@@ -4,6 +4,7 @@ let
   mkSource = spec:
     assert spec ? type;
     if spec.type == "GitHub" then mkGitHubSource spec
+    else if spec.type == "GitHubRelease" then mkGitHubReleaseSource spec
     else builtins.throw "Unknown source type ${spec.type}";
 
   mkGitHubSource = spec:
@@ -16,6 +17,15 @@ let
     in
     spec // { outPath = path; }
   ;
+
+  mkGitHubReleaseSource = spec:
+    let
+      path = builtins.fetchTarball {
+        url = spec.tarball_url;
+        sha256 = spec.hash;
+      };
+    in
+    spec // { outPath = path; };
 
 in
 builtins.mapAttrs (_: mkSource) data.pins

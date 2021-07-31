@@ -9,6 +9,7 @@ use url::Url;
 mod github;
 mod nix;
 
+/// GitHubPin tracks a given branch on GitHub and always uses the latest commit
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GitHubPin {
     pub repository: String,
@@ -20,7 +21,9 @@ pub struct GitHubPin {
 
 impl GitHubPin {
     pub async fn update(&self) -> Result<Self> {
-        let latest = github::get_latest_commit(&self.owner, &self.repository, &self.branch).await?;
+        let latest = github::get_latest_commit(&self.owner, &self.repository, &self.branch)
+            .await
+            .context("Couldn't fetch the latest commit")?;
 
         let tarball_url = format!(
             "https://github.com/{owner}/{repo}/archive/{revision}.tar.gz",
@@ -33,6 +36,31 @@ impl GitHubPin {
 
         Ok(Self {
             revision: Some(latest.revision),
+            hash: Some(hash),
+            ..self.clone()
+        })
+    }
+}
+
+/// GitHubReleasePin tries to follow the latest release of the given project
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GitHubReleasePin {
+    pub repository: String,
+    pub owner: String,
+    pub tarball_url: Option<String>,
+    pub release_name: Option<String>,
+    pub hash: Option<String>,
+}
+
+impl GitHubReleasePin {
+    pub async fn update(&self) -> Result<Self> {
+        let latest = github::get_latest_release(&self.owner, &self.repository)
+            .await
+            .context("Couldn't fetch the latest release")?;
+        let hash = nix::nix_prefetch_tarball(&latest.tarball_url).await?;
+        Ok(Self {
+            tarball_url: Some(latest.tarball_url),
+            release_name: Some(latest.release_name),
             hash: Some(hash),
             ..self.clone()
         })
@@ -57,6 +85,7 @@ impl GitPin {
 #[serde(tag = "type")]
 pub enum Pin {
     GitHub(GitHubPin),
+    GitHubRelease(GitHubReleasePin),
     Git(GitPin),
     Url,
 }
@@ -65,6 +94,7 @@ impl Pin {
     async fn update(&self) -> Result<Pin> {
         match self {
             Self::GitHub(gh) => gh.update().await.map(Self::GitHub),
+            Self::GitHubRelease(ghr) => ghr.update().await.map(Self::GitHubRelease),
             Self::Git(g) => g.update().await.map(Self::Git),
             Self::Url => Ok(Self::Url),
         }
@@ -75,8 +105,9 @@ impl std::fmt::Display for Pin {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::GitHub(gh) => write!(fmt, "{:?}", gh),
+            Self::GitHubRelease(ghr) => write!(fmt, "{:?}", ghr),
             Self::Git(g) => write!(fmt, "{:?}", g),
-            Url => write!(fmt, "Url..."),
+            Self::Url => write!(fmt, "Url..."),
         }
     }
 }
@@ -136,15 +167,43 @@ impl GitHubAddOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct GitHubReleaseAddOpts {
+    pub owner: String,
+    pub repository: String,
+
+    /// Name of the pin
+    pub name: Option<String>,
+}
+
+impl GitHubReleaseAddOpts {
+    pub fn add(&self) -> Result<(String, Pin)> {
+        let name = self.name.clone().unwrap_or(self.repository.clone());
+        Ok((
+            name,
+            Pin::GitHubRelease(GitHubReleasePin {
+                owner: self.owner.clone(),
+                repository: self.repository.clone(),
+                hash: None,
+                release_name: None,
+                tarball_url: None,
+            }),
+        ))
+    }
+}
+
+#[derive(Debug, StructOpt)]
 pub enum AddOpts {
     #[structopt(name = "github")]
     GitHub(GitHubAddOpts),
+    #[structopt(name = "github-release")]
+    GitHubRelease(GitHubReleaseAddOpts),
 }
 
 impl AddOpts {
     fn run(&self) -> Result<(String, Pin)> {
         match self {
             Self::GitHub(gh) => gh.add(),
+            Self::GitHubRelease(ghr) => ghr.add(),
         }
     }
 }
@@ -165,6 +224,7 @@ pub enum Command {
 
 #[derive(Debug, StructOpt)]
 pub struct Opts {
+    /// Base folder for npins.json and the boilerplate default.nix
     #[structopt(default_value = "npins")]
     folder: std::path::PathBuf,
 
@@ -204,6 +264,11 @@ impl Opts {
         let p = self.folder.join("default.nix");
         let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
         fh.write_all(default_nix)?;
+
+        // Only create the pins if the file isn't there yet
+        if self.folder.join("pins.json").exists() {
+            return Ok(());
+        }
 
         let initial_pins = NixPins::new_with_nixpkgs();
         self.write_pins(&initial_pins)?;
@@ -277,6 +342,7 @@ impl Opts {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
     let opts = Opts::from_args();
     opts.run().await?;
     Ok(())

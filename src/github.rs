@@ -37,3 +37,26 @@ pub async fn get_latest_commit(
         branch: branch.as_ref().to_string(),
     })
 }
+
+pub struct ReleaseInfo {
+    pub tarball_url: String,
+    pub release_name: String,
+}
+
+pub async fn get_latest_release(
+    owner: impl AsRef<str>,
+    repo: impl AsRef<str>,
+) -> Result<ReleaseInfo> {
+    let gh = get_github_client()?;
+
+    let release = gh
+        .repo(owner.as_ref(), repo.as_ref())
+        .releases()
+        .latest()
+        .await?;
+
+    Ok(ReleaseInfo {
+        tarball_url: release.tarball_url,
+        release_name: release.name,
+    })
+}
