@@ -1,0 +1,15 @@
+[package]
+name = "npins"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "^1.0", features = [ "derive" ] }
+serde_json = { version = "^1.0" }
+url = { version = "^2.2.2", features = [ "serde" ] }
+structopt = "^0.3"
+anyhow = "^1.0"
+hubcaps = { git = "https://github.com/softprops/hubcaps", rev = "a9e6616ecc7b8eef0ea0eaf6055d9610c8961500", features = [ "rustls-tls" ], default-features = false }
+tokio = { version = "^1.0", features = ["macros", "rt-multi-thread", "process"] }
