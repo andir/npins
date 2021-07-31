@@ -1,11 +1,13 @@
 use std::io::Write;
 
 use anyhow::{Context, Result};
+use diff::Diff;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use structopt::StructOpt;
 use url::Url;
 
+mod diff;
 mod git;
 mod github;
 mod nix;
@@ -18,6 +20,18 @@ pub struct GitHubPin {
     pub branch: String,
     pub revision: Option<String>,
     pub hash: Option<String>,
+}
+
+impl diff::Diff for GitHubPin {
+    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
+        diff::d(&[
+            diff::Difference::new("repository", &self.repository, &other.repository),
+            diff::Difference::new("owner", &self.owner, &other.owner),
+            diff::Difference::new("branch", &self.branch, &other.branch),
+            diff::Difference::new("revision", &self.revision, &other.revision),
+            diff::Difference::new("hash", &self.hash, &other.hash),
+        ])
+    }
 }
 
 impl GitHubPin {
@@ -53,6 +67,18 @@ pub struct GitHubReleasePin {
     pub hash: Option<String>,
 }
 
+impl diff::Diff for GitHubReleasePin {
+    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
+        diff::d(&[
+            diff::Difference::new("repository", &self.repository, &other.repository),
+            diff::Difference::new("owner", &self.owner, &other.owner),
+            diff::Difference::new("tarball_url", &self.tarball_url, &other.tarball_url),
+            diff::Difference::new("release_name", &self.release_name, &other.release_name),
+            diff::Difference::new("hash", &self.hash, &other.hash),
+        ])
+    }
+}
+
 impl GitHubReleasePin {
     pub async fn update(&self) -> Result<Self> {
         let latest = github::get_latest_release(&self.owner, &self.repository)
@@ -76,6 +102,21 @@ pub struct GitPin {
     pub hash: Option<String>,
 }
 
+impl diff::Diff for GitPin {
+    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
+        diff::d(&[
+            diff::Difference::new(
+                "repository_url",
+                &self.repository_url,
+                &other.repository_url,
+            ),
+            diff::Difference::new("branch", &self.branch, &other.branch),
+            diff::Difference::new("revision", &self.revision, &other.revision),
+            diff::Difference::new("hash", &self.hash, &other.hash),
+        ])
+    }
+}
+
 impl GitPin {
     pub async fn update(&self) -> Result<Self> {
         let info = git::fetch_branch_head(&self.repository_url, &self.branch).await?;
@@ -94,7 +135,22 @@ pub enum Pin {
     GitHub(GitHubPin),
     GitHubRelease(GitHubReleasePin),
     Git(GitPin),
-    Url,
+}
+
+impl diff::Diff for Pin {
+    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
+        use Pin::*;
+        match (self, other) {
+            (GitHub(a), GitHub(b)) => a.diff(b),
+            (GitHubRelease(a), GitHubRelease(b)) => a.diff(b),
+            (Git(a), Git(b)) => a.diff(b),
+
+            // impossible/invalid cases
+            (GitHub(_), _) => vec![],
+            (GitHubRelease(_), _) => vec![],
+            (Git(_), _) => vec![],
+        }
+    }
 }
 
 impl Pin {
@@ -103,7 +159,6 @@ impl Pin {
             Self::GitHub(gh) => gh.update().await.map(Self::GitHub),
             Self::GitHubRelease(ghr) => ghr.update().await.map(Self::GitHubRelease),
             Self::Git(g) => g.update().await.map(Self::Git),
-            Self::Url => Ok(Self::Url),
         }
     }
 }
@@ -114,7 +169,6 @@ impl std::fmt::Display for Pin {
             Self::GitHub(gh) => write!(fmt, "{:?}", gh),
             Self::GitHubRelease(ghr) => write!(fmt, "{:?}", ghr),
             Self::Git(g) => write!(fmt, "{:?}", g),
-            Self::Url => write!(fmt, "Url..."),
         }
     }
 }
@@ -365,11 +419,15 @@ impl Opts {
         for (name, pin) in pins.pins.iter() {
             println!("Updating {}", name);
             let p = pin.update().await?;
+            let diff = pin.diff(&p);
             new_pins.pins.insert(name.clone(), p);
+            if diff.len() > 0 {
+                println!("changes:");
+                for d in diff {
+                    println!("{}", d);
+                }
+            }
         }
-
-        println!("old pins: {:?}", pins);
-        println!("new pins: {:?}", new_pins);
 
         self.write_pins(&new_pins)?;
 
