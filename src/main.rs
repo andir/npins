@@ -215,10 +215,20 @@ pub struct RemoveOpts {
 
 #[derive(Debug, StructOpt)]
 pub enum Command {
+    /// Intializes the npins directory. Running this multiple times will restore/upgrade the
+    /// `default.nix` and never touch your pins.json.
     Init,
+
+    /// Adds a new pin entry.
     Add(AddOpts),
+
+    /// Lists the current pin entries.
     Show,
+
+    /// Updates all pins to the latest version.
     Update,
+
+    /// Removes one pin entry.
     Remove(RemoveOpts),
 }
 
