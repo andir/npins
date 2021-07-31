@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use structopt::StructOpt;
 use url::Url;
 
+mod git;
 mod github;
 mod nix;
 
@@ -69,7 +70,7 @@ impl GitHubReleasePin {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GitPin {
-    pub repoistory_url: Url,
+    pub repository_url: Url,
     pub branch: String,
     pub revision: Option<String>,
     pub hash: Option<String>,
@@ -77,7 +78,13 @@ pub struct GitPin {
 
 impl GitPin {
     pub async fn update(&self) -> Result<Self> {
-        Ok(self.clone())
+        let info = git::fetch_branch_head(&self.repository_url, &self.branch).await?;
+        let hash = nix::nix_prefetch_git(&self.repository_url, &info.revision).await?;
+        Ok(GitPin {
+            revision: Some(info.revision),
+            hash: Some(hash),
+            ..self.clone()
+        })
     }
 }
 
@@ -170,16 +177,12 @@ impl GitHubAddOpts {
 pub struct GitHubReleaseAddOpts {
     pub owner: String,
     pub repository: String,
-
-    /// Name of the pin
-    pub name: Option<String>,
 }
 
 impl GitHubReleaseAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
-        let name = self.name.clone().unwrap_or(self.repository.clone());
         Ok((
-            name,
+            self.repository.clone(),
             Pin::GitHubRelease(GitHubReleasePin {
                 owner: self.owner.clone(),
                 repository: self.repository.clone(),
@@ -192,19 +195,70 @@ impl GitHubReleaseAddOpts {
 }
 
 #[derive(Debug, StructOpt)]
-pub enum AddOpts {
+pub struct GitAddOpts {
+    /// The git remote URL. For example https://github.com/andir/ate.git
+    url: String,
+
+    /// Name of the branch to track.
+    #[structopt(default_value = "master")]
+    branch: String,
+}
+
+impl GitAddOpts {
+    pub fn add(&self) -> Result<(String, Pin)> {
+        let url = Url::parse(&self.url)?;
+        let name = match url.path_segments().map(|x| x.rev().next()).flatten() {
+            None => return Err(anyhow::anyhow!("Path segment in URL missing.")),
+            Some(seg) => seg.to_owned(),
+        };
+        let name = name.strip_suffix(".git").unwrap_or(&name);
+
+        Ok((
+            name.to_owned(),
+            Pin::Git(GitPin {
+                repository_url: url,
+                branch: self.branch.clone(),
+                revision: None,
+                hash: None,
+            }),
+        ))
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub enum AddCommands {
     #[structopt(name = "github")]
     GitHub(GitHubAddOpts),
     #[structopt(name = "github-release")]
     GitHubRelease(GitHubReleaseAddOpts),
+    #[structopt(name = "git")]
+    Git(GitAddOpts),
+}
+
+#[derive(Debug, StructOpt)]
+pub struct AddOpts {
+    #[structopt(long, short)]
+    pub name: Option<String>,
+
+    #[structopt(subcommand)]
+    command: AddCommands,
 }
 
 impl AddOpts {
     fn run(&self) -> Result<(String, Pin)> {
-        match self {
-            Self::GitHub(gh) => gh.add(),
-            Self::GitHubRelease(ghr) => ghr.add(),
-        }
+        let (name, pin) = match &self.command {
+            AddCommands::Git(g) => g.add()?,
+            AddCommands::GitHub(gh) => gh.add()?,
+            AddCommands::GitHubRelease(ghr) => ghr.add()?,
+        };
+
+        let name = if let Some(ref n) = self.name {
+            n.clone()
+        } else {
+            name
+        };
+
+        Ok((name, pin))
     }
 }
 

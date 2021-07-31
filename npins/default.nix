@@ -3,9 +3,22 @@ let
 
   mkSource = spec:
     assert spec ? type;
-    if spec.type == "GitHub" then mkGitHubSource spec
+    if spec.type == "Git" then mkGitSource spec
+    else if spec.type == "GitHub" then mkGitHubSource spec
     else if spec.type == "GitHubRelease" then mkGitHubReleaseSource spec
     else builtins.throw "Unknown source type ${spec.type}";
+
+  mkGitSource = spec:
+    let
+      path = builtins.fetchGit (with spec; {
+        url = repository_url;
+        ref = "refs/heads/${branch}";
+        rev = revision;
+        # hash = hash;
+      });
+    in
+    spec // { outPath = path; }
+  ;
 
   mkGitHubSource = spec:
     let

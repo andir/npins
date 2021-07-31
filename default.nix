@@ -1,7 +1,16 @@
-{ rustPlatform, nix-gitignore }:
+{ lib
+, rustPlatform
+, nix-gitignore
+, makeWrapper
+
+  # runtime dependencies
+, nix # for nix-prefetch-url
+, nix-prefetch-git
+}:
 let
   src = nix-gitignore.gitignoreSource [ ] ./.;
   cargoToml = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
+  runtimePath = lib.makeBinPath [ nix nix-prefetch-git ];
 in
 rustPlatform.buildRustPackage {
   pname = cargoToml.package.name;
@@ -12,4 +21,10 @@ rustPlatform.buildRustPackage {
   };
 
   inherit src;
+
+  nativeBuildInputs = [ makeWrapper ];
+
+  postFixup = ''
+    wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
+  '';
 }

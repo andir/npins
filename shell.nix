@@ -19,6 +19,8 @@ pkgs.mkShell {
     rust-analyzer
     rustfmt
     nixpkgs-fmt
+    nix
+    nix-prefetch-git
   ];
 
   inherit (pre-commit) shellHook;
