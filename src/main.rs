@@ -370,7 +370,7 @@ impl Opts {
         let path = self.folder.join("pins.json");
         let fh = std::fs::File::create(&path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
-        serde_json::to_writer(fh, pins)?;
+        serde_json::to_writer_pretty(fh, pins)?;
         Ok(())
     }
 

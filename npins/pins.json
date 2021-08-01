@@ -1,1 +1,20 @@
-{"pins":{"nixpkgs":{"type":"GitHub","repository":"nixpkgs","owner":"nixos","branch":"nixpkgs-unstable","revision":"dd98b100651cfbb8804f32d852f75ef7c97a6b74","hash":"08ck4y9yhw75qdqh3m6mfk7k0pqcwylffrw30h6dphmgsxq188ip"},"pre-commit-hooks.nix":{"type":"GitHub","repository":"pre-commit-hooks.nix","owner":"cachix","branch":"master","revision":"397f0713d007250a2c7a745e555fa16c5dc8cadb","hash":"0hjbq4pf8a2qdndx0xdb3yjhx9l3l5grk4mlk78vw4zm32fgyrq2"}}}
+{
+  "pins": {
+    "nixpkgs": {
+      "type": "GitHub",
+      "repository": "nixpkgs",
+      "owner": "nixos",
+      "branch": "nixpkgs-unstable",
+      "revision": "dd98b100651cfbb8804f32d852f75ef7c97a6b74",
+      "hash": "08ck4y9yhw75qdqh3m6mfk7k0pqcwylffrw30h6dphmgsxq188ip"
+    },
+    "pre-commit-hooks.nix": {
+      "type": "GitHub",
+      "repository": "pre-commit-hooks.nix",
+      "owner": "cachix",
+      "branch": "master",
+      "revision": "397f0713d007250a2c7a745e555fa16c5dc8cadb",
+      "hash": "0hjbq4pf8a2qdndx0xdb3yjhx9l3l5grk4mlk78vw4zm32fgyrq2"
+    }
+  }
+}
