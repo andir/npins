@@ -5,8 +5,8 @@
       "repository": "nixpkgs",
       "owner": "nixos",
       "branch": "nixpkgs-unstable",
-      "revision": "dd98b100651cfbb8804f32d852f75ef7c97a6b74",
-      "hash": "08ck4y9yhw75qdqh3m6mfk7k0pqcwylffrw30h6dphmgsxq188ip"
+      "revision": "4d3e13e51b6e59b7892874b03072a7c931911e66",
+      "hash": "046ca3dd8p5a2a2x2d4n7d31yy6989jjb5xnh9gy631wfs7g6rcw"
     },
     "pre-commit-hooks.nix": {
       "type": "GitHub",
