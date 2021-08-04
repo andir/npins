@@ -343,7 +343,7 @@ pub enum Command {
 #[derive(Debug, StructOpt)]
 pub struct Opts {
     /// Base folder for npins.json and the boilerplate default.nix
-    #[structopt(default_value = "npins")]
+    #[structopt(default_value = "npins", env = "NPINS_FOLDER")]
     folder: std::path::PathBuf,
 
     #[structopt(subcommand)]
