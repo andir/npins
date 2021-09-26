@@ -5,16 +5,16 @@
       "repository": "nixpkgs",
       "owner": "nixos",
       "branch": "nixpkgs-unstable",
-      "revision": "6525bbc06a39f26750ad8ee0d40000ddfdc24acb",
-      "hash": "1irrvwzfj37awf0l7ww4n5dbs7scf7jkb436gwgyzs1bn4r5w7nq"
+      "revision": "a3a23d9599b0a82e333ad91db2cdc479313ce154",
+      "hash": "05xmgrrnw6j39lh3d48kg064z510i0w5vvrm1s5cdwhdc2fkspjq"
     },
     "pre-commit-hooks.nix": {
       "type": "GitHub",
       "repository": "pre-commit-hooks.nix",
       "owner": "cachix",
       "branch": "master",
-      "revision": "397f0713d007250a2c7a745e555fa16c5dc8cadb",
-      "hash": "0hjbq4pf8a2qdndx0xdb3yjhx9l3l5grk4mlk78vw4zm32fgyrq2"
+      "revision": "3ed0e618cebc1ff291c27b749cf7568959cac028",
+      "hash": "0zni3zpz544p7bs7a87wjhd6wb7jmicx0sf2s5nrqapnxa97zcs4"
     }
   }
 }
