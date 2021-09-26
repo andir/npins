@@ -2,13 +2,35 @@
 , rustPlatform
 , nix-gitignore
 , makeWrapper
+, runCommand
 
   # runtime dependencies
 , nix # for nix-prefetch-url
 , nix-prefetch-git
 }:
 let
-  src = nix-gitignore.gitignoreSource [ ] ./.;
+  paths = [
+    "^/src$"
+    "^/src/.+.rs$"
+    "^/npins$"
+    "^/npins/default.nix$"
+    "^/Cargo.lock$"
+    "^/Cargo.toml$"
+  ];
+
+  extractSource = src:
+    let baseDir = toString src; in
+    expressions:
+    builtins.path {
+      path = src;
+      filter = path:
+        let suffix = lib.removePrefix baseDir path; in
+        _: lib.any (r: builtins.match r suffix != null) expressions;
+      name = "source";
+    };
+
+  src = extractSource ./. paths;
+
   cargoToml = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
   runtimePath = lib.makeBinPath [ nix nix-prefetch-git ];
 in

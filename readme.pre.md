@@ -1,0 +1,3 @@
+# npins
+
+Nix dependency pinning.
