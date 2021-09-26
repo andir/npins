@@ -322,6 +322,11 @@ pub struct RemoveOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct UpdateOpts {
+    pub name: Option<String>,
+}
+
+#[derive(Debug, StructOpt)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your pins.json.
@@ -333,8 +338,8 @@ pub enum Command {
     /// Lists the current pin entries.
     Show,
 
-    /// Updates all pins to the latest version.
-    Update,
+    /// Updates all or the given pin to the latest version.
+    Update(UpdateOpts),
 
     /// Removes one pin entry.
     Remove(RemoveOpts),
@@ -412,20 +417,37 @@ impl Opts {
         Ok(())
     }
 
-    async fn update(&self) -> Result<()> {
+    async fn update_one(&self, pin: &Pin) -> Result<Pin> {
+        let p = pin.update().await?;
+        let diff = pin.diff(&p);
+        if diff.len() > 0 {
+            println!("changes:");
+            for d in diff {
+                println!("{}", d);
+            }
+        }
+
+        Ok(p)
+    }
+
+    async fn update(&self, opts: &UpdateOpts) -> Result<()> {
         let pins = self.read_pins()?;
         let mut new_pins = NixPins::default();
 
-        for (name, pin) in pins.pins.iter() {
-            println!("Updating {}", name);
-            let p = pin.update().await?;
-            let diff = pin.diff(&p);
-            new_pins.pins.insert(name.clone(), p);
-            if diff.len() > 0 {
-                println!("changes:");
-                for d in diff {
-                    println!("{}", d);
+        if let Some(name) = &opts.name {
+            new_pins = pins.clone();
+            match pins.pins.get(name) {
+                None => return Err(anyhow::anyhow!("No such pin entry found.")),
+                Some(p) => {
+                    let p = self.update_one(p).await?;
+                    new_pins.pins.insert(name.clone(), p);
                 }
+            }
+        } else {
+            for (name, pin) in pins.pins.iter() {
+                println!("Updating {}", name);
+                let p = self.update_one(pin).await?;
+                new_pins.pins.insert(name.clone(), p);
             }
         }
 
@@ -454,7 +476,7 @@ impl Opts {
             Command::Init => self.init()?,
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a)?,
-            Command::Update => self.update().await?,
+            Command::Update(o) => self.update(o).await?,
             Command::Remove(r) => self.remove(r)?,
         };
 
