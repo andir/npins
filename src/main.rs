@@ -36,7 +36,8 @@ impl diff::Diff for GitHubPin {
 
 impl GitHubPin {
     pub async fn update(&self) -> Result<Self> {
-        let latest = github::get_latest_commit(&self.owner, &self.repository, &self.branch)
+        let latest = github::Client::new()?
+            .get_latest_commit(&self.owner, &self.repository, &self.branch)
             .await
             .context("Couldn't fetch the latest commit")?;
 
@@ -81,7 +82,8 @@ impl diff::Diff for GitHubReleasePin {
 
 impl GitHubReleasePin {
     pub async fn update(&self) -> Result<Self> {
-        let latest = github::get_latest_release(&self.owner, &self.repository)
+        let latest = github::Client::new()?
+            .get_latest_release(&self.owner, &self.repository)
             .await
             .context("Couldn't fetch the latest release")?;
         let hash = nix::nix_prefetch_tarball(&latest.tarball_url).await?;
