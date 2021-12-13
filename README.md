@@ -62,6 +62,7 @@ SUBCOMMANDS:
     github            
     github-release    
     help              Prints this message or the help of the given subcommand(s)
+    pypi              
 ```
 
 ## npins help update

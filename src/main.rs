@@ -11,6 +11,7 @@ pub mod diff;
 pub mod git;
 pub mod github;
 pub mod nix;
+pub mod pypi;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
@@ -18,6 +19,7 @@ pub enum Pin {
     GitHub(github::GitHubPin),
     GitHubRelease(github::GitHubReleasePin),
     Git(git::GitPin),
+    PyPi(pypi::PyPiPin),
 }
 
 impl diff::Diff for Pin {
@@ -27,11 +29,10 @@ impl diff::Diff for Pin {
             (GitHub(a), GitHub(b)) => a.diff(b),
             (GitHubRelease(a), GitHubRelease(b)) => a.diff(b),
             (Git(a), Git(b)) => a.diff(b),
+            (PyPi(a), PyPi(b)) => a.diff(b),
 
             // impossible/invalid cases
-            (GitHub(_), _) => vec![],
-            (GitHubRelease(_), _) => vec![],
-            (Git(_), _) => vec![],
+            (_, _) => vec![],
         }
     }
 }
@@ -42,6 +43,7 @@ impl Pin {
             Self::GitHub(gh) => gh.update().await.map(Self::GitHub),
             Self::GitHubRelease(ghr) => ghr.update().await.map(Self::GitHubRelease),
             Self::Git(g) => g.update().await.map(Self::Git),
+            Self::PyPi(p) => p.update().await.map(Self::PyPi),
         }
     }
 }
@@ -52,6 +54,7 @@ impl std::fmt::Display for Pin {
             Self::GitHub(gh) => write!(fmt, "{:?}", gh),
             Self::GitHubRelease(ghr) => write!(fmt, "{:?}", ghr),
             Self::Git(g) => write!(fmt, "{:?}", g),
+            Self::PyPi(p) => write!(fmt, "{:?}", p),
         }
     }
 }
@@ -163,6 +166,26 @@ impl GitAddOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct PyPiAddOpts {
+    /// Name of the package at PyPi.org
+    pub name: String,
+}
+
+impl PyPiAddOpts {
+    pub fn add(&self) -> Result<(String, Pin)> {
+        Ok((
+            self.name.clone(),
+            Pin::PyPi(pypi::PyPiPin {
+                name: self.name.clone(),
+                version: None,
+                hash: None,
+                url: None,
+            }),
+        ))
+    }
+}
+
+#[derive(Debug, StructOpt)]
 pub enum AddCommands {
     #[structopt(name = "github")]
     GitHub(GitHubAddOpts),
@@ -170,6 +193,8 @@ pub enum AddCommands {
     GitHubRelease(GitHubReleaseAddOpts),
     #[structopt(name = "git")]
     Git(GitAddOpts),
+    #[structopt(name = "pypi")]
+    PyPi(PyPiAddOpts),
 }
 
 #[derive(Debug, StructOpt)]
@@ -187,6 +212,7 @@ impl AddOpts {
             AddCommands::Git(g) => g.add()?,
             AddCommands::GitHub(gh) => gh.add()?,
             AddCommands::GitHubRelease(ghr) => ghr.add()?,
+            AddCommands::PyPi(p) => p.add()?,
         };
 
         let name = if let Some(ref n) = self.name {
