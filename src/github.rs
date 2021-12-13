@@ -1,5 +1,89 @@
-use anyhow::Result;
+use crate::{diff, nix};
+use anyhow::{Context, Result};
 use hubcaps::{Credentials, Github};
+use serde::{Deserialize, Serialize};
+
+/// GitHubPin tracks a given branch on GitHub and always uses the latest commit
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GitHubPin {
+    pub repository: String,
+    pub owner: String,
+    pub branch: String,
+    pub revision: Option<String>,
+    pub hash: Option<String>,
+}
+
+impl diff::Diff for GitHubPin {
+    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
+        diff::d(&[
+            diff::Difference::new("repository", &self.repository, &other.repository),
+            diff::Difference::new("owner", &self.owner, &other.owner),
+            diff::Difference::new("branch", &self.branch, &other.branch),
+            diff::Difference::new("revision", &self.revision, &other.revision),
+            diff::Difference::new("hash", &self.hash, &other.hash),
+        ])
+    }
+}
+
+impl GitHubPin {
+    pub async fn update(&self) -> Result<Self> {
+        let latest = get_latest_commit(&self.owner, &self.repository, &self.branch)
+            .await
+            .context("Couldn't fetch the latest commit")?;
+
+        let tarball_url = format!(
+            "https://github.com/{owner}/{repo}/archive/{revision}.tar.gz",
+            owner = self.owner,
+            repo = self.repository,
+            revision = latest.revision,
+        );
+
+        let hash = nix::nix_prefetch_tarball(tarball_url).await?;
+
+        Ok(Self {
+            revision: Some(latest.revision),
+            hash: Some(hash),
+            ..self.clone()
+        })
+    }
+}
+
+/// GitHubReleasePin tries to follow the latest release of the given project
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GitHubReleasePin {
+    pub repository: String,
+    pub owner: String,
+    pub tarball_url: Option<String>,
+    pub release_name: Option<String>,
+    pub hash: Option<String>,
+}
+
+impl diff::Diff for GitHubReleasePin {
+    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
+        diff::d(&[
+            diff::Difference::new("repository", &self.repository, &other.repository),
+            diff::Difference::new("owner", &self.owner, &other.owner),
+            diff::Difference::new("tarball_url", &self.tarball_url, &other.tarball_url),
+            diff::Difference::new("release_name", &self.release_name, &other.release_name),
+            diff::Difference::new("hash", &self.hash, &other.hash),
+        ])
+    }
+}
+
+impl GitHubReleasePin {
+    pub async fn update(&self) -> Result<Self> {
+        let latest = get_latest_release(&self.owner, &self.repository)
+            .await
+            .context("Couldn't fetch the latest release")?;
+        let hash = nix::nix_prefetch_tarball(&latest.tarball_url).await?;
+        Ok(Self {
+            tarball_url: Some(latest.tarball_url),
+            release_name: Some(latest.release_name),
+            hash: Some(hash),
+            ..self.clone()
+        })
+    }
+}
 
 pub struct CommitInfo {
     pub revision: String,

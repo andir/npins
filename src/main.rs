@@ -7,134 +7,17 @@ use std::collections::BTreeMap;
 use structopt::StructOpt;
 use url::Url;
 
-mod diff;
-mod git;
-mod github;
-mod nix;
-
-/// GitHubPin tracks a given branch on GitHub and always uses the latest commit
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitHubPin {
-    pub repository: String,
-    pub owner: String,
-    pub branch: String,
-    pub revision: Option<String>,
-    pub hash: Option<String>,
-}
-
-impl diff::Diff for GitHubPin {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[
-            diff::Difference::new("repository", &self.repository, &other.repository),
-            diff::Difference::new("owner", &self.owner, &other.owner),
-            diff::Difference::new("branch", &self.branch, &other.branch),
-            diff::Difference::new("revision", &self.revision, &other.revision),
-            diff::Difference::new("hash", &self.hash, &other.hash),
-        ])
-    }
-}
-
-impl GitHubPin {
-    pub async fn update(&self) -> Result<Self> {
-        let latest = github::get_latest_commit(&self.owner, &self.repository, &self.branch)
-            .await
-            .context("Couldn't fetch the latest commit")?;
-
-        let tarball_url = format!(
-            "https://github.com/{owner}/{repo}/archive/{revision}.tar.gz",
-            owner = self.owner,
-            repo = self.repository,
-            revision = latest.revision,
-        );
-
-        let hash = nix::nix_prefetch_tarball(tarball_url).await?;
-
-        Ok(Self {
-            revision: Some(latest.revision),
-            hash: Some(hash),
-            ..self.clone()
-        })
-    }
-}
-
-/// GitHubReleasePin tries to follow the latest release of the given project
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitHubReleasePin {
-    pub repository: String,
-    pub owner: String,
-    pub tarball_url: Option<String>,
-    pub release_name: Option<String>,
-    pub hash: Option<String>,
-}
-
-impl diff::Diff for GitHubReleasePin {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[
-            diff::Difference::new("repository", &self.repository, &other.repository),
-            diff::Difference::new("owner", &self.owner, &other.owner),
-            diff::Difference::new("tarball_url", &self.tarball_url, &other.tarball_url),
-            diff::Difference::new("release_name", &self.release_name, &other.release_name),
-            diff::Difference::new("hash", &self.hash, &other.hash),
-        ])
-    }
-}
-
-impl GitHubReleasePin {
-    pub async fn update(&self) -> Result<Self> {
-        let latest = github::get_latest_release(&self.owner, &self.repository)
-            .await
-            .context("Couldn't fetch the latest release")?;
-        let hash = nix::nix_prefetch_tarball(&latest.tarball_url).await?;
-        Ok(Self {
-            tarball_url: Some(latest.tarball_url),
-            release_name: Some(latest.release_name),
-            hash: Some(hash),
-            ..self.clone()
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitPin {
-    pub repository_url: Url,
-    pub branch: String,
-    pub revision: Option<String>,
-    pub hash: Option<String>,
-}
-
-impl diff::Diff for GitPin {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[
-            diff::Difference::new(
-                "repository_url",
-                &self.repository_url,
-                &other.repository_url,
-            ),
-            diff::Difference::new("branch", &self.branch, &other.branch),
-            diff::Difference::new("revision", &self.revision, &other.revision),
-            diff::Difference::new("hash", &self.hash, &other.hash),
-        ])
-    }
-}
-
-impl GitPin {
-    pub async fn update(&self) -> Result<Self> {
-        let info = git::fetch_branch_head(&self.repository_url, &self.branch).await?;
-        let hash = nix::nix_prefetch_git(&self.repository_url, &info.revision).await?;
-        Ok(GitPin {
-            revision: Some(info.revision),
-            hash: Some(hash),
-            ..self.clone()
-        })
-    }
-}
+pub mod diff;
+pub mod git;
+pub mod github;
+pub mod nix;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum Pin {
-    GitHub(GitHubPin),
-    GitHubRelease(GitHubReleasePin),
-    Git(GitPin),
+    GitHub(github::GitHubPin),
+    GitHubRelease(github::GitHubReleasePin),
+    Git(git::GitPin),
 }
 
 impl diff::Diff for Pin {
@@ -183,7 +66,7 @@ impl NixPins {
         let mut pins = BTreeMap::new();
         pins.insert(
             "nixpkgs".to_owned(),
-            Pin::GitHub(GitHubPin {
+            Pin::GitHub(github::GitHubPin {
                 repository: "nixpkgs".to_owned(),
                 owner: "nixos".to_owned(),
                 branch: "nixpkgs-unstable".to_owned(),
@@ -216,7 +99,7 @@ impl GitHubAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
         Ok((
             self.repository.clone(),
-            Pin::GitHub(GitHubPin {
+            Pin::GitHub(github::GitHubPin {
                 repository: self.repository.clone(),
                 owner: self.owner.clone(),
                 branch: self.branch.clone(),
@@ -237,7 +120,7 @@ impl GitHubReleaseAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
         Ok((
             self.repository.clone(),
-            Pin::GitHubRelease(GitHubReleasePin {
+            Pin::GitHubRelease(github::GitHubReleasePin {
                 owner: self.owner.clone(),
                 repository: self.repository.clone(),
                 hash: None,
@@ -269,7 +152,7 @@ impl GitAddOpts {
 
         Ok((
             name.to_owned(),
-            Pin::Git(GitPin {
+            Pin::Git(git::GitPin {
                 repository_url: url,
                 branch: self.branch.clone(),
                 revision: None,
