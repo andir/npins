@@ -58,11 +58,11 @@ OPTIONS:
     -n, --name <name>    
 
 SUBCOMMANDS:
-    git               
-    github            
-    github-release    
+    git               Track a git repository
+    github            Track a branch from a GitHub repository
+    github-release    Track the latest release from a GitHub repository
     help              Prints this message or the help of the given subcommand(s)
-    pypi              
+    pypi              Track a package on PyPi
 ```
 
 ## npins help update

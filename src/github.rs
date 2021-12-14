@@ -1,32 +1,36 @@
-use crate::{diff, nix};
+use crate::*;
 use anyhow::{Context, Result};
 use hubcaps::{Credentials, Github};
 use serde::{Deserialize, Serialize};
 
-/// GitHubPin tracks a given branch on GitHub and always uses the latest commit
+/// Track a given branch on GitHub and always use the latest commit
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitHubPin {
+pub struct PinInput {
     pub repository: String,
     pub owner: String,
     pub branch: String,
-    pub revision: Option<String>,
-    pub hash: Option<String>,
 }
 
-impl diff::Diff for GitHubPin {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PinOutput {
+    pub revision: String,
+    pub hash: String,
+}
+
+impl diff::Diff for PinOutput {
     fn diff(&self, other: &Self) -> Vec<diff::Difference> {
         diff::d(&[
-            diff::Difference::new("repository", &self.repository, &other.repository),
-            diff::Difference::new("owner", &self.owner, &other.owner),
-            diff::Difference::new("branch", &self.branch, &other.branch),
             diff::Difference::new("revision", &self.revision, &other.revision),
             diff::Difference::new("hash", &self.hash, &other.hash),
         ])
     }
 }
 
-impl GitHubPin {
-    pub async fn update(&self) -> Result<Self> {
+#[async_trait::async_trait]
+impl Updatable for PinInput {
+    type Output = PinOutput;
+
+    async fn update(&self) -> Result<PinOutput> {
         let latest = get_latest_commit(&self.owner, &self.repository, &self.branch)
             .await
             .context("Couldn't fetch the latest commit")?;
@@ -40,29 +44,30 @@ impl GitHubPin {
 
         let hash = nix::nix_prefetch_tarball(tarball_url).await?;
 
-        Ok(Self {
-            revision: Some(latest.revision),
-            hash: Some(hash),
-            ..self.clone()
+        Ok(PinOutput {
+            revision: latest.revision,
+            hash: hash,
         })
     }
 }
 
-/// GitHubReleasePin tries to follow the latest release of the given project
+/// Try to follow the latest release of the given project
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitHubReleasePin {
+pub struct ReleasePinInput {
     pub repository: String,
     pub owner: String,
-    pub tarball_url: Option<String>,
-    pub release_name: Option<String>,
-    pub hash: Option<String>,
 }
 
-impl diff::Diff for GitHubReleasePin {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReleasePinOutput {
+    pub tarball_url: String,
+    pub release_name: String,
+    pub hash: String,
+}
+
+impl diff::Diff for ReleasePinOutput {
     fn diff(&self, other: &Self) -> Vec<diff::Difference> {
         diff::d(&[
-            diff::Difference::new("repository", &self.repository, &other.repository),
-            diff::Difference::new("owner", &self.owner, &other.owner),
             diff::Difference::new("tarball_url", &self.tarball_url, &other.tarball_url),
             diff::Difference::new("release_name", &self.release_name, &other.release_name),
             diff::Difference::new("hash", &self.hash, &other.hash),
@@ -70,17 +75,19 @@ impl diff::Diff for GitHubReleasePin {
     }
 }
 
-impl GitHubReleasePin {
-    pub async fn update(&self) -> Result<Self> {
+#[async_trait::async_trait]
+impl Updatable for ReleasePinInput {
+    type Output = ReleasePinOutput;
+
+    async fn update(&self) -> Result<ReleasePinOutput> {
         let latest = get_latest_release(&self.owner, &self.repository)
             .await
             .context("Couldn't fetch the latest release")?;
         let hash = nix::nix_prefetch_tarball(&latest.tarball_url).await?;
-        Ok(Self {
-            tarball_url: Some(latest.tarball_url),
-            release_name: Some(latest.release_name),
-            hash: Some(hash),
-            ..self.clone()
+        Ok(ReleasePinOutput {
+            tarball_url: latest.tarball_url,
+            release_name: latest.release_name,
+            hash,
         })
     }
 }

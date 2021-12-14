@@ -1,20 +1,23 @@
-use crate::diff;
+use crate::*;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PyPiPin {
+pub struct PinInput {
     pub name: String,
-    pub version: Option<String>,
-    pub hash: Option<String>,
-    pub url: Option<String>,
 }
 
-impl diff::Diff for PyPiPin {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PinOutput {
+    pub version: String,
+    pub hash: String,
+    pub url: String,
+}
+
+impl diff::Diff for PinOutput {
     fn diff(&self, other: &Self) -> Vec<diff::Difference> {
         diff::d(&[
-            diff::Difference::new("name", &self.name, &other.name),
             diff::Difference::new("version", &self.version, &other.version),
             diff::Difference::new("hash", &self.hash, &other.hash),
             diff::Difference::new("url", &self.url, &other.url),
@@ -22,8 +25,11 @@ impl diff::Diff for PyPiPin {
     }
 }
 
-impl PyPiPin {
-    pub async fn update(&self) -> Result<Self> {
+#[async_trait::async_trait]
+impl Updatable for PinInput {
+    type Output = PinOutput;
+
+    async fn update(&self) -> Result<PinOutput> {
         let metadata = fetch_metadata(&self.name)
             .await
             .context("Could not fetch Pypi metadata")?;
@@ -43,18 +49,17 @@ impl PyPiPin {
             )
         })?;
 
-        Ok(PyPiPin {
-            version: Some(metadata.info.version),
-            hash: Some(hash),
-            url: Some(latest_source.url),
-            ..self.clone()
+        Ok(PinOutput {
+            version: metadata.info.version,
+            hash,
+            url: latest_source.url,
         })
     }
 }
 
 /// The actual JSON file is rather large, we only deserialize what we are interested in,
 /// and only up to the granularity we are interested in.
-/// JSON API specification: https://warehouse.pypa.io/api-reference/json.html
+/// JSON API specification: <https://warehouse.pypa.io/api-reference/json.html>
 #[derive(Debug, Deserialize)]
 struct PyPiMetadata {
     pub info: PyPiInfoMetadata,
