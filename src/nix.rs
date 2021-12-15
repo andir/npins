@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 
+#[allow(unused)]
 pub struct PrefetchInfo {
     store_path: String,
     hash: String,
@@ -53,6 +54,7 @@ pub async fn nix_prefetch_git(url: impl AsRef<str>, git_ref: impl AsRef<str>) ->
         )));
     }
 
+    #[allow(unused)]
     #[derive(Debug, serde::Deserialize)]
     struct NixPrefetchGitResponse {
         url: String,

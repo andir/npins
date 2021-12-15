@@ -1,176 +1,85 @@
 use std::io::Write;
 
 use anyhow::{Context, Result};
-use diff::Diff;
+use diff::OptionExt;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use structopt::StructOpt;
 use url::Url;
 
-mod diff;
-mod git;
-mod github;
-mod nix;
+pub mod diff;
+pub mod git;
+pub mod github;
+pub mod nix;
+pub mod pypi;
 
-/// GitHubPin tracks a given branch on GitHub and always uses the latest commit
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitHubPin {
-    pub repository: String,
-    pub owner: String,
-    pub branch: String,
-    pub revision: Option<String>,
-    pub hash: Option<String>,
+#[async_trait::async_trait]
+trait Updatable {
+    type Output: diff::Diff + Serialize + Deserialize<'static> + std::fmt::Debug;
+
+    async fn update(&self) -> Result<Self::Output>;
 }
 
-impl diff::Diff for GitHubPin {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[
-            diff::Difference::new("repository", &self.repository, &other.repository),
-            diff::Difference::new("owner", &self.owner, &other.owner),
-            diff::Difference::new("branch", &self.branch, &other.branch),
-            diff::Difference::new("revision", &self.revision, &other.revision),
-            diff::Difference::new("hash", &self.hash, &other.hash),
-        ])
-    }
-}
-
-impl GitHubPin {
-    pub async fn update(&self) -> Result<Self> {
-        let latest = github::get_latest_commit(&self.owner, &self.repository, &self.branch)
-            .await
-            .context("Couldn't fetch the latest commit")?;
-
-        let tarball_url = format!(
-            "https://github.com/{owner}/{repo}/archive/{revision}.tar.gz",
-            owner = self.owner,
-            repo = self.repository,
-            revision = latest.revision,
-        );
-
-        let hash = nix::nix_prefetch_tarball(tarball_url).await?;
-
-        Ok(Self {
-            revision: Some(latest.revision),
-            hash: Some(hash),
-            ..self.clone()
-        })
-    }
-}
-
-/// GitHubReleasePin tries to follow the latest release of the given project
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitHubReleasePin {
-    pub repository: String,
-    pub owner: String,
-    pub tarball_url: Option<String>,
-    pub release_name: Option<String>,
-    pub hash: Option<String>,
-}
-
-impl diff::Diff for GitHubReleasePin {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[
-            diff::Difference::new("repository", &self.repository, &other.repository),
-            diff::Difference::new("owner", &self.owner, &other.owner),
-            diff::Difference::new("tarball_url", &self.tarball_url, &other.tarball_url),
-            diff::Difference::new("release_name", &self.release_name, &other.release_name),
-            diff::Difference::new("hash", &self.hash, &other.hash),
-        ])
-    }
-}
-
-impl GitHubReleasePin {
-    pub async fn update(&self) -> Result<Self> {
-        let latest = github::get_latest_release(&self.owner, &self.repository)
-            .await
-            .context("Couldn't fetch the latest release")?;
-        let hash = nix::nix_prefetch_tarball(&latest.tarball_url).await?;
-        Ok(Self {
-            tarball_url: Some(latest.tarball_url),
-            release_name: Some(latest.release_name),
-            hash: Some(hash),
-            ..self.clone()
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitPin {
-    pub repository_url: Url,
-    pub branch: String,
-    pub revision: Option<String>,
-    pub hash: Option<String>,
-}
-
-impl diff::Diff for GitPin {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[
-            diff::Difference::new(
-                "repository_url",
-                &self.repository_url,
-                &other.repository_url,
-            ),
-            diff::Difference::new("branch", &self.branch, &other.branch),
-            diff::Difference::new("revision", &self.revision, &other.revision),
-            diff::Difference::new("hash", &self.hash, &other.hash),
-        ])
-    }
-}
-
-impl GitPin {
-    pub async fn update(&self) -> Result<Self> {
-        let info = git::fetch_branch_head(&self.repository_url, &self.branch).await?;
-        let hash = nix::nix_prefetch_git(&self.repository_url, &info.revision).await?;
-        Ok(GitPin {
-            revision: Some(info.revision),
-            hash: Some(hash),
-            ..self.clone()
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "type")]
-pub enum Pin {
-    GitHub(GitHubPin),
-    GitHubRelease(GitHubReleasePin),
-    Git(GitPin),
-}
-
-impl diff::Diff for Pin {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        use Pin::*;
-        match (self, other) {
-            (GitHub(a), GitHub(b)) => a.diff(b),
-            (GitHubRelease(a), GitHubRelease(b)) => a.diff(b),
-            (Git(a), Git(b)) => a.diff(b),
-
-            // impossible/invalid cases
-            (GitHub(_), _) => vec![],
-            (GitHubRelease(_), _) => vec![],
-            (Git(_), _) => vec![],
+/// Create the `Pin` type
+///
+/// We need a type to unify over all possible way to pin a dependency. Normally, this would be done with a trait
+/// and trait objects. However, designing such a trait to be object-safe turns out to be highly non-trivial.
+/// (We'd need the `serde_erase` crate for `Deserialize` alone). Since writing this as an enum is extremely repetitive,
+/// this macro does the work for you.
+///
+/// For each pin type, call it with `(Name, lowename, InputType, OutputType)`. `Name` will be the name of the enum variant,
+/// `lower_name` will be used for the constructor.
+/// `InputType` and `OutputType` must adhere to the following requirements: TODO
+macro_rules! mkPin {
+    ( $(( $name:ident, $lower_name:ident, $input_name:path, $output_name:path )),* $(,)? ) => {
+        /* The type declaration */
+        #[derive(Debug, Serialize, Deserialize, Clone)]
+        #[serde(tag = "type")]
+        pub enum Pin {
+            $(
+                /* One variant per type. input and output are serialized to a common JSON dict using `flatten`. Output is optional. */
+                $name {
+                    #[serde(flatten)]
+                    input: $input_name,
+                    #[serde(flatten)]
+                    output: Option<$output_name>,
+                }
+            ),*
         }
-    }
+
+        impl Pin {
+            /* Constructors */
+            $(fn $lower_name(input: $input_name) -> Self {
+                Self::$name { input, output: None }
+            })*
+
+            /* If an error is returned, `self` remains unchanged */
+            async fn update(&mut self) -> Result<Vec<diff::Difference>> {
+                Ok(match self {
+                    $(Self::$name { input, output } => {
+                        /* Use very explicit syntax to force the correct types and get good compile errors */
+                        let new_output: $output_name = <$input_name as Updatable>::update(input).await?;
+                        output.insert_diffed(new_output)
+                    }),*
+                })
+            }
+        }
+
+        impl std::fmt::Display for Pin {
+            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self {
+                    $(Self::$name { input, output } => write!(fmt, "{:?} -> {:?}", input, output)),*
+                }
+            }
+        }
+    };
 }
 
-impl Pin {
-    async fn update(&self) -> Result<Pin> {
-        match self {
-            Self::GitHub(gh) => gh.update().await.map(Self::GitHub),
-            Self::GitHubRelease(ghr) => ghr.update().await.map(Self::GitHubRelease),
-            Self::Git(g) => g.update().await.map(Self::Git),
-        }
-    }
-}
-
-impl std::fmt::Display for Pin {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::GitHub(gh) => write!(fmt, "{:?}", gh),
-            Self::GitHubRelease(ghr) => write!(fmt, "{:?}", ghr),
-            Self::Git(g) => write!(fmt, "{:?}", g),
-        }
-    }
+mkPin! {
+    (GitHub, github, github::PinInput, github::PinOutput),
+    (GitHubRelease, github_release, github::ReleasePinInput, github::ReleasePinOutput),
+    (Git, git, git::PinInput, git::PinOutput),
+    (PyPi, pypi, pypi::PinInput, pypi::PinOutput),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -183,12 +92,10 @@ impl NixPins {
         let mut pins = BTreeMap::new();
         pins.insert(
             "nixpkgs".to_owned(),
-            Pin::GitHub(GitHubPin {
+            Pin::github(github::PinInput {
                 repository: "nixpkgs".to_owned(),
                 owner: "nixos".to_owned(),
                 branch: "nixpkgs-unstable".to_owned(),
-                revision: None,
-                hash: None,
             }),
         );
         Self { pins }
@@ -216,12 +123,10 @@ impl GitHubAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
         Ok((
             self.repository.clone(),
-            Pin::GitHub(GitHubPin {
+            Pin::github(github::PinInput {
                 repository: self.repository.clone(),
                 owner: self.owner.clone(),
                 branch: self.branch.clone(),
-                revision: None,
-                hash: None,
             }),
         ))
     }
@@ -237,12 +142,9 @@ impl GitHubReleaseAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
         Ok((
             self.repository.clone(),
-            Pin::GitHubRelease(GitHubReleasePin {
+            Pin::github_release(github::ReleasePinInput {
                 owner: self.owner.clone(),
                 repository: self.repository.clone(),
-                hash: None,
-                release_name: None,
-                tarball_url: None,
             }),
         ))
     }
@@ -250,7 +152,7 @@ impl GitHubReleaseAddOpts {
 
 #[derive(Debug, StructOpt)]
 pub struct GitAddOpts {
-    /// The git remote URL. For example https://github.com/andir/ate.git
+    /// The git remote URL. For example <https://github.com/andir/ate.git>
     url: String,
 
     /// Name of the branch to track.
@@ -269,11 +171,26 @@ impl GitAddOpts {
 
         Ok((
             name.to_owned(),
-            Pin::Git(GitPin {
+            Pin::git(git::PinInput {
                 repository_url: url,
                 branch: self.branch.clone(),
-                revision: None,
-                hash: None,
+            }),
+        ))
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub struct PyPiAddOpts {
+    /// Name of the package at PyPi.org
+    pub name: String,
+}
+
+impl PyPiAddOpts {
+    pub fn add(&self) -> Result<(String, Pin)> {
+        Ok((
+            self.name.clone(),
+            Pin::pypi(pypi::PinInput {
+                name: self.name.clone(),
             }),
         ))
     }
@@ -281,12 +198,18 @@ impl GitAddOpts {
 
 #[derive(Debug, StructOpt)]
 pub enum AddCommands {
+    /// Track a branch from a GitHub repository
     #[structopt(name = "github")]
     GitHub(GitHubAddOpts),
+    /// Track the latest release from a GitHub repository
     #[structopt(name = "github-release")]
     GitHubRelease(GitHubReleaseAddOpts),
+    /// Track a git repository
     #[structopt(name = "git")]
     Git(GitAddOpts),
+    /// Track a package on PyPi
+    #[structopt(name = "pypi")]
+    PyPi(PyPiAddOpts),
 }
 
 #[derive(Debug, StructOpt)]
@@ -304,6 +227,7 @@ impl AddOpts {
             AddCommands::Git(g) => g.add()?,
             AddCommands::GitHub(gh) => gh.add()?,
             AddCommands::GitHubRelease(ghr) => ghr.add()?,
+            AddCommands::PyPi(p) => p.add()?,
         };
 
         let name = if let Some(ref n) = self.name {
@@ -417,9 +341,8 @@ impl Opts {
         Ok(())
     }
 
-    async fn update_one(&self, pin: &Pin) -> Result<Pin> {
-        let p = pin.update().await?;
-        let diff = pin.diff(&p);
+    async fn update_one(&self, pin: &mut Pin) -> Result<()> {
+        let diff = pin.update().await?;
         if diff.len() > 0 {
             println!("changes:");
             for d in diff {
@@ -427,31 +350,27 @@ impl Opts {
             }
         }
 
-        Ok(p)
+        Ok(())
     }
 
     async fn update(&self, opts: &UpdateOpts) -> Result<()> {
-        let pins = self.read_pins()?;
-        let mut new_pins = NixPins::default();
+        let mut pins = self.read_pins()?;
 
         if let Some(name) = &opts.name {
-            new_pins = pins.clone();
-            match pins.pins.get(name) {
+            match pins.pins.get_mut(name) {
                 None => return Err(anyhow::anyhow!("No such pin entry found.")),
                 Some(p) => {
-                    let p = self.update_one(p).await?;
-                    new_pins.pins.insert(name.clone(), p);
-                }
+                    self.update_one(p).await?;
+                },
             }
         } else {
-            for (name, pin) in pins.pins.iter() {
+            for (name, pin) in pins.pins.iter_mut() {
                 println!("Updating {}", name);
-                let p = self.update_one(pin).await?;
-                new_pins.pins.insert(name.clone(), p);
+                self.update_one(pin).await?;
             }
         }
 
-        self.write_pins(&new_pins)?;
+        self.write_pins(&pins)?;
 
         Ok(())
     }
