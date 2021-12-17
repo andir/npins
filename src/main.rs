@@ -140,6 +140,8 @@ pub struct GitHubReleaseAddOpts {
 
 impl GitHubReleaseAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
+        log::warn!("The releases API always gives you the *latest* release, which is probably not what you want!");
+        log::warn!("This is a known issue, and will be fixed in the future. That fix might be backwards-incompatible in some way.");
         Ok((
             self.repository.clone(),
             Pin::github_release(github::ReleasePinInput {
@@ -405,7 +407,11 @@ impl Opts {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
     let opts = Opts::from_args();
     opts.run().await?;
     Ok(())
