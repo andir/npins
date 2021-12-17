@@ -334,9 +334,12 @@ impl Opts {
         Ok(())
     }
 
-    fn add(&self, opts: &AddOpts) -> Result<()> {
+    async fn add(&self, opts: &AddOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
-        let (name, pin) = opts.run()?;
+        let (name, mut pin) = opts.run()?;
+        self.update_one(&mut pin)
+            .await
+            .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name, pin);
         self.write_pins(&pins)?;
 
@@ -396,7 +399,7 @@ impl Opts {
         match &self.command {
             Command::Init => self.init()?,
             Command::Show => self.show()?,
-            Command::Add(a) => self.add(a)?,
+            Command::Add(a) => self.add(a).await?,
             Command::Update(o) => self.update(o).await?,
             Command::Remove(r) => self.remove(r)?,
         };
