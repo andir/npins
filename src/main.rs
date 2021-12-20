@@ -253,10 +253,17 @@ pub struct UpdateOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct InitOpts {
+    /// Don't add an initial `nixpkgs` entry
+    #[structopt(long)]
+    pub bare: bool,
+}
+
+#[derive(Debug, StructOpt)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your pins.json.
-    Init,
+    Init(InitOpts),
 
     /// Adds a new pin entry.
     Add(AddOpts),
@@ -308,7 +315,7 @@ impl Opts {
         Ok(())
     }
 
-    fn init(&self) -> Result<()> {
+    fn init(&self, o: &InitOpts) -> Result<()> {
         let default_nix = include_bytes!("../npins/default.nix");
         if !self.folder.exists() {
             std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
@@ -322,7 +329,11 @@ impl Opts {
             return Ok(());
         }
 
-        let initial_pins = NixPins::new_with_nixpkgs();
+        let initial_pins = if o.bare {
+            NixPins::default()
+        } else {
+            NixPins::new_with_nixpkgs()
+        };
         self.write_pins(&initial_pins)?;
         Ok(())
     }
@@ -411,7 +422,7 @@ impl Opts {
 
     async fn run(&self) -> Result<()> {
         match &self.command {
-            Command::Init => self.init()?,
+            Command::Init(o) => self.init(o)?,
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
             Command::Fetch(a) => self.fetch(a).await?,

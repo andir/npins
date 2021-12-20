@@ -35,9 +35,10 @@ Intializes the npins directory. Running this multiple times will restore/upgrade
 pins.json
 
 USAGE:
-    npins init
+    npins init [FLAGS]
 
 FLAGS:
+        --bare       Don't add an initial `nixpkgs` entry
     -h, --help       Prints help information
     -V, --version    Prints version information
 ```
