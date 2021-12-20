@@ -18,6 +18,7 @@ ARGS:
 
 SUBCOMMANDS:
     add       Adds a new pin entry
+    fetch     Query some release information and then print out the entry
     help      Prints this message or the help of the given subcommand(s)
     init      Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and
               never touch your pins.json

@@ -261,6 +261,9 @@ pub enum Command {
     /// Adds a new pin entry.
     Add(AddOpts),
 
+    /// Query some release information and then print out the entry
+    Fetch(AddOpts),
+
     /// Lists the current pin entries.
     Show,
 
@@ -346,6 +349,17 @@ impl Opts {
         Ok(())
     }
 
+    async fn fetch(&self, opts: &AddOpts) -> Result<()> {
+        let (_name, mut pin) = opts.run()?;
+        self.update_one(&mut pin)
+            .await
+            .context("Failed to fully fetch the pin")?;
+        serde_json::to_writer_pretty(std::io::stdout(), &pin)?;
+        println!();
+
+        Ok(())
+    }
+
     async fn update_one(&self, pin: &mut Pin) -> Result<()> {
         let diff = pin.update().await?;
         if diff.len() > 0 {
@@ -400,6 +414,7 @@ impl Opts {
             Command::Init => self.init()?,
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
+            Command::Fetch(a) => self.fetch(a).await?,
             Command::Update(o) => self.update(o).await?,
             Command::Remove(r) => self.remove(r)?,
         };
