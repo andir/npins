@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use url::Url;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct PinInput {
     pub repository_url: Url,
     pub branch: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct PinOutput {
     pub revision: String,
     pub hash: String,

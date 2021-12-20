@@ -14,9 +14,17 @@ pub mod nix;
 pub mod pypi;
 
 #[async_trait::async_trait]
-pub trait Updatable {
+pub trait Updatable:
+    Serialize + Deserialize<'static> + std::fmt::Debug + Clone + PartialEq + Eq + std::hash::Hash
+{
     /// The pinned hashes
-    type Output: diff::Diff + Serialize + Deserialize<'static> + std::fmt::Debug;
+    type Output: diff::Diff
+        + Serialize
+        + Deserialize<'static>
+        + std::fmt::Debug
+        + Clone
+        + PartialEq
+        + Eq;
 
     /// Fetch the latest applicable commit data
     async fn update(&self) -> Result<Self::Output>;
@@ -32,8 +40,8 @@ pub trait Updatable {
 /// For each pin type, call it with `(Name, lowename, InputType, OutputType)`. `Name` will be the name of the enum variant,
 /// `lower_name` will be used for the constructor.
 /// `InputType` and `OutputType` must adhere to the following requirements:
-/// - `InputType: Updatable + Serialize + Deserialize + Debug + Clone`
-/// - `OutputType: Serialize + Deserialize + Debug + Clone
+/// - `InputType: Updatable + Serialize + Deserialize + Debug + Clone + Eq + PartialEq + Hash`
+/// - `OutputType: Serialize + Deserialize + Debug + Clone + Eq + PartialEq`
 /// - Both types serialize to a map/dictionary
 /// - **The serialized dictionaries of both are disjoint** (unchecked invariant at the moment)
 macro_rules! mkPin {

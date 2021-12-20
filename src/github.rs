@@ -4,14 +4,14 @@ use hubcaps::{Credentials, Github};
 use serde::{Deserialize, Serialize};
 
 /// Track a given branch on GitHub and always use the latest commit
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct PinInput {
     pub repository: String,
     pub owner: String,
     pub branch: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct PinOutput {
     pub revision: String,
     pub hash: String,
@@ -52,13 +52,13 @@ impl Updatable for PinInput {
 }
 
 /// Try to follow the latest release of the given project
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct ReleasePinInput {
     pub repository: String,
     pub owner: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct ReleasePinOutput {
     pub tarball_url: String,
     pub release_name: String,
