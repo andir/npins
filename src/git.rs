@@ -61,15 +61,20 @@ pub async fn fetch_branch_head(url: &url::Url, branch: impl AsRef<str>) -> Resul
             )
         })?;
     let stdout = String::from_utf8_lossy(&process.stdout);
-    let (revision, _) = match stdout.split_once('\t') {
-        None => {
-            return Err(anyhow::anyhow!(
-                "git ls-remote output doesn't contain \\t. Can't match revision."
-            ))
-        },
-        Some(v) => v,
-    };
-    log::warn!("revision: {:?}", revision);
+    anyhow::ensure!(
+        !stdout.is_empty(),
+        anyhow::anyhow!(
+            "git ls-remote output is empty. Are you sure the requested branch ('{}') exists?",
+            branch
+        ),
+    );
+    let revision = stdout
+        .split_once('\t')
+        .map(|(revision, _)| revision)
+        .ok_or_else(|| {
+            anyhow::anyhow!("git ls-remote output doesn't contain \\t. Can't match revision.")
+        })?;
+    log::debug!("revision: {:?}", revision);
 
     Ok(RevisionInfo {
         revision: revision.to_string(),
