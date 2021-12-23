@@ -1,0 +1,19 @@
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2.3.4
+      - uses: nixbuild/nix-quick-install-action@v6
+      - uses: nixbuild/nixbuild-action@v8
+        with:
+          nixbuild_ssh_key: ${{ secrets.nixbuild_ssh_key }}
+      - name: Build
+        run: nix-build test.nix
+      - name: Run pre-commit hooks
+        run: nix-shell --run "pre-commit run --all"
