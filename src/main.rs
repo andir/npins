@@ -115,7 +115,7 @@ pub struct GitHubAddOpts {
     pub owner: String,
     pub repository: String,
 
-    #[structopt(default_value = "master")]
+    #[structopt(short, long, default_value = "master")]
     pub branch: String,
 }
 
@@ -158,7 +158,7 @@ pub struct GitAddOpts {
     url: String,
 
     /// Name of the branch to track.
-    #[structopt(default_value = "master")]
+    #[structopt(short, long, default_value = "master")]
     branch: String,
 }
 
@@ -281,10 +281,24 @@ pub enum Command {
     Remove(RemoveOpts),
 }
 
+use structopt::clap::AppSettings;
+
 #[derive(Debug, StructOpt)]
+#[structopt(
+    setting(AppSettings::ArgRequiredElseHelp),
+    global_setting(AppSettings::VersionlessSubcommands),
+    global_setting(AppSettings::ColoredHelp),
+    global_setting(AppSettings::ColorAuto)
+)]
 pub struct Opts {
     /// Base folder for npins.json and the boilerplate default.nix
-    #[structopt(default_value = "npins", env = "NPINS_FOLDER")]
+    #[structopt(
+        global = true,
+        short = "d",
+        long = "directory",
+        default_value = "npins",
+        env = "NPINS_DIRECTORY"
+    )]
     folder: std::path::PathBuf,
 
     #[structopt(subcommand)]
