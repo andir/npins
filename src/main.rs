@@ -14,9 +14,11 @@ pub mod nix;
 pub mod pypi;
 
 #[async_trait::async_trait]
-trait Updatable {
+pub trait Updatable {
+    /// The pinned hashes
     type Output: diff::Diff + Serialize + Deserialize<'static> + std::fmt::Debug;
 
+    /// Fetch the latest applicable commit data
     async fn update(&self) -> Result<Self::Output>;
 }
 
@@ -29,10 +31,18 @@ trait Updatable {
 ///
 /// For each pin type, call it with `(Name, lowename, InputType, OutputType)`. `Name` will be the name of the enum variant,
 /// `lower_name` will be used for the constructor.
-/// `InputType` and `OutputType` must adhere to the following requirements: TODO
+/// `InputType` and `OutputType` must adhere to the following requirements:
+/// - `InputType: Updatable + Serialize + Deserialize + Debug + Clone`
+/// - `OutputType: Serialize + Deserialize + Debug + Clone
+/// - Both types serialize to a map/dictionary
+/// - **The serialized dictionaries of both are disjoint** (unchecked invariant at the moment)
 macro_rules! mkPin {
     ( $(( $name:ident, $lower_name:ident, $input_name:path, $output_name:path )),* $(,)? ) => {
         /* The type declaration */
+        /// Enum over all possible pin types
+        ///
+        /// Every pin type has two parts, an `input` and an `output`. The input implements [`Updatable`], which
+        /// will generate output in its most up-to-date form.
         #[derive(Debug, Serialize, Deserialize, Clone)]
         #[serde(tag = "type")]
         pub enum Pin {
@@ -72,6 +82,15 @@ macro_rules! mkPin {
                 }
             }
         }
+
+        // Each variant holds exactly one distinct type, so we can easily create convenient type wrappers that simply call the constructor
+        $(
+            impl From<$input_name> for Pin {
+                fn from(input: $input_name) -> Self {
+                    Self::$lower_name(input)
+                }
+            }
+        )*
     };
 }
 
@@ -82,6 +101,9 @@ mkPin! {
     (PyPi, pypi, pypi::PinInput, pypi::PinOutput),
 }
 
+/// The main struct the CLI operates on
+///
+/// For serialization purposes, use the `NixPinsVersioned` wrapper instead.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NixPins {
     pins: BTreeMap<String, Pin>,
