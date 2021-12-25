@@ -2,6 +2,7 @@
 let
   pins = import ./npins;
   pkgs = import pins.nixpkgs { inherit system; };
+  inherit (pkgs) stdenv lib;
 
   pre-commit = (import pins."pre-commit-hooks.nix").run {
     src = ./.;
@@ -20,7 +21,8 @@ let
   };
 
 in
-pkgs.mkShell {
+pkgs.mkShell
+{
   nativeBuildInputs = with pkgs; [
     cargo
     rustc
@@ -32,5 +34,9 @@ pkgs.mkShell {
     git
   ];
 
-  inherit (pre-commit) shellHook;
+  # https://github.com/cachix/pre-commit-hooks.nix/issues/131
+  shellHook =
+    if (!(stdenv.isDarwin && stdenv.isAarch64))
+    then pre-commit.shellHook
+    else "";
 }
