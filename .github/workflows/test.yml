@@ -13,6 +13,7 @@ jobs:
       - uses: nixbuild/nixbuild-action@v8
         with:
           nixbuild_ssh_key: ${{ secrets.nixbuild_ssh_key }}
+        if: ${{ github.ref_name == 'master' }}
       - name: Build
         run: nix-build test.nix
       - name: Run pre-commit hooks
