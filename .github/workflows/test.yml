@@ -15,6 +15,6 @@ jobs:
           nixbuild_ssh_key: ${{ secrets.nixbuild_ssh_key }}
         if: ${{ github.ref_name == 'master' }}
       - name: Build
-        run: nix-build test.nix
+        run: nix-build
       - name: Run pre-commit hooks
         run: nix-shell --run "pre-commit run --all"
