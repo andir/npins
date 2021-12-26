@@ -12,6 +12,7 @@ pub mod git;
 pub mod github;
 pub mod nix;
 pub mod pypi;
+pub mod versions;
 
 #[async_trait::async_trait]
 pub trait Updatable:
@@ -292,7 +293,7 @@ pub struct InitOpts {
 #[derive(Debug, StructOpt)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
-    /// `default.nix` and never touch your pins.json.
+    /// `default.nix` and never touch your sources.json.
     Init(InitOpts),
 
     /// Adds a new pin entry.
@@ -306,6 +307,9 @@ pub enum Command {
 
     /// Updates all or the given pin to the latest version.
     Update(UpdateOpts),
+
+    /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
+    Upgrade,
 
     /// Removes one pin entry.
     Remove(RemoveOpts),
@@ -321,7 +325,7 @@ use structopt::clap::AppSettings;
     global_setting(AppSettings::ColorAuto)
 )]
 pub struct Opts {
-    /// Base folder for npins.json and the boilerplate default.nix
+    /// Base folder for sources.json and the boilerplate default.nix
     #[structopt(
         global = true,
         short = "d",
@@ -337,25 +341,25 @@ pub struct Opts {
 
 impl Opts {
     fn read_pins(&self) -> Result<NixPins> {
-        let path = self.folder.join("pins.json");
-        let fh = std::fs::File::open(&path).with_context(move || {
+        let path = self.folder.join("sources.json");
+        let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
             format!(
                 "Failed to open {}. You must initialize npins before you can show current pins.",
                 path.display()
             )
-        })?;
-        let pins: NixPins = serde_json::from_reader(fh)?;
-        Ok(pins)
+        })?);
+        versions::from_value_versioned(serde_json::from_reader(fh)?)
+            .context("Failed to deserialize sources.json")
     }
 
     fn write_pins(&self, pins: &NixPins) -> Result<()> {
         if !self.folder.exists() {
             std::fs::create_dir(&self.folder)?;
         }
-        let path = self.folder.join("pins.json");
+        let path = self.folder.join("sources.json");
         let fh = std::fs::File::create(&path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
-        serde_json::to_writer_pretty(fh, pins)?;
+        serde_json::to_writer_pretty(fh, &versions::to_value_versioned(&pins))?;
         Ok(())
     }
 
@@ -369,7 +373,7 @@ impl Opts {
         fh.write_all(default_nix)?;
 
         // Only create the pins if the file isn't there yet
-        if self.folder.join("pins.json").exists() {
+        if self.folder.join("sources.json").exists() {
             return Ok(());
         }
 
@@ -449,6 +453,40 @@ impl Opts {
         Ok(())
     }
 
+    fn upgrade(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.folder.exists(),
+            "Could not find npins folder at {}",
+            self.folder.display(),
+        );
+
+        let nix_path = self.folder.join("default.nix");
+        let nix_file = include_str!("../npins/default.nix");
+        if std::fs::read_to_string(&nix_path)? == nix_file {
+            log::info!("default.nix is already up to date");
+        } else {
+            log::info!("Replacing default.nix with an up to date version");
+            std::fs::write(&nix_path, nix_file).context("Failed to create npins default.nix")?;
+        }
+
+        log::info!("Updating sources.json to the newest format version");
+        let path = self.folder.join("sources.json");
+        let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
+            format!(
+                "Failed to open {}. You must initialize npins before you can show current pins.",
+                path.display()
+            )
+        })?);
+
+        let pins_raw: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(fh)
+            .context("sources.json must be a valid JSON file with an object as top level")?;
+
+        let pins_raw = versions::update(pins_raw).context("Upgrading failed")?;
+
+        let pins: NixPins = serde_json::from_value(pins_raw)?;
+        self.write_pins(&pins.into())
+    }
+
     fn remove(&self, r: &RemoveOpts) -> Result<()> {
         let pins = self.read_pins()?;
 
@@ -459,7 +497,7 @@ impl Opts {
         let mut new_pins = pins.clone();
         new_pins.pins.remove(&r.name);
 
-        self.write_pins(&new_pins)?;
+        self.write_pins(&new_pins.into())?;
 
         Ok(())
     }
@@ -471,6 +509,7 @@ impl Opts {
             Command::Add(a) => self.add(a).await?,
             Command::Fetch(a) => self.fetch(a).await?,
             Command::Update(o) => self.update(o).await?,
+            Command::Upgrade => self.upgrade()?,
             Command::Remove(r) => self.remove(r)?,
         };
 
