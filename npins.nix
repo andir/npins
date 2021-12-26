@@ -9,6 +9,7 @@
   # runtime dependencies
 , nix # for nix-prefetch-url
 , nix-prefetch-git
+, git # for git ls-remote
 }:
 let
   paths = [
@@ -34,7 +35,7 @@ let
   src = extractSource ./. paths;
 
   cargoToml = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
-  runtimePath = lib.makeBinPath [ nix nix-prefetch-git ];
+  runtimePath = lib.makeBinPath [ nix nix-prefetch-git git ];
 in
 rustPlatform.buildRustPackage {
   pname = cargoToml.package.name;
