@@ -3,6 +3,8 @@
 , nix-gitignore
 , makeWrapper
 , runCommand
+, stdenv
+, darwin
 
   # runtime dependencies
 , nix # for nix-prefetch-url
@@ -44,6 +46,7 @@ rustPlatform.buildRustPackage {
 
   inherit src;
 
+  buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
   nativeBuildInputs = [ makeWrapper ];
 
   postFixup = ''
