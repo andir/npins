@@ -115,7 +115,7 @@ pub struct GitHubAddOpts {
     pub owner: String,
     pub repository: String,
 
-    #[structopt(default_value = "master")]
+    #[structopt(short, long, default_value = "master")]
     pub branch: String,
 }
 
@@ -158,7 +158,7 @@ pub struct GitAddOpts {
     url: String,
 
     /// Name of the branch to track.
-    #[structopt(default_value = "master")]
+    #[structopt(short, long, default_value = "master")]
     branch: String,
 }
 
@@ -253,13 +253,23 @@ pub struct UpdateOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct InitOpts {
+    /// Don't add an initial `nixpkgs` entry
+    #[structopt(long)]
+    pub bare: bool,
+}
+
+#[derive(Debug, StructOpt)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your pins.json.
-    Init,
+    Init(InitOpts),
 
     /// Adds a new pin entry.
     Add(AddOpts),
+
+    /// Query some release information and then print out the entry
+    Fetch(AddOpts),
 
     /// Lists the current pin entries.
     Show,
@@ -271,10 +281,24 @@ pub enum Command {
     Remove(RemoveOpts),
 }
 
+use structopt::clap::AppSettings;
+
 #[derive(Debug, StructOpt)]
+#[structopt(
+    setting(AppSettings::ArgRequiredElseHelp),
+    global_setting(AppSettings::VersionlessSubcommands),
+    global_setting(AppSettings::ColoredHelp),
+    global_setting(AppSettings::ColorAuto)
+)]
 pub struct Opts {
     /// Base folder for npins.json and the boilerplate default.nix
-    #[structopt(default_value = "npins", env = "NPINS_FOLDER")]
+    #[structopt(
+        global = true,
+        short = "d",
+        long = "directory",
+        default_value = "npins",
+        env = "NPINS_DIRECTORY"
+    )]
     folder: std::path::PathBuf,
 
     #[structopt(subcommand)]
@@ -305,7 +329,7 @@ impl Opts {
         Ok(())
     }
 
-    fn init(&self) -> Result<()> {
+    fn init(&self, o: &InitOpts) -> Result<()> {
         let default_nix = include_bytes!("../npins/default.nix");
         if !self.folder.exists() {
             std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
@@ -319,7 +343,11 @@ impl Opts {
             return Ok(());
         }
 
-        let initial_pins = NixPins::new_with_nixpkgs();
+        let initial_pins = if o.bare {
+            NixPins::default()
+        } else {
+            NixPins::new_with_nixpkgs()
+        };
         self.write_pins(&initial_pins)?;
         Ok(())
     }
@@ -342,6 +370,17 @@ impl Opts {
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name, pin);
         self.write_pins(&pins)?;
+
+        Ok(())
+    }
+
+    async fn fetch(&self, opts: &AddOpts) -> Result<()> {
+        let (_name, mut pin) = opts.run()?;
+        self.update_one(&mut pin)
+            .await
+            .context("Failed to fully fetch the pin")?;
+        serde_json::to_writer_pretty(std::io::stdout(), &pin)?;
+        println!();
 
         Ok(())
     }
@@ -397,9 +436,10 @@ impl Opts {
 
     async fn run(&self) -> Result<()> {
         match &self.command {
-            Command::Init => self.init()?,
+            Command::Init(o) => self.init(o)?,
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
+            Command::Fetch(a) => self.fetch(a).await?,
             Command::Update(o) => self.update(o).await?,
             Command::Remove(r) => self.remove(r)?,
         };

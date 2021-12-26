@@ -7,17 +7,19 @@ $ npins help
 npins 0.1.0
 
 USAGE:
-    npins [folder] <SUBCOMMAND>
+    npins [OPTIONS] <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
-ARGS:
-    <folder>    Base folder for npins.json and the boilerplate default.nix [env: NPINS_FOLDER=]  [default: npins]
+OPTIONS:
+    -d, --directory <folder>    Base folder for npins.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
+                                [default: npins]
 
 SUBCOMMANDS:
     add       Adds a new pin entry
+    fetch     Query some release information and then print out the entry
     help      Prints this message or the help of the given subcommand(s)
     init      Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and
               never touch your pins.json
@@ -34,11 +36,15 @@ Intializes the npins directory. Running this multiple times will restore/upgrade
 pins.json
 
 USAGE:
-    npins init
+    npins init [FLAGS] [OPTIONS]
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+        --bare    Don't add an initial `nixpkgs` entry
+    -h, --help    Prints help information
+
+OPTIONS:
+    -d, --directory <folder>    Base folder for npins.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
+                                [default: npins]
 ```
 
 ## npins help add
@@ -51,11 +57,12 @@ USAGE:
     npins add [OPTIONS] <SUBCOMMAND>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help    Prints help information
 
 OPTIONS:
-    -n, --name <name>    
+    -d, --directory <folder>    Base folder for npins.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
+                                [default: npins]
+    -n, --name <name>           
 
 SUBCOMMANDS:
     git               Track a git repository
@@ -72,11 +79,14 @@ npins-update 0.1.0
 Updates all or the given pin to the latest version
 
 USAGE:
-    npins update [name]
+    npins update [OPTIONS] [name]
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help    Prints help information
+
+OPTIONS:
+    -d, --directory <folder>    Base folder for npins.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
+                                [default: npins]
 
 ARGS:
     <name>    
@@ -89,11 +99,14 @@ npins-remove 0.1.0
 Removes one pin entry
 
 USAGE:
-    npins remove <name>
+    npins remove [OPTIONS] <name>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help    Prints help information
+
+OPTIONS:
+    -d, --directory <folder>    Base folder for npins.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
+                                [default: npins]
 
 ARGS:
     <name>    
