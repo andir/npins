@@ -15,7 +15,7 @@ let
       } ''
 
       set -e
-      echo "## npins $cmd" > $out
+      echo "### npins $cmd" > $out
       echo '```console' >> $out
       echo "\$ npins $cmd" >> $out
       npins $cmd >> $out 2>&1

@@ -1,42 +1,12 @@
-## Usage in nix expressions
+<!-- MARKDOWN LINKS & IMAGES -->
 
-`npins` creates a `default.nix` file in the target directory that exports each
-of the dependencies as an attribute.
-
-Each attribute has the `outPath` property which means it can be used just like
-regular results of fetchers in `nixpkgs`.
-
-Example:
-
-```nix
-let
-   sources = import ./npins;
-   pkgs = import sources.nixpkgs {};
-in pkgs.mkShell {
-   # ...
-}
-```
-
-Additionally, depending on the type of pin (Git, GitHub, GitHub release, ...)
-additional information about the fetched sources are available.
-
-Example:
-
-```nix
-let
-   sources = import ./npins;
-   pkgs = import sources.nixpkgs {};
-in pkgs.stdenv.mkDerivation {
-   # Use the name and owner of the repository as package name
-   pname = sources.neovim.owner + "-" + sources.neovim.repository;
-
-   # this will set the version of the package to the git revision
-   version = sources.neovim.revision;
-
-   # or, if you are tracking a tag you can use the name of the release as
-   # defined on GitHub:
-   # version = sources.neovim.release_name;
-
-   src = sources.neovim;
-}
-```
+[contributors-shield]: https://img.shields.io/github/contributors/andir/npins.svg?style=for-the-badge
+[contributors-url]: https://github.com/andir/npins/graphs/contributors
+[issues-shield]: https://img.shields.io/github/issues/andir/npins.svg?style=for-the-badge
+[issues-url]: https://github.com/andir/npins/issues
+[license-shield]: https://img.shields.io/github/license/andir/npins.svg?style=for-the-badge
+[license-url]: https://github.com/andir/npins/blob/master/LICENSE
+[test-shield]: https://img.shields.io/github/workflow/status/andir/npins/test/master?style=for-the-badge
+[test-url]: https://github.com/andir/npins/actions
+[pr-shield]: https://img.shields.io/github/issues-pr/andir/npins.svg?style=for-the-badge
+[pr-url]: https://github.com/andir/npins/pulls
