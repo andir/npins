@@ -18,3 +18,5 @@ jobs:
         run: nix-build
       - name: Run pre-commit hooks
         run: nix-shell --run "pre-commit run --all"
+      - name: Run smoke test
+        run: bash ./.github/workflows/smoke-test.sh
