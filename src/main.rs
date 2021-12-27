@@ -340,6 +340,14 @@ impl Opts {
 
         // Only create the pins if the file isn't there yet
         if self.folder.join("pins.json").exists() {
+            println!(
+                "The file '{}' already exists, nothing to do.",
+                self.folder
+                    .join("pins.json")
+                    .into_os_string()
+                    .into_string()
+                    .unwrap()
+            );
             return Ok(());
         }
 
@@ -349,6 +357,10 @@ impl Opts {
             NixPins::new_with_nixpkgs()
         };
         self.write_pins(&initial_pins)?;
+        println!(
+            "Successfully written initial files to '{}'.",
+            self.folder.clone().into_os_string().into_string().unwrap()
+        );
         Ok(())
     }
 
@@ -368,9 +380,9 @@ impl Opts {
         self.update_one(&mut pin)
             .await
             .context("Failed to fully initialize the pin")?;
-        pins.pins.insert(name, pin);
+        pins.pins.insert(name, pin.clone());
         self.write_pins(&pins)?;
-
+        println!("Successfully added pin for '{}'.", pin);
         Ok(())
     }
 
@@ -402,20 +414,26 @@ impl Opts {
 
         if let Some(name) = &opts.name {
             match pins.pins.get_mut(name) {
-                None => return Err(anyhow::anyhow!("No such pin entry found.")),
+                None => {
+                    return Err(anyhow::anyhow!(format!(
+                        "Could not find a pin for '{}'.",
+                        name
+                    )))
+                },
                 Some(p) => {
+                    println!("Updating {} ...", name);
                     self.update_one(p).await?;
                 },
             }
         } else {
             for (name, pin) in pins.pins.iter_mut() {
-                println!("Updating {}", name);
+                println!("Updating {} ...", name);
                 self.update_one(pin).await?;
             }
         }
 
         self.write_pins(&pins)?;
-
+        println!("Update successful.");
         Ok(())
     }
 
@@ -423,13 +441,17 @@ impl Opts {
         let pins = self.read_pins()?;
 
         if !pins.pins.contains_key(&r.name) {
-            return Err(anyhow::anyhow!("No such pin entry found."));
+            return Err(anyhow::anyhow!(format!(
+                "Could not find a pin for '{}'.",
+                r.name
+            )));
         }
 
         let mut new_pins = pins.clone();
         new_pins.pins.remove(&r.name);
 
         self.write_pins(&new_pins)?;
+        println!("Successfully removed pin for '{}'.", r.name);
 
         Ok(())
     }
