@@ -1,3 +1,5 @@
+//! Pin a PyPi package
+
 use crate::*;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -30,9 +32,14 @@ impl Updatable for PinInput {
     type Output = PinOutput;
 
     async fn update(&self) -> Result<PinOutput> {
-        let metadata = fetch_metadata(&self.name)
-            .await
-            .context("Could not fetch Pypi metadata")?;
+        /* Fetch the JSON metadata for a Pypi package.
+         * Url template: `https://pypi.org/pypi/$pname/json`
+         * JSON schema (as in the returned value): https://warehouse.pypa.io/api-reference/json.html
+         */
+        let metadata: PyPiMetadata =
+            get_and_deserialize(format!("https://pypi.org/pypi/{}/json", &self.name))
+                .await
+                .context("Could not fetch Pypi metadata")?;
 
         let mut latest_source: PyPiUrlMetadata = metadata.urls
             .into_iter()
@@ -81,13 +88,27 @@ struct PyPiInfoMetadata {
     version: String,
 }
 
-/// Fetch the JSON metadata for a Pypi package.
-///
-/// Url template: `https://pypi.org/pypi/$pname/json`
-/// JSON schema (as in the returned value): TODO link to documentation?
-async fn fetch_metadata(pname: &str) -> Result<PyPiMetadata> {
-    let response = reqwest::get(format!("https://pypi.org/pypi/{}/json", pname))
-        .await?
-        .error_for_status()?;
-    Ok(serde_json::from_str(&response.text().await?)?)
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_pypi_update() -> Result<()> {
+        /* Last release has been in 2016, there are separate packages for major releases.
+         * There's no way this will get an update anymore.
+         */
+        let pin = PinInput {
+            name: "gaiatest".into(),
+        };
+        let output = pin.update().await?;
+        assert_eq!(
+            output,
+            PinOutput {
+                version: "0.34".into(),
+                hash: "3953b158b7b690642d68cd6beb1d59f6e10526f2ee10a6fb4636a913cc95e718".into(),
+                url: "https://files.pythonhosted.org/packages/d1/d5/0c270c22d61ff6b883d0f24956f13e904b131b5ac2829e0af1cda99d70b1/gaiatest-0.34.tar.gz".into(),
+            }
+        );
+        Ok(())
+    }
 }

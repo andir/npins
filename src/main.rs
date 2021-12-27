@@ -2,6 +2,7 @@ use std::io::Write;
 
 use anyhow::{Context, Result};
 use diff::OptionExt;
+use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use structopt::StructOpt;
@@ -13,6 +14,28 @@ pub mod github;
 pub mod nix;
 pub mod pypi;
 pub mod versions;
+
+/// Helper method for doing various API calls
+async fn get_and_deserialize<T, U>(url: U) -> anyhow::Result<T>
+where
+    T: for<'a> Deserialize<'a> + 'static,
+    U: IntoUrl,
+{
+    let response = reqwest::Client::builder()
+        .user_agent(concat!(
+            env!("CARGO_PKG_NAME"),
+            " v",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .build()?
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .text()
+        .await?;
+    Ok(serde_json::from_str(&response)?)
+}
 
 #[async_trait::async_trait]
 pub trait Updatable:

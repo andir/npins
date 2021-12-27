@@ -50,6 +50,9 @@ rustPlatform.buildRustPackage {
   buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
   nativeBuildInputs = [ makeWrapper ];
 
+  # (Almost) all tests require internet
+  doCheck = false;
+
   postFixup = ''
     wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
   '';
