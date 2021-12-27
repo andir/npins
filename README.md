@@ -117,7 +117,7 @@ in pkgs.stdenv.mkDerivation {
 ## Commands
 
 The section below provides an overview of all available commands and their arguments.
-## npins help
+### npins help
 ```console
 $ npins help
 npins 0.1.0
@@ -147,7 +147,7 @@ SUBCOMMANDS:
                   Nix evaluation!
 ```
 
-## npins help init
+### npins init
 ```console
 $ npins help init
 npins-init 0.1.0
@@ -166,7 +166,7 @@ OPTIONS:
                                 [default: npins]
 ```
 
-## npins help add
+### npins add
 ```console
 $ npins help add
 npins-add 0.1.0
@@ -191,7 +191,7 @@ SUBCOMMANDS:
     pypi      Track a package on PyPi
 ```
 
-## npins help update
+### npins update
 ```console
 $ npins help update
 npins-update 0.1.0
@@ -215,7 +215,7 @@ ARGS:
     <names>...    Update only those pins
 ```
 
-## npins help remove
+### npins remove
 ```console
 $ npins help remove
 npins-remove 0.1.0
