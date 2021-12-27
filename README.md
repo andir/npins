@@ -114,6 +114,14 @@ in pkgs.stdenv.mkDerivation {
 
 ```
 
+## Contributing
+
+Contributions to this project are welcome in the form of GitHub Issues or PRs. Please consider the following before creating PRs:
+
+- This project has several commit hooks configured via `pre-commit-hooks`, make sure you have these enabled and they are passing
+- If you are planning to make any considerable changes, you should first present your plans in a GitHub issue so it can be discussed
+- Simplicity and ease of use is one of the design goals, please keep this in mind when making contributons
+
 ## Commands
 
 The section below provides an overview of all available commands and their arguments.
