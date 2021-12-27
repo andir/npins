@@ -1,16 +1,13 @@
-use std::io::Write;
-
 use anyhow::{Context, Result};
 use diff::OptionExt;
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::io::Write;
 use structopt::StructOpt;
-use url::Url;
 
 pub mod diff;
 pub mod git;
-pub mod github;
 pub mod nix;
 pub mod pypi;
 pub mod versions;
@@ -37,12 +34,34 @@ where
     Ok(serde_json::from_str(&response)?)
 }
 
+/// The main trait implemented by all pins
+///
+/// It comes with two associated types, `Version` and `Hashes`. Together, each of these types
+/// must satisfy the following invariants:
+/// - They serialize to a map/dictionary/object, however you want to call it
+/// - **The serialized dictionaries of all are disjoint** (unchecked invariant at the moment)
 #[async_trait::async_trait]
 pub trait Updatable:
     Serialize + Deserialize<'static> + std::fmt::Debug + Clone + PartialEq + Eq + std::hash::Hash
 {
-    /// The pinned hashes
-    type Output: diff::Diff
+    /// Version information, produced by the [`update`](Self::update) method.
+    ///
+    /// It should contain information that charactarizes a version, e.g. the release version.
+    /// A user should be able to manually specify it, if they want to pin a specific version.
+    /// Each version should map to the same set of hashes over time, and violations of this
+    /// should only be caused by upstream errors.
+    type Version: diff::Diff
+        + Serialize
+        + Deserialize<'static>
+        + std::fmt::Debug
+        + Clone
+        + PartialEq
+        + Eq;
+
+    /// The pinned hashes for a given version, produced by the [`fetch`](Self::fetch) method.
+    ///
+    /// It may contain multiple different hashes, or download URLs that go with them.
+    type Hashes: diff::Diff
         + Serialize
         + Deserialize<'static>
         + std::fmt::Debug
@@ -51,7 +70,12 @@ pub trait Updatable:
         + Eq;
 
     /// Fetch the latest applicable commit data
-    async fn update(&self) -> Result<Self::Output>;
+    ///
+    /// The old version may be passed to help guarantee monotonicity of the versions.
+    async fn update(&self, old: Option<&Self::Version>) -> Result<Self::Version>;
+
+    /// Fetch hashes for a given version
+    async fn fetch(&self, version: &Self::Version) -> Result<Self::Hashes>;
 }
 
 /// Create the `Pin` type
@@ -61,21 +85,16 @@ pub trait Updatable:
 /// (We'd need the `serde_erase` crate for `Deserialize` alone). Since writing this as an enum is extremely repetitive,
 /// this macro does the work for you.
 ///
-/// For each pin type, call it with `(Name, lowename, InputType, OutputType)`. `Name` will be the name of the enum variant,
+/// For each pin type, call it with `(Name, lower_name, Type)`. `Name` will be the name of the enum variant,
 /// `lower_name` will be used for the constructor.
-/// `InputType` and `OutputType` must adhere to the following requirements:
-/// - `InputType: Updatable + Serialize + Deserialize + Debug + Clone + Eq + PartialEq + Hash`
-/// - `OutputType: Serialize + Deserialize + Debug + Clone + Eq + PartialEq`
-/// - Both types serialize to a map/dictionary
-/// - **The serialized dictionaries of both are disjoint** (unchecked invariant at the moment)
 macro_rules! mkPin {
-    ( $(( $name:ident, $lower_name:ident, $input_name:path, $output_name:path )),* $(,)? ) => {
+    ( $(( $name:ident, $lower_name:ident, $input_name:path )),* $(,)? ) => {
         /* The type declaration */
         /// Enum over all possible pin types
         ///
         /// Every pin type has two parts, an `input` and an `output`. The input implements [`Updatable`], which
         /// will generate output in its most up-to-date form.
-        #[derive(Debug, Serialize, Deserialize, Clone)]
+        #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
         #[serde(tag = "type")]
         pub enum Pin {
             $(
@@ -84,33 +103,62 @@ macro_rules! mkPin {
                     #[serde(flatten)]
                     input: $input_name,
                     #[serde(flatten)]
-                    output: Option<$output_name>,
+                    version: Option<<$input_name as Updatable>::Version>,
+                    #[serde(flatten)]
+                    hashes: Option<<$input_name as Updatable>::Hashes>,
                 }
             ),*
         }
 
         impl Pin {
             /* Constructors */
-            $(fn $lower_name(input: $input_name) -> Self {
-                Self::$name { input, output: None }
+            $(fn $lower_name(input: $input_name, version: Option<<$input_name as Updatable>::Version>) -> Self {
+                Self::$name { input, version, hashes: None }
             })*
 
             /* If an error is returned, `self` remains unchanged */
             async fn update(&mut self) -> Result<Vec<diff::Difference>> {
                 Ok(match self {
-                    $(Self::$name { input, output } => {
+                    $(Self::$name { input, version, .. } => {
                         /* Use very explicit syntax to force the correct types and get good compile errors */
-                        let new_output: $output_name = <$input_name as Updatable>::update(input).await?;
-                        output.insert_diffed(new_output)
+                        let new_version = <$input_name as Updatable>::update(input, version.as_ref()).await?;
+                        version.insert_diffed(new_version)
                     }),*
                 })
+            }
+
+            /* If an error is returned, `self` remains unchanged. This returns a double result: the outer one
+             * indicates that `update` should be called first, the inner is from the actual operation.
+             */
+            async fn fetch(&mut self) -> Result<Vec<diff::Difference>> {
+                Ok(match self {
+                    $(Self::$name { input, version, hashes } => {
+                        let version = version.as_ref()
+                            .ok_or_else(|| anyhow::format_err!("No version information available, call `update` first or manually set one"))?;
+                        /* Use very explicit syntax to force the correct types and get good compile errors */
+                        let new_hashes = <$input_name as Updatable>::fetch(input, &version).await?;
+                        hashes.insert_diffed(new_hashes)
+                    }),*
+                })
+            }
+
+            pub fn has_version(&self) -> bool {
+                match self {
+                    $(Self::$name { version, ..} => version.is_some() ),*
+                }
+            }
+
+            pub fn has_hashes(&self) -> bool {
+                match self {
+                    $(Self::$name { hashes, ..} => hashes.is_some() ),*
+                }
             }
         }
 
         impl std::fmt::Display for Pin {
             fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match self {
-                    $(Self::$name { input, output } => write!(fmt, "{:?} -> {:?}", input, output)),*
+                    $(Self::$name { input, version, hashes } => write!(fmt, "{:?} -> {:?} -> {:?}", input, version, hashes)),*
                 }
             }
         }
@@ -119,7 +167,19 @@ macro_rules! mkPin {
         $(
             impl From<$input_name> for Pin {
                 fn from(input: $input_name) -> Self {
-                    Self::$lower_name(input)
+                    Self::$lower_name(input, None)
+                }
+            }
+
+            impl From<($input_name, Option<<$input_name as Updatable>::Version>)> for Pin {
+                fn from((input, version): ($input_name, Option<<$input_name as Updatable>::Version>)) -> Self {
+                    Self::$lower_name(input, version)
+                }
+            }
+
+            impl From<($input_name, <$input_name as Updatable>::Version)> for Pin {
+                fn from((input, version): ($input_name, <$input_name as Updatable>::Version)) -> Self {
+                    (input, Some(version)).into()
                 }
             }
         )*
@@ -127,16 +187,15 @@ macro_rules! mkPin {
 }
 
 mkPin! {
-    (GitHub, github, github::PinInput, github::PinOutput),
-    (GitHubRelease, github_release, github::ReleasePinInput, github::ReleasePinOutput),
-    (Git, git, git::PinInput, git::PinOutput),
-    (PyPi, pypi, pypi::PinInput, pypi::PinOutput),
+    (Git, git, git::GitPin),
+    (GitRelease, git_release, git::GitReleasePin),
+    (PyPi, pypi, pypi::Pin),
 }
 
 /// The main struct the CLI operates on
 ///
 /// For serialization purposes, use the `NixPinsVersioned` wrapper instead.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct NixPins {
     pins: BTreeMap<String, Pin>,
 }
@@ -146,22 +205,72 @@ impl NixPins {
         let mut pins = BTreeMap::new();
         pins.insert(
             "nixpkgs".to_owned(),
-            Pin::github(github::PinInput {
-                repository: "nixpkgs".to_owned(),
-                owner: "nixos".to_owned(),
-                branch: "nixpkgs-unstable".to_owned(),
-            }),
+            git::GitPin::github("nixos", "nixpkgs", "nixpkgs-unstable".to_owned()).into(),
         );
         Self { pins }
     }
 }
 
-impl Default for NixPins {
-    fn default() -> Self {
-        Self {
-            pins: BTreeMap::new(),
-        }
+/// Just a version string
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct GenericVersion {
+    /// Note that "version" must be seen in the context of the pin.
+    /// Without that context, it shall be treated as opaque string.
+    pub version: String,
+}
+
+impl diff::Diff for GenericVersion {
+    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
+        diff::d(&[diff::Difference::new(
+            "version",
+            &self.version,
+            &other.version,
+        )])
     }
+}
+
+/// An URL and its hash
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct GenericUrlHashes {
+    pub url: url::Url,
+    pub hash: String,
+}
+
+impl diff::Diff for GenericUrlHashes {
+    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
+        diff::d(&[
+            diff::Difference::new("hash", &self.hash, &other.hash),
+            diff::Difference::new("url", &self.url, &other.url),
+        ])
+    }
+}
+
+use url::Url;
+
+#[derive(Debug, StructOpt)]
+pub struct GenericGitAddOpts {
+    /// Track a branch instead of a release
+    #[structopt(short, long)]
+    pub branch: Option<String>,
+
+    /// Use a specific commit/release instead of the latest.
+    /// This may be a tag name, or a git revision when --branch is set.
+    #[structopt(long, value_name = "tag or rev")]
+    pub at: Option<String>,
+
+    /// Also track pre-releases.
+    /// Conflicts with the --branch option.
+    #[structopt(long, conflicts_with = "branch")]
+    pub pre_releases: bool,
+
+    /// Bound the version resolution. For example, setting this to "2" will
+    /// restrict updates to 1.X versions. Conflicts with the --branch option.
+    #[structopt(
+        long = "upper-bound",
+        value_name = "version",
+        conflicts_with = "branch"
+    )]
+    pub version_upper_bound: Option<String>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -169,39 +278,90 @@ pub struct GitHubAddOpts {
     pub owner: String,
     pub repository: String,
 
-    #[structopt(short, long, default_value = "master")]
-    pub branch: String,
+    #[structopt(flatten)]
+    pub more: GenericGitAddOpts,
 }
 
 impl GitHubAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
         Ok((
             self.repository.clone(),
-            Pin::github(github::PinInput {
-                repository: self.repository.clone(),
-                owner: self.owner.clone(),
-                branch: self.branch.clone(),
-            }),
+            match &self.more.branch {
+                Some(branch) => {
+                    let pin = git::GitPin::github(&self.repository, &self.owner, branch.clone());
+                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
+                        revision: at.clone(),
+                    });
+                    (pin, version).into()
+                },
+                None => {
+                    let pin = git::GitReleasePin::github(
+                        &self.owner,
+                        &self.repository,
+                        self.more.pre_releases,
+                        self.more.version_upper_bound.clone(),
+                    );
+                    let version = self.more.at.as_ref().map(|at| GenericVersion {
+                        version: at.clone(),
+                    });
+                    (pin, version).into()
+                },
+            },
         ))
     }
 }
 
 #[derive(Debug, StructOpt)]
-pub struct GitHubReleaseAddOpts {
-    pub owner: String,
-    pub repository: String,
+pub struct GitLabAddOpts {
+    /// Usually just `"owner" "repository"`, but GitLab allows arbitrary folder-like structures.
+    #[structopt(required = true, min_values = 2)]
+    pub repo_path: Vec<String>,
+
+    #[structopt(
+        long,
+        default_value = "https://gitlab.com/",
+        help = "Use a self-hosted GitLab instance instead",
+        value_name = "url"
+    )]
+    pub server: url::Url,
+
+    #[structopt(flatten)]
+    pub more: GenericGitAddOpts,
 }
 
-impl GitHubReleaseAddOpts {
+impl GitLabAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
-        log::warn!("The releases API always gives you the *latest* release, which is probably not what you want!");
-        log::warn!("This is a known issue, and will be fixed in the future. That fix might be backwards-incompatible in some way.");
         Ok((
-            self.repository.clone(),
-            Pin::github_release(github::ReleasePinInput {
-                owner: self.owner.clone(),
-                repository: self.repository.clone(),
-            }),
+            self.repo_path
+                .last()
+                .ok_or_else(|| anyhow::format_err!("GitLab repository path must at least have one element (usually two: owner, repo)"))?
+                .clone(),
+            match &self.more.branch {
+                Some(branch) =>{
+                    let pin = git::GitPin::gitlab(
+                        self.repo_path.join("/"),
+                        branch.clone(),
+                        Some(self.server.clone()),
+                    );
+                    let version = self.more.at.as_ref()
+                    .map(|at| git::GitRevision {
+                        revision: at.clone(),
+                    });
+                    (pin, version).into()},
+                None => {
+                    let pin = git::GitReleasePin::gitlab(
+                        self.repo_path.join("/"),
+                        Some(self.server.clone()),
+                        self.more.pre_releases,
+                        self.more.version_upper_bound.clone(),
+                    );
+                    let version = self.more.at.as_ref()
+                        .map(|at| GenericVersion {
+                            version: at.clone(),
+                        });
+                    (pin, version).into()
+                },
+            },
         ))
     }
 }
@@ -209,11 +369,10 @@ impl GitHubReleaseAddOpts {
 #[derive(Debug, StructOpt)]
 pub struct GitAddOpts {
     /// The git remote URL. For example <https://github.com/andir/ate.git>
-    url: String,
+    pub url: String,
 
-    /// Name of the branch to track.
-    #[structopt(short, long, default_value = "master")]
-    branch: String,
+    #[structopt(flatten)]
+    pub more: GenericGitAddOpts,
 }
 
 impl GitAddOpts {
@@ -227,10 +386,26 @@ impl GitAddOpts {
 
         Ok((
             name.to_owned(),
-            Pin::git(git::PinInput {
-                repository_url: url,
-                branch: self.branch.clone(),
-            }),
+            match &self.more.branch {
+                Some(branch) => {
+                    let pin = git::GitPin::git(url, branch.clone());
+                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
+                        revision: at.clone(),
+                    });
+                    (pin, version).into()
+                },
+                None => {
+                    let pin = git::GitReleasePin::git(
+                        url,
+                        self.more.pre_releases,
+                        self.more.version_upper_bound.clone(),
+                    );
+                    let version = self.more.at.as_ref().map(|at| GenericVersion {
+                        version: at.clone(),
+                    });
+                    (pin, version).into()
+                },
+            },
         ))
     }
 }
@@ -245,21 +420,22 @@ impl PyPiAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
         Ok((
             self.name.clone(),
-            Pin::pypi(pypi::PinInput {
+            pypi::Pin {
                 name: self.name.clone(),
-            }),
+            }
+            .into(),
         ))
     }
 }
 
 #[derive(Debug, StructOpt)]
 pub enum AddCommands {
-    /// Track a branch from a GitHub repository
+    /// Track a GitHub repository
     #[structopt(name = "github")]
     GitHub(GitHubAddOpts),
-    /// Track the latest release from a GitHub repository
-    #[structopt(name = "github-release")]
-    GitHubRelease(GitHubReleaseAddOpts),
+    /// Track a GitLab repository
+    #[structopt(name = "gitlab")]
+    GitLab(GitLabAddOpts),
     /// Track a git repository
     #[structopt(name = "git")]
     Git(GitAddOpts),
@@ -282,7 +458,7 @@ impl AddOpts {
         let (name, pin) = match &self.command {
             AddCommands::Git(g) => g.add()?,
             AddCommands::GitHub(gh) => gh.add()?,
-            AddCommands::GitHubRelease(ghr) => ghr.add()?,
+            AddCommands::GitLab(gl) => gl.add()?,
             AddCommands::PyPi(p) => p.add()?,
         };
 
@@ -303,7 +479,18 @@ pub struct RemoveOpts {
 
 #[derive(Debug, StructOpt)]
 pub struct UpdateOpts {
-    pub name: Option<String>,
+    /// Update only those pins
+    pub names: Vec<String>,
+    /// Don't update versions, only re-fetch hashes
+    #[structopt(short, long, conflicts_with = "full")]
+    pub partial: bool,
+    /// Re-fetch hashes even if the version hasn't changed.
+    /// Useful to make sure the derivations are in the Nix store.
+    #[structopt(short, long, conflicts_with = "partial")]
+    pub full: bool,
+    /// Print the diff, but don't write back the changes
+    #[structopt(short = "n", long)]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -382,30 +569,41 @@ impl Opts {
         let path = self.folder.join("sources.json");
         let fh = std::fs::File::create(&path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
-        serde_json::to_writer_pretty(fh, &versions::to_value_versioned(&pins))?;
+        serde_json::to_writer_pretty(fh, &versions::to_value_versioned(pins))?;
         Ok(())
     }
 
-    fn init(&self, o: &InitOpts) -> Result<()> {
+    async fn init(&self, o: &InitOpts) -> Result<()> {
+        log::info!("Welcome to npins!");
         let default_nix = include_bytes!("../npins/default.nix");
         if !self.folder.exists() {
+            log::info!("Creating `{}` directory", self.folder.display());
             std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
         }
+        log::info!("Writing default.nix");
         let p = self.folder.join("default.nix");
         let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
         fh.write_all(default_nix)?;
 
         // Only create the pins if the file isn't there yet
         if self.folder.join("sources.json").exists() {
+            log::info!("Done.");
             return Ok(());
         }
 
         let initial_pins = if o.bare {
+            log::info!("Writing initial sources.json (empty)");
             NixPins::default()
         } else {
-            NixPins::new_with_nixpkgs()
+            log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
+            let mut pin = NixPins::new_with_nixpkgs();
+            self.update_one(pin.pins.get_mut("nixpkgs").unwrap(), false, true)
+                .await
+                .context("Failed to fetch initial nixpkgs entry")?;
+            pin
         };
         self.write_pins(&initial_pins)?;
+        log::info!("Done.");
         Ok(())
     }
 
@@ -422,7 +620,8 @@ impl Opts {
     async fn add(&self, opts: &AddOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
         let (name, mut pin) = opts.run()?;
-        self.update_one(&mut pin)
+        let has_version = pin.has_version();
+        self.update_one(&mut pin, has_version, false)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name, pin);
@@ -433,7 +632,8 @@ impl Opts {
 
     async fn fetch(&self, opts: &AddOpts) -> Result<()> {
         let (_name, mut pin) = opts.run()?;
-        self.update_one(&mut pin)
+        let has_version = pin.has_version();
+        self.update_one(&mut pin, has_version, false)
             .await
             .context("Failed to fully fetch the pin")?;
         serde_json::to_writer_pretty(std::io::stdout(), &pin)?;
@@ -442,12 +642,31 @@ impl Opts {
         Ok(())
     }
 
-    async fn update_one(&self, pin: &mut Pin) -> Result<()> {
-        let diff = pin.update().await?;
-        if diff.len() > 0 {
-            println!("changes:");
-            for d in diff {
-                println!("{}", d);
+    async fn update_one(&self, pin: &mut Pin, partial: bool, full: bool) -> Result<()> {
+        assert!(
+            !(partial && full),
+            "partial and full are mutually exclusive"
+        );
+
+        /* Skip this for partial updates */
+        let diff1 = if !partial {
+            pin.update().await?
+        } else {
+            vec![]
+        };
+
+        /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
+        if !diff1.is_empty() || full || partial {
+            let diff2 = pin.fetch().await?;
+
+            if diff1.len() + diff2.len() > 0 {
+                println!("changes:");
+                for d in diff1 {
+                    println!("{}", d);
+                }
+                for d in diff2 {
+                    println!("{}", d);
+                }
             }
         }
 
@@ -457,21 +676,26 @@ impl Opts {
     async fn update(&self, opts: &UpdateOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
 
-        if let Some(name) = &opts.name {
-            match pins.pins.get_mut(name) {
-                None => return Err(anyhow::anyhow!("No such pin entry found.")),
-                Some(p) => {
-                    self.update_one(p).await?;
-                },
-            }
-        } else {
+        if opts.names.is_empty() {
             for (name, pin) in pins.pins.iter_mut() {
                 println!("Updating {}", name);
-                self.update_one(pin).await?;
+                self.update_one(pin, opts.partial, opts.full).await?;
+            }
+        } else {
+            for name in &opts.names {
+                match pins.pins.get_mut(name) {
+                    None => return Err(anyhow::anyhow!("No such pin entry found.")),
+                    Some(pin) => {
+                        println!("Updating {}", name);
+                        self.update_one(pin, opts.partial, opts.full).await?;
+                    },
+                }
             }
         }
 
-        self.write_pins(&pins)?;
+        if !opts.dry_run {
+            self.write_pins(&pins)?;
+        }
 
         Ok(())
     }
@@ -492,7 +716,7 @@ impl Opts {
             std::fs::write(&nix_path, nix_file).context("Failed to create npins default.nix")?;
         }
 
-        log::info!("Updating sources.json to the newest format version");
+        log::info!("Upgrading sources.json to the newest format version");
         let path = self.folder.join("sources.json");
         let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
             format!(
@@ -504,10 +728,12 @@ impl Opts {
         let pins_raw: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(fh)
             .context("sources.json must be a valid JSON file with an object as top level")?;
 
-        let pins_raw = versions::update(pins_raw).context("Upgrading failed")?;
-
-        let pins: NixPins = serde_json::from_value(pins_raw)?;
-        self.write_pins(&pins.into())
+        let pins_raw_new = versions::upgrade(pins_raw.clone()).context("Upgrading failed")?;
+        let pins: NixPins = serde_json::from_value(pins_raw_new.clone())?;
+        if pins_raw_new != serde_json::Value::Object(pins_raw) {
+            log::info!("Done. It is recommended to at least run `update --partial` afterwards.");
+        }
+        self.write_pins(&pins)
     }
 
     fn remove(&self, r: &RemoveOpts) -> Result<()> {
@@ -520,14 +746,14 @@ impl Opts {
         let mut new_pins = pins.clone();
         new_pins.pins.remove(&r.name);
 
-        self.write_pins(&new_pins.into())?;
+        self.write_pins(&new_pins)?;
 
         Ok(())
     }
 
-    async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> Result<()> {
         match &self.command {
-            Command::Init(o) => self.init(o)?,
+            Command::Init(o) => self.init(o).await?,
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
             Command::Fetch(a) => self.fetch(a).await?,

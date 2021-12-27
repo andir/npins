@@ -6,42 +6,28 @@ let
   mkSource = spec:
     assert spec ? type;
     if spec.type == "Git" then mkGitSource spec
-    else if spec.type == "GitHub" then mkGitHubSource spec
-    else if spec.type == "GitHubRelease" then mkGitHubReleaseSource spec
+    else if spec.type == "GitRelease" then mkGitSource spec
     else if spec.type == "PyPi" then mkPyPiSource spec
     else builtins.throw "Unknown source type ${spec.type}";
 
-  mkGitSource = spec:
+  mkGitSource = spec@{ repository, branch, revision, hash, ... }:
+    assert repository ? type;
     let
-      path = builtins.fetchGit (with spec; {
-        url = repository_url;
-        ref = "refs/heads/${branch}";
-        rev = revision;
-        # hash = hash;
-      });
+      path =
+        if spec ? url then
+          (builtins.fetchTarball {
+            url = spec.url;
+            sha256 = hash; # FIXME: check nix version & use SRI hashes
+          })
+        else assert repository.type == "Git"; builtins.fetchGit {
+          url = repository.url;
+          ref = "refs/heads/${branch}";
+          rev = revision;
+          # hash = hash;
+        };
     in
     spec // { outPath = path; }
   ;
-
-  mkGitHubSource = spec:
-    let
-      url = with spec; "https://github.com/${owner}/${repository}/archive/${revision}.tar.gz";
-      path = (builtins.fetchTarball {
-        inherit url;
-        sha256 = spec.hash; # FIXME: check nix version & use SRI hashes
-      });
-    in
-    spec // { outPath = path; }
-  ;
-
-  mkGitHubReleaseSource = spec:
-    let
-      path = builtins.fetchTarball {
-        url = spec.tarball_url;
-        sha256 = spec.hash;
-      };
-    in
-    spec // { outPath = path; };
 
   mkPyPiSource = spec:
     let
@@ -52,7 +38,7 @@ let
     in
     spec // { outPath = path; };
 in
-if version == 0 then
+if version == 1 then
   builtins.mapAttrs (_: mkSource) data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"

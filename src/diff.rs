@@ -1,3 +1,5 @@
+//! Helper tools for generating differential output
+
 #[inline]
 pub fn d(list: &[Option<Difference>]) -> Vec<Difference> {
     list.iter().cloned().filter_map(|x| x).collect()
@@ -54,6 +56,9 @@ pub trait Diff {
 }
 
 pub trait OptionExt<T> {
+    /// Like [`Option::insert`] but returns the diff between both values instead of a reference to the inserted value.
+    ///
+    /// If `self` is `None`, then the diff will always be empty.
     fn insert_diffed(&mut self, value: T) -> Vec<Difference>;
 }
 
@@ -61,9 +66,6 @@ impl<T> OptionExt<T> for Option<T>
 where
     T: Diff,
 {
-    /// Like [`Option::insert`] but returns the diff between both values instead of a reference to the inserted value.
-    ///
-    /// If `self` is `None`, then the diff will always be empty.
     fn insert_diffed(&mut self, value: T) -> Vec<Difference> {
         match self {
             Some(this) => this.set(value),
