@@ -1,0 +1,35 @@
+{
+  "pins": {
+    "nixos-mailserver": {
+      "type": "Git",
+      "repository_url": "https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git",
+      "branch": "nixos-21.11",
+      "revision": "6e3a7b2ea6f0d68b82027b988aa25d3423787303",
+      "hash": "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44"
+    },
+    "nixpkgs": {
+      "type": "GitHub",
+      "repository": "nixpkgs",
+      "owner": "nixos",
+      "branch": "nixpkgs-unstable",
+      "revision": "5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2",
+      "hash": "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb"
+    },
+    "streamlit": {
+      "type": "PyPi",
+      "name": "streamlit",
+      "version": "1.3.1",
+      "hash": "adec7935c9cf774b9115b2456cf2f48c4f49b9f67159a97db0fe228357c1afdf",
+      "url": "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz"
+    },
+    "youtube-dl": {
+      "type": "GitHubRelease",
+      "repository": "youtube-dl",
+      "owner": "ytdl-org",
+      "tarball_url": "https://api.github.com/repos/ytdl-org/youtube-dl/tarball/2021.12.17",
+      "release_name": "youtube-dl 2021.12.17",
+      "hash": "0a0ljx67q0gh8wza84gk33g31v02bd0a7lzawhn33i42iihms2w7"
+    }
+  },
+  "version": 0
+}
