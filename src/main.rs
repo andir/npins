@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use diff::OptionExt;
 use reqwest::IntoUrl;
@@ -8,6 +10,7 @@ use structopt::StructOpt;
 
 pub mod diff;
 pub mod git;
+pub mod niv;
 pub mod nix;
 pub mod pypi;
 pub mod versions;
@@ -501,6 +504,15 @@ pub struct InitOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct ImportOpts {
+    #[structopt(default_value = "nix/sources.json", parse(from_os_str))]
+    pub path: PathBuf,
+    /// Only import one entry from Niv
+    #[structopt(short, long)]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, StructOpt)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your sources.json.
@@ -523,6 +535,9 @@ pub enum Command {
 
     /// Removes one pin entry.
     Remove(RemoveOpts),
+
+    /// Try to import entries from Niv
+    ImportNiv(ImportOpts),
 }
 
 use structopt::clap::AppSettings;
@@ -751,7 +766,64 @@ impl Opts {
         Ok(())
     }
 
-    pub async fn run(&self) -> Result<()> {
+    async fn import_niv(&self, o: &ImportOpts) -> Result<()> {
+        let mut pins = self.read_pins()?;
+
+        let niv: BTreeMap<String, serde_json::Value> =
+            serde_json::from_reader(std::fs::File::open(&o.path).context(anyhow::format_err!(
+                "Could not open sources.json at '{}'",
+                o.path.canonicalize().unwrap_or_else(|_| o.path.clone()).display()
+            ))?)
+            .context("Niv file is not a valid JSON dict")?;
+        log::info!("Note that all the imported entries will be updated so they won't necessarily point to the same commits as before!");
+
+        async fn import(
+            name: &str,
+            pin: Option<&serde_json::Value>,
+            npins: &mut NixPins,
+            niv: &BTreeMap<String, serde_json::Value>,
+        ) -> Result<()> {
+            use std::convert::TryInto;
+
+            let pin = pin
+                .or_else(|| niv.get(name))
+                .ok_or_else(|| anyhow::format_err!("Pin '{}' not found in sources.json", name))?;
+            anyhow::ensure!(
+                !npins.pins.contains_key(name),
+                "Pin '{}' exists in both files, this is a collision. Please delete the entry in one of the files.",
+                name
+            );
+
+            let pin: niv::NivPin = serde_json::from_value(pin.clone())
+                .context("Pin is either invalid, or we don't support it")?;
+            let mut pin: Pin = pin
+                .try_into()
+                .context("Could not convert pin to npins format")?;
+            pin.update().await.context("Failed to update the pin")?;
+            pin.fetch().await.context("Failed to update the pin")?;
+            npins.pins.insert(name.to_string(), pin);
+
+            Ok(())
+        }
+
+        if let Some(name) = &o.name {
+            import(name, None, &mut pins, &niv).await?;
+        } else {
+            for (name, pin) in niv.iter() {
+                println!("Importing {}", name);
+                if let Err(err) = import(name, Some(pin), &mut pins, &niv).await {
+                    log::error!("Failed to import pin '{}'", name);
+                    log::error!("{}", err);
+                }
+            }
+        }
+
+        self.write_pins(&pins)?;
+        log::info!("Done.");
+        Ok(())
+    }
+
+    async fn run(&self) -> Result<()> {
         match &self.command {
             Command::Init(o) => self.init(o).await?,
             Command::Show => self.show()?,
@@ -760,6 +832,7 @@ impl Opts {
             Command::Update(o) => self.update(o).await?,
             Command::Upgrade => self.upgrade()?,
             Command::Remove(r) => self.remove(r)?,
+            Command::ImportNiv(o) => self.import_niv(o).await?,
         };
 
         Ok(())
