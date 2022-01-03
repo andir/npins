@@ -425,8 +425,7 @@ impl Opts {
     fn show(&self) -> Result<()> {
         let pins = self.read_pins()?;
         for (name, pin) in pins.pins.iter() {
-            println!("{}:", name);
-            println!("\t{}", pin);
+            println!("\t{:<24}: {}", name, pin);
         }
 
         Ok(())
