@@ -24,62 +24,132 @@ trait Updatable {
 ///
 /// We need a type to unify over all possible way to pin a dependency. Normally, this would be done with a trait
 /// and trait objects. However, designing such a trait to be object-safe turns out to be highly non-trivial.
-/// (We'd need the `serde_erase` crate for `Deserialize` alone). Since writing this as an enum is extremely repetitive,
-/// this macro does the work for you.
-///
-/// For each pin type, call it with `(Name, lowename, InputType, OutputType)`. `Name` will be the name of the enum variant,
-/// `lower_name` will be used for the constructor.
-/// `InputType` and `OutputType` must adhere to the following requirements: TODO
-macro_rules! mkPin {
-    ( $(( $name:ident, $lower_name:ident, $input_name:path, $output_name:path )),* $(,)? ) => {
-        /* The type declaration */
-        #[derive(Debug, Serialize, Deserialize, Clone)]
-        #[serde(tag = "type")]
-        pub enum Pin {
-            $(
-                /* One variant per type. input and output are serialized to a common JSON dict using `flatten`. Output is optional. */
-                $name {
-                    #[serde(flatten)]
-                    input: $input_name,
-                    #[serde(flatten)]
-                    output: Option<$output_name>,
-                }
-            ),*
-        }
 
-        impl Pin {
-            /* Constructors */
-            $(fn $lower_name(input: $input_name) -> Self {
-                Self::$name { input, output: None }
-            })*
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum Pin {
+    GitHub {
+        #[serde(flatten)]
+        input: github::PinInput,
+        #[serde(flatten)]
+        output: Option<github::PinOutput>,
+    },
 
-            /* If an error is returned, `self` remains unchanged */
-            async fn update(&mut self) -> Result<Vec<diff::Difference>> {
-                Ok(match self {
-                    $(Self::$name { input, output } => {
-                        /* Use very explicit syntax to force the correct types and get good compile errors */
-                        let new_output: $output_name = <$input_name as Updatable>::update(input).await?;
-                        output.insert_diffed(new_output)
-                    }),*
-                })
-            }
-        }
+    GitHubRelease {
+        #[serde(flatten)]
+        input: github::ReleasePinInput,
+        #[serde(flatten)]
+        output: Option<github::ReleasePinOutput>,
+    },
 
-        impl std::fmt::Display for Pin {
-            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-                match self {
-                    $(Self::$name { input, output } => write!(fmt, "{:?} -> {:?}", input, output)),*
-                }
-            }
-        }
-    };
+    Git {
+        #[serde(flatten)]
+        input: git::PinInput,
+        #[serde(flatten)]
+        output: Option<git::PinOutput>,
+    },
+
+    PyPi {
+        #[serde(flatten)]
+        input: pypi::PinInput,
+        #[serde(flatten)]
+        output: Option<pypi::PinOutput>,
+    },
 }
 
-mkPin! {
-    (GitHub, github, github::PinInput, github::PinOutput),
-    (GitHubRelease, github_release, github::ReleasePinInput, github::ReleasePinOutput),
-    (Git, git, git::PinInput, git::PinOutput),
-    (PyPi, pypi, pypi::PinInput, pypi::PinOutput),
+impl Pin {
+    fn github(input: github::PinInput) -> Self {
+        Self::GitHub {
+            input,
+            output: None,
+        }
+    }
+
+    fn github_release(input: github::ReleasePinInput) -> Self {
+        Self::GitHubRelease {
+            input,
+            output: None,
+        }
+    }
+
+    fn git(input: git::PinInput) -> Self {
+        Self::Git {
+            input,
+            output: None,
+        }
+    }
+
+    fn pypi(input: pypi::PinInput) -> Self {
+        Self::PyPi {
+            input,
+            output: None,
+        }
+    }
+
+    async fn update(&mut self) -> Result<Vec<diff::Difference>> {
+        /* Use very explicit syntax to force the correct types and get good compile errors */
+        Ok(match self {
+            Self::GitHub { input, output } => {
+                let new_output: github::PinOutput =
+                    <github::PinInput as Updatable>::update(input).await?;
+                output.insert_diffed(new_output)
+            },
+
+            Self::GitHubRelease { input, output } => {
+                let new_output: github::ReleasePinOutput =
+                    <github::ReleasePinInput as Updatable>::update(input).await?;
+                output.insert_diffed(new_output)
+            },
+
+            Self::Git { input, output } => {
+                let new_output: git::PinOutput =
+                    <git::PinInput as Updatable>::update(input).await?;
+                output.insert_diffed(new_output)
+            },
+
+            Self::PyPi { input, output } => {
+                let new_output: pypi::PinOutput =
+                    <pypi::PinInput as Updatable>::update(input).await?;
+                output.insert_diffed(new_output)
+            },
+        })
+    }
+}
+
+impl std::fmt::Display for Pin {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::GitHub { input, output } => write!(
+                fmt,
+                "GitHub:{}/{}@{}",
+                input.repository,
+                input.owner,
+                output.as_ref().map_or("", |o| &o.revision)
+            ),
+
+            Self::GitHubRelease { input, output } => write!(
+                fmt,
+                "GitHubRelease:{}/{}@{}",
+                input.repository,
+                input.owner,
+                output.as_ref().map_or("", |o| &o.release_name)
+            ),
+
+            Self::Git { input, output } => write!(
+                fmt,
+                "Git:{}@{}",
+                input.repository_url,
+                output.as_ref().map_or("", |o| &o.revision)
+            ),
+
+            Self::PyPi { input, output } => write!(
+                fmt,
+                "PyPi: {}@{}",
+                input.name,
+                output.as_ref().map_or("", |o| &o.version)
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
