@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use ansi_term::Style;
 use anyhow::{Context, Result};
 use diff::OptionExt;
 use pin::Pin;
@@ -295,7 +296,7 @@ impl Opts {
     fn show(&self) -> Result<()> {
         let pins = self.read_pins()?;
         for (name, pin) in pins.pins.iter() {
-            println!("\t{:<24}: {}", name, pin);
+            println!("\t{:<24}: {}", Style::new().bold().paint(name), pin);
         }
 
         Ok(())
