@@ -42,13 +42,15 @@ rustPlatform.buildRustPackage {
   version = cargoToml.package.version;
   cargoLock = {
     lockFile = src + "/Cargo.lock";
-    outputHashes."hubcaps-0.6.2" = "0xxla9d71ar0z9kmilx6qa077d3lq7zi3kjl234yjdmyb56n54iq";
   };
 
   inherit src;
 
   buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
   nativeBuildInputs = [ makeWrapper ];
+
+  # (Almost) all tests require internet
+  doCheck = false;
 
   postFixup = ''
     wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
