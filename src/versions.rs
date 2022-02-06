@@ -120,7 +120,7 @@ fn upgrade_v0_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
             owner: String,
         },
         Git {
-            repository_url: Url,
+            repository_url: url::Url,
         },
         /* Don't care */
         PyPi {},
