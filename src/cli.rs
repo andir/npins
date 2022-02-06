@@ -396,7 +396,10 @@ impl Opts {
 
         // Only create the pins if the file isn't there yet
         if self.folder.join("sources.json").exists() {
-            log::info!("Done.");
+            log::info!(
+                "The file '{}' already exists; nothing to do.",
+                self.folder.join("pins.json").display()
+            );
             return Ok(());
         }
 
@@ -412,15 +415,18 @@ impl Opts {
             pin
         };
         self.write_pins(&initial_pins)?;
-        log::info!("Done.");
+        log::info!(
+            "Successfully written initial files to '{}'.",
+            self.folder.display()
+        );
         Ok(())
     }
 
     fn show(&self) -> Result<()> {
         let pins = self.read_pins()?;
         for (name, pin) in pins.pins.iter() {
-            println!("{}:", name);
-            println!("\t{}", pin);
+            println!("{}: ({})", name, pin.pin_type());
+            println!("{}", pin);
         }
 
         Ok(())
@@ -437,9 +443,11 @@ impl Opts {
         self.update_one(&mut pin, strategy)
             .await
             .context("Failed to fully initialize the pin")?;
-        pins.pins.insert(name, pin);
+        pins.pins.insert(name.clone(), pin.clone());
         self.write_pins(&pins)?;
 
+        log::info!("Successfully added pin '{}':", name);
+        println!("{}", pin);
         Ok(())
     }
 
@@ -472,14 +480,18 @@ impl Opts {
             let diff2 = pin.fetch().await?;
 
             if diff1.len() + diff2.len() > 0 {
-                println!("changes:");
+                println!("Changes:");
                 for d in diff1 {
-                    println!("{}", d);
+                    print!("{}", d);
                 }
                 for d in diff2 {
-                    println!("{}", d);
+                    print!("{}", d);
                 }
+            } else {
+                println!("(no changes)");
             }
+        } else {
+            println!("(no changes)");
         }
 
         Ok(())
@@ -497,15 +509,15 @@ impl Opts {
 
         if opts.names.is_empty() {
             for (name, pin) in pins.pins.iter_mut() {
-                println!("Updating {}", name);
+                log::info!("Updating {} …", name);
                 self.update_one(pin, strategy).await?;
             }
         } else {
             for name in &opts.names {
                 match pins.pins.get_mut(name) {
-                    None => return Err(anyhow::anyhow!("No such pin entry found.")),
+                    None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
                     Some(pin) => {
-                        println!("Updating {}", name);
+                        log::info!("Updating {} …", name);
                         self.update_one(pin, strategy).await?;
                     },
                 }
@@ -514,6 +526,7 @@ impl Opts {
 
         if !opts.dry_run {
             self.write_pins(&pins)?;
+            log::info!("Update successful.");
         }
 
         Ok(())
@@ -559,14 +572,14 @@ impl Opts {
         let pins = self.read_pins()?;
 
         if !pins.pins.contains_key(&r.name) {
-            return Err(anyhow::anyhow!("No such pin entry found."));
+            return Err(anyhow::anyhow!("Could not find the pin '{}'", r.name));
         }
 
         let mut new_pins = pins.clone();
         new_pins.pins.remove(&r.name);
 
         self.write_pins(&new_pins)?;
-
+        log::info!("Successfully removed pin '{}'.", r.name);
         Ok(())
     }
 
@@ -587,8 +600,6 @@ impl Opts {
             npins: &mut NixPins,
             niv: &BTreeMap<String, serde_json::Value>,
         ) -> Result<()> {
-            use std::convert::TryInto;
-
             let pin = pin
                 .or_else(|| niv.get(name))
                 .ok_or_else(|| anyhow::format_err!("Pin '{}' not found in sources.json", name))?;

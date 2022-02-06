@@ -29,12 +29,8 @@ pub struct GitRevision {
 }
 
 impl diff::Diff for GitRevision {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[diff::Difference::new(
-            "revision",
-            &self.revision,
-            &other.revision,
-        )])
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![("revision".into(), self.revision.clone())]
     }
 }
 
@@ -48,8 +44,14 @@ pub struct OptionalUrlHashes {
 }
 
 impl diff::Diff for OptionalUrlHashes {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[diff::Difference::new("hash", &self.hash, &other.hash)])
+    fn properties(&self) -> Vec<(String, String)> {
+        [
+            self.url.as_ref().map(|url| ("url".into(), url.to_string())),
+            Some(("hash".into(), self.hash.clone())),
+        ]
+        .into_iter()
+        .flat_map(Option::into_iter)
+        .collect()
     }
 }
 
@@ -61,11 +63,11 @@ pub struct ReleasePinHashes {
 }
 
 impl diff::Diff for ReleasePinHashes {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[
-            diff::Difference::new("revision", &self.revision, &other.revision),
-            diff::Difference::new("hash", &self.hash, &other.hash),
-        ])
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![
+            ("revision".into(), self.revision.clone()),
+            ("hash".into(), self.hash.clone()),
+        ]
     }
 }
 
@@ -188,6 +190,18 @@ pub struct GitPin {
     pub branch: String,
 }
 
+impl diff::Diff for GitPin {
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![
+            (
+                "repository".into(),
+                self.repository.git_url().unwrap().to_string(),
+            ),
+            ("branch".into(), self.branch.clone()),
+        ]
+    }
+}
+
 impl GitPin {
     pub fn git(url: Url, branch: String) -> Self {
         Self {
@@ -263,6 +277,26 @@ pub struct GitReleasePin {
     ///
     /// Versions will be parsed the in the same rather lenient way as the tags themselves.
     pub version_upper_bound: Option<String>,
+}
+
+impl diff::Diff for GitReleasePin {
+    fn properties(&self) -> Vec<(String, String)> {
+        [
+            Some((
+                "repository".into(),
+                self.repository.git_url().unwrap().to_string(),
+            )),
+            Some(("pre_releases".into(), self.pre_releases.to_string())),
+            self.version_upper_bound
+                .as_ref()
+                .map(|version_upper_bound| {
+                    ("version_upper_bound".into(), version_upper_bound.clone())
+                }),
+        ]
+        .into_iter()
+        .flat_map(Option::into_iter)
+        .collect()
+    }
 }
 
 impl GitReleasePin {

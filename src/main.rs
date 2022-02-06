@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use diff::OptionExt;
+use diff::{Diff, OptionExt};
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -45,7 +45,14 @@ where
 /// - **The serialized dictionaries of all are disjoint** (unchecked invariant at the moment)
 #[async_trait::async_trait]
 pub trait Updatable:
-    Serialize + Deserialize<'static> + std::fmt::Debug + Clone + PartialEq + Eq + std::hash::Hash
+    Serialize
+    + Deserialize<'static>
+    + std::fmt::Debug
+    + Clone
+    + PartialEq
+    + Eq
+    + std::hash::Hash
+    + diff::Diff
 {
     /// Version information, produced by the [`update`](Self::update) method.
     ///
@@ -88,10 +95,10 @@ pub trait Updatable:
 /// (We'd need the `serde_erase` crate for `Deserialize` alone). Since writing this as an enum is extremely repetitive,
 /// this macro does the work for you.
 ///
-/// For each pin type, call it with `(Name, lower_name, Type)`. `Name` will be the name of the enum variant,
+/// For each pin type, call it with `(Name, lower_name, human readable name, Type)`. `Name` will be the name of the enum variant,
 /// `lower_name` will be used for the constructor.
 macro_rules! mkPin {
-    ( $(( $name:ident, $lower_name:ident, $input_name:path )),* $(,)? ) => {
+    ( $(( $name:ident, $lower_name:ident, $human_name:expr, $input_name:path )),* $(,)? ) => {
         /* The type declaration */
         /// Enum over all possible pin types
         ///
@@ -120,7 +127,7 @@ macro_rules! mkPin {
             })*
 
             /* If an error is returned, `self` remains unchanged */
-            async fn update(&mut self) -> Result<Vec<diff::Difference>> {
+            async fn update(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, .. } => {
                         /* Use very explicit syntax to force the correct types and get good compile errors */
@@ -133,7 +140,7 @@ macro_rules! mkPin {
             /* If an error is returned, `self` remains unchanged. This returns a double result: the outer one
              * indicates that `update` should be called first, the inner is from the actual operation.
              */
-            async fn fetch(&mut self) -> Result<Vec<diff::Difference>> {
+            async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, hashes } => {
                         let version = version.as_ref()
@@ -156,12 +163,28 @@ macro_rules! mkPin {
                     $(Self::$name { hashes, ..} => hashes.is_some() ),*
                 }
             }
+
+            /// Human readable name of the pin type
+            pub fn pin_type(&self) -> &'static str {
+                match self {
+                    $(Self::$name { ..} => $human_name ),*
+                }
+            }
         }
 
         impl std::fmt::Display for Pin {
             fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match self {
-                    $(Self::$name { input, version, hashes } => write!(fmt, "{:?} -> {:?} -> {:?}", input, version, hashes)),*
+                    $(Self::$name { input, version, hashes } => {
+                        /* Concat all properties and then print them */
+                        let properties = input.properties().into_iter()
+                            .chain(version.iter().flat_map(Diff::properties))
+                            .chain(hashes.iter().flat_map(Diff::properties));
+                        for (key, value) in properties {
+                            writeln!(fmt, "    {}: {}", key, value)?;
+                        }
+                        Ok(())
+                    }),*
                 }
             }
         }
@@ -190,9 +213,9 @@ macro_rules! mkPin {
 }
 
 mkPin! {
-    (Git, git, git::GitPin),
-    (GitRelease, git_release, git::GitReleasePin),
-    (PyPi, pypi, pypi::Pin),
+    (Git, git, "git repository", git::GitPin),
+    (GitRelease, git_release, "git release tag", git::GitReleasePin),
+    (PyPi, pypi, "pypi package", pypi::Pin),
 }
 
 /// The main struct the CLI operates on
@@ -223,12 +246,8 @@ pub struct GenericVersion {
 }
 
 impl diff::Diff for GenericVersion {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[diff::Difference::new(
-            "version",
-            &self.version,
-            &other.version,
-        )])
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![("version".into(), self.version.clone())]
     }
 }
 
@@ -240,11 +259,11 @@ pub struct GenericUrlHashes {
 }
 
 impl diff::Diff for GenericUrlHashes {
-    fn diff(&self, other: &Self) -> Vec<diff::Difference> {
-        diff::d(&[
-            diff::Difference::new("hash", &self.hash, &other.hash),
-            diff::Difference::new("url", &self.url, &other.url),
-        ])
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![
+            ("url".into(), self.url.to_string()),
+            ("hash".into(), self.hash.clone()),
+        ]
     }
 }
 

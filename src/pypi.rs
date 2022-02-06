@@ -10,6 +10,12 @@ pub struct Pin {
     pub name: String,
 }
 
+impl diff::Diff for Pin {
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![("name".into(), self.name.clone())]
+    }
+}
+
 #[async_trait::async_trait]
 impl Updatable for Pin {
     type Version = GenericVersion;
