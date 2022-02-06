@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
 /// The current format version
-pub const LATEST: u64 = 1;
+pub const LATEST: u64 = 2;
 
 /// Custom manual deserialize wrapper that checks the version
 pub fn from_value_versioned(value: Value) -> Result<NixPins> {
@@ -74,6 +74,9 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
             }
         },
         1 => {
+            log::info!("There is nothing to do");
+        },
+        2 => {
             log::info!("sources.json is already up to date");
         },
         unknown => {

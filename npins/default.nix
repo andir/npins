@@ -41,7 +41,7 @@ let
       sha256 = hash;
     };
 in
-if version == 1 then
+if version == 2 then
   builtins.mapAttrs (_: mkSource) data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"
