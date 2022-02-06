@@ -9,6 +9,37 @@ use structopt::StructOpt;
 
 use url::Url;
 
+/// How to handle updates
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum UpdateStrategy {
+    /// Fetch latest version, update hashes if necessary
+    Normal,
+    /// Update hashes of the currently pinned version
+    HashesOnly,
+    /// Fetch latest version, always update hashes
+    Full,
+}
+
+impl UpdateStrategy {
+    /// Whether the latest version should be fetched
+    pub fn should_update(&self) -> bool {
+        match self {
+            UpdateStrategy::Normal => true,
+            UpdateStrategy::HashesOnly => false,
+            UpdateStrategy::Full => true,
+        }
+    }
+
+    /// Whether we want to force-update the hashes
+    pub fn must_fetch(&self) -> bool {
+        match self {
+            UpdateStrategy::Normal => false,
+            UpdateStrategy::HashesOnly => true,
+            UpdateStrategy::Full => true,
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 pub struct GenericGitAddOpts {
     /// Track a branch instead of a release
@@ -371,7 +402,7 @@ impl Opts {
         } else {
             log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
             let mut pin = NixPins::new_with_nixpkgs();
-            self.update_one(pin.pins.get_mut("nixpkgs").unwrap(), false, true)
+            self.update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
                 .await
                 .context("Failed to fetch initial nixpkgs entry")?;
             pin
@@ -394,8 +425,12 @@ impl Opts {
     async fn add(&self, opts: &AddOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
         let (name, mut pin) = opts.run()?;
-        let has_version = pin.has_version();
-        self.update_one(&mut pin, has_version, false)
+        let strategy = if pin.has_version() {
+            UpdateStrategy::HashesOnly
+        } else {
+            UpdateStrategy::Full
+        };
+        self.update_one(&mut pin, strategy)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name, pin);
@@ -406,8 +441,12 @@ impl Opts {
 
     async fn fetch(&self, opts: &AddOpts) -> Result<()> {
         let (_name, mut pin) = opts.run()?;
-        let has_version = pin.has_version();
-        self.update_one(&mut pin, has_version, false)
+        let strategy = if pin.has_version() {
+            UpdateStrategy::HashesOnly
+        } else {
+            UpdateStrategy::Full
+        };
+        self.update_one(&mut pin, strategy)
             .await
             .context("Failed to fully fetch the pin")?;
         serde_json::to_writer_pretty(std::io::stdout(), &pin)?;
@@ -416,21 +455,16 @@ impl Opts {
         Ok(())
     }
 
-    async fn update_one(&self, pin: &mut Pin, partial: bool, full: bool) -> Result<()> {
-        assert!(
-            !(partial && full),
-            "partial and full are mutually exclusive"
-        );
-
+    async fn update_one(&self, pin: &mut Pin, strategy: UpdateStrategy) -> Result<()> {
         /* Skip this for partial updates */
-        let diff1 = if !partial {
+        let diff1 = if strategy.should_update() {
             pin.update().await?
         } else {
             vec![]
         };
 
         /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
-        if !diff1.is_empty() || full || partial {
+        if !diff1.is_empty() || strategy.must_fetch() {
             let diff2 = pin.fetch().await?;
 
             if diff1.len() + diff2.len() > 0 {
@@ -450,10 +484,17 @@ impl Opts {
     async fn update(&self, opts: &UpdateOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
 
+        let strategy = match (opts.partial, opts.full) {
+            (false, false) => UpdateStrategy::Normal,
+            (false, true) => UpdateStrategy::Full,
+            (true, false) => UpdateStrategy::HashesOnly,
+            (true, true) => panic!("partial and full are mutually exclusive"),
+        };
+
         if opts.names.is_empty() {
             for (name, pin) in pins.pins.iter_mut() {
                 println!("Updating {}", name);
-                self.update_one(pin, opts.partial, opts.full).await?;
+                self.update_one(pin, strategy).await?;
             }
         } else {
             for name in &opts.names {
@@ -461,7 +502,7 @@ impl Opts {
                     None => return Err(anyhow::anyhow!("No such pin entry found.")),
                     Some(pin) => {
                         println!("Updating {}", name);
-                        self.update_one(pin, opts.partial, opts.full).await?;
+                        self.update_one(pin, strategy).await?;
                     },
                 }
             }
