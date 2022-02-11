@@ -6,6 +6,7 @@
 [![Issues][issues-shield]][issues-url]
 [![PRs][pr-shield]][pr-url]
 [![Tests][test-shield]][test-url]
+![Matrix][matrix-url]
 
 <!-- teaser -->
 <br />

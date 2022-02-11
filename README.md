@@ -6,6 +6,7 @@
 [![Issues][issues-shield]][issues-url]
 [![PRs][pr-shield]][pr-url]
 [![Tests][test-shield]][test-url]
+![Matrix][matrix-url]
 
 <!-- teaser -->
 <br />
@@ -255,3 +256,4 @@ ARGS:
 [test-url]: https://github.com/andir/npins/actions
 [pr-shield]: https://img.shields.io/github/issues-pr/andir/npins.svg?style=for-the-badge
 [pr-url]: https://github.com/andir/npins/pulls
+[matrix-url]: https://img.shields.io/matrix/npins:kack.it?label=Chat%20on%20Matrix?style=for-the-badge
