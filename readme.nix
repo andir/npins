@@ -15,7 +15,8 @@ let
       } ''
 
       set -e
-      echo "## npins $cmd" > $out
+      HEADER=$(echo $cmd | cut -d " " -f 2)
+      echo "### npins $HEADER" > $out
       echo '```console' >> $out
       echo "\$ npins $cmd" >> $out
       npins $cmd >> $out 2>&1
