@@ -50,7 +50,7 @@ impl GitHubAddOpts {
             self.repository.clone(),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::github(&self.repository, &self.owner, branch.clone());
+                    let pin = git::GitPin::github(&self.owner, &self.repository, branch.clone());
                     let version = self.more.at.as_ref().map(|at| git::GitRevision {
                         revision: at.clone(),
                     });
