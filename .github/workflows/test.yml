@@ -25,3 +25,5 @@ jobs:
         run: nix-shell --run "pre-commit run --all"
       - name: Run smoke test
         run: bash ./.github/workflows/smoke-test.sh
+      - name: Run integration tests
+        run: nix-build -A meta.tests.integration-tests
