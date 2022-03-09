@@ -260,6 +260,10 @@ impl AddOpts {
         } else {
             name
         };
+        anyhow::ensure!(
+            !name.is_empty(),
+            "Pin name cannot be empty. Use --name to specify one manually",
+        );
 
         Ok((name, pin))
     }
