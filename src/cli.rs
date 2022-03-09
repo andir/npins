@@ -41,6 +41,23 @@ impl UpdateStrategy {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct ChannelAddOpts {
+    name: String,
+}
+
+impl ChannelAddOpts {
+    pub fn add(&self) -> Result<(String, Pin)> {
+        Ok((
+            self.name.clone(),
+            channel::Pin {
+                name: self.name.clone(),
+            }
+            .into(),
+        ))
+    }
+}
+
+#[derive(Debug, StructOpt)]
 pub struct GenericGitAddOpts {
     /// Track a branch instead of a release
     #[structopt(short, long)]
@@ -223,6 +240,9 @@ impl PyPiAddOpts {
 
 #[derive(Debug, StructOpt)]
 pub enum AddCommands {
+    /// Track a Nix channel
+    #[structopt(name = "channel")]
+    Channel(ChannelAddOpts),
     /// Track a GitHub repository
     #[structopt(name = "github")]
     GitHub(GitHubAddOpts),
@@ -249,6 +269,7 @@ pub struct AddOpts {
 impl AddOpts {
     fn run(&self) -> Result<(String, Pin)> {
         let (name, pin) = match &self.command {
+            AddCommands::Channel(c) => c.add()?,
             AddCommands::Git(g) => g.add()?,
             AddCommands::GitHub(gh) => gh.add()?,
             AddCommands::GitLab(gl) => gl.add()?,

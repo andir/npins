@@ -8,6 +8,7 @@ let
     if spec.type == "Git" then mkGitSource spec
     else if spec.type == "GitRelease" then mkGitSource spec
     else if spec.type == "PyPi" then mkPyPiSource spec
+    else if spec.type == "Channel" then mkChannelSource spec
     else builtins.throw "Unknown source type ${spec.type}";
 
   mkGitSource = spec@{ repository, branch, revision, hash, ... }:
@@ -32,6 +33,15 @@ let
   mkPyPiSource = spec:
     let
       path = builtins.fetchurl {
+        url = spec.url;
+        sha256 = spec.hash;
+      };
+    in
+    spec // { outPath = path; };
+
+  mkChannelSource = spec:
+    let
+      path = builtins.fetchTarball {
         url = spec.url;
         sha256 = spec.hash;
       };

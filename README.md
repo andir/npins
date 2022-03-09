@@ -193,11 +193,12 @@ OPTIONS:
     -n, --name <name>           
 
 SUBCOMMANDS:
-    git       Track a git repository
-    github    Track a GitHub repository
-    gitlab    Track a GitLab repository
-    help      Prints this message or the help of the given subcommand(s)
-    pypi      Track a package on PyPi
+    channel    Track a Nix channel
+    git        Track a git repository
+    github     Track a GitHub repository
+    gitlab     Track a GitLab repository
+    help       Prints this message or the help of the given subcommand(s)
+    pypi       Track a package on PyPi
 ```
 
 ### npins update
