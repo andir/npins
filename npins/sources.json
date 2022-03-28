@@ -23,6 +23,18 @@
       "revision": "ff9c0b459ddc4b79c06e19d44251daa8e9cd1746",
       "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/ff9c0b459ddc4b79c06e19d44251daa8e9cd1746.tar.gz",
       "hash": "0z09ndxvbk6w4j28lzgj0b9qqcbwrvr58c0xsm0rf0xsdipi0nwf"
+    },
+    "smokers": {
+      "type": "Git",
+      "repository": {
+        "type": "GitHub",
+        "owner": "andir",
+        "repo": "smokers"
+      },
+      "branch": "master",
+      "revision": "bb8f8f0acc2d1f4ad6065778d291de7e23d259b0",
+      "url": "https://github.com/andir/smokers/archive/bb8f8f0acc2d1f4ad6065778d291de7e23d259b0.tar.gz",
+      "hash": "07c2hm7iggpbg2fccz9sn0klgarlh5xxp2rliin2glm0an29nzmz"
     }
   },
   "version": 1

@@ -3,9 +3,51 @@
 , pkgs ? import pins.nixpkgs { inherit system; }
 , npins ? pkgs.callPackage ../npins.nix { }
 }:
-{
-  gitRepoBranch =
-    let
+let
+  smokers = pkgs.rustPlatform.buildRustPackage {
+    pname = "smokers";
+    version = "git-${pins.smokers.revision}";
+    src = pins.smokers;
+
+    cargoLock.lockFile = pins.smokers + "/Cargo.lock";
+  };
+  mkSmokersTest =
+  { name
+  , commands ? [
+    # { args ? []
+    # , stdout ? ""
+    # , exit-code ? 1
+    # }
+  ]
+  , preTest ? ""
+  , postTest ? ""
+  }: let
+    specs = builtins.map (c: let
+      command = { args = []; stdout = ""; exit-code = 0; } // c;
+    in {
+      command = [
+        "${npins}/bin/npins"
+      ] ++ command.args;
+      inherit (command) stdout exit-code;
+    }) commands;
+    specFiles =
+      builtins.map (spec:
+        pkgs.writeText "${name}-spec.json" (builtins.toJSON spec)) specs;
+    in
+    pkgs.runCommand name {
+        nativeBuildInputs = [ npins smokers ];
+    } ''
+      ${preTest}
+      mkdir $out
+      cd $out
+      set -ex
+      ${pkgs.lib.concatMapStringsSep "\n" (specFile: ''
+        smokers ${specFile} > test.log
+      '') specFiles}
+      set +ex
+      ${postTest}
+    '';
+
       gitRepoWithBranch = pkgs.runCommand "git-repo"
         {
           nativeBuildInputs = [ pkgs.gitMinimal ];
@@ -21,6 +63,39 @@
         git commit -v -m "foo"
         git update-server-info
       '';
+in
+{
+  no-arguments = mkSmokersTest {
+    name = "no-arguments";
+    commands = [ { exit-code = 1; } ];
+  };
+
+  help = mkSmokersTest {
+    name = "help";
+    commands = [ {
+        args = [ "--help" ];
+        stdout = null;
+        exit-code = 0;
+    } ];
+  };
+
+  gitRepoBranch2 = mkSmokersTest {
+    name = "gitRepoBranch";
+    preTest = ''
+      cd ${gitRepoWithBranch}/.git
+      ${pkgs.python3}/bin/python -m http.server 8000 &
+      sleep 3
+    '';
+    commands = [
+      { args = [ "init" "--bare" ]; }
+      { args = [ "add" "git" "http://localhost:8000" "-b" "test-branch" ]; }
+      { args = [ "show" ]; }
+    ];
+  };
+
+  
+  gitRepoBranch =
+    let
     in
     pkgs.runCommand "git-repo" { nativeBuildInputs = [ npins pkgs.python3 ]; } ''
       set -e
@@ -54,7 +129,7 @@
       '';
 
     in
-    pkgs.runCommand "git-repo" { nativeBuildInputs = [ npins pkgs.python3 ]; } ''
+    pkgs.runCommand "git-repo" { nativeBuildInputs = [ smokers npins pkgs.python3 ]; } ''
       set -e
       cd ${gitRepoWithTag}/.git
       python -m http.server 8000 &
