@@ -10,22 +10,24 @@ let
     else if spec.type == "PyPi" then mkPyPiSource spec
     else builtins.throw "Unknown source type ${spec.type}";
 
-  mkGitSource = spec@{ repository, branch, revision, hash, ... }:
+  mkGitSource = spec@{ repository, branch ? null, version ? null, revision, hash, ... }:
     assert repository ? type;
     let
       path =
-        if spec ? url then
+        if spec ? url && spec.url != null then
           (builtins.fetchTarball {
             url = spec.url;
             sha256 = hash; # FIXME: check nix version & use SRI hashes
           })
-        else assert repository.type == "Git"; builtins.fetchGit {
+        else assert repository.type == "Git"; builtins.fetchGit ({
           url = repository.url;
-          ref = "refs/heads/${branch}";
           rev = revision;
           # hash = hash;
-        };
-    in
+        } // (if branch != null then {
+          ref = "refs/heads/${branch}";
+        } else { }) // (if version != null then {
+          ref = "refs/tags/${version}";
+        } else { })); in
     spec // { outPath = path; }
   ;
 
