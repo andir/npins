@@ -14,6 +14,15 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use url::Url;
 
+fn get_github_url() -> String {
+    std::env::var("NPINS_GITHUB_HOST").unwrap_or_else(|_| String::from("https://github.com"))
+}
+
+fn get_github_api_url() -> String {
+    std::env::var("NPINS_GITHUB_API_HOST")
+        .unwrap_or_else(|_| String::from("https://api.github.com"))
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct GitRevision {
     pub revision: String,
@@ -93,7 +102,7 @@ impl Repository {
         Ok(match self {
             Repository::Git { url } => url.clone(),
             Repository::GitHub { owner, repo } => {
-                format!("https://github.com/{}/{}.git", owner, repo).parse()?
+                format!("{}/{}/{}.git", get_github_url(), owner, repo).parse()?
             },
             Repository::GitLab { repo_path, server } => {
                 server.join(&format!("{}.git", repo_path))?
@@ -107,7 +116,8 @@ impl Repository {
             Repository::Git { .. } => None,
             Repository::GitHub { owner, repo } => Some(
                 format!(
-                    "https://github.com/{owner}/{repo}/archive/{revision}.tar.gz",
+                    "{github}/{owner}/{repo}/archive/{revision}.tar.gz",
+                    github = get_github_url(),
                     owner = owner,
                     repo = repo,
                     revision = revision,
@@ -141,7 +151,8 @@ impl Repository {
             Repository::Git { .. } => None,
             Repository::GitHub { owner, repo } => Some(
                 format!(
-                    "https://api.github.com/repos/{owner}/{repo}/tarball/{tag}",
+                    "{github_api}/repos/{owner}/{repo}/tarball/{tag}",
+                    github_api = get_github_api_url(),
                     owner = owner,
                     repo = repo,
                     tag = tag,

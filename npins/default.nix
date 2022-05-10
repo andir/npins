@@ -4,39 +4,35 @@ let
   version = data.version;
 
   mkSource = spec:
-    assert spec ? type;
-    if spec.type == "Git" then mkGitSource spec
-    else if spec.type == "GitRelease" then mkGitSource spec
-    else if spec.type == "PyPi" then mkPyPiSource spec
-    else builtins.throw "Unknown source type ${spec.type}";
-
-  mkGitSource = spec@{ repository, branch, revision, hash, ... }:
-    assert repository ? type;
-    let
+    assert spec ? type; let
       path =
-        if spec ? url then
-          (builtins.fetchTarball {
-            url = spec.url;
-            sha256 = hash; # FIXME: check nix version & use SRI hashes
-          })
-        else assert repository.type == "Git"; builtins.fetchGit {
-          url = repository.url;
-          ref = "refs/heads/${branch}";
-          rev = revision;
-          # hash = hash;
-        };
-    in
-    spec // { outPath = path; }
-  ;
-
-  mkPyPiSource = spec:
-    let
-      path = builtins.fetchurl {
-        url = spec.url;
-        sha256 = spec.hash;
-      };
+        if spec.type == "Git" then mkGitSource spec
+        else if spec.type == "GitRelease" then mkGitSource spec
+        else if spec.type == "PyPi" then mkPyPiSource spec
+        else builtins.throw "Unknown source type ${spec.type}";
     in
     spec // { outPath = path; };
+
+  mkGitSource = { repository, revision, url ? null, hash, ... }:
+    assert repository ? type;
+    # At the moment, either it is a plain git repository (which has an url), or it is a GitHub/GitLab repository
+    # In the latter case, there we will always be an url to the tarball
+    if url != null then
+      (builtins.fetchTarball {
+        inherit url;
+        sha256 = hash; # FIXME: check nix version & use SRI hashes
+      })
+    else assert repository.type == "Git"; builtins.fetchGit {
+      url = repository.url;
+      rev = revision;
+      # hash = hash;
+    };
+
+  mkPyPiSource = { url, hash, ... }:
+    builtins.fetchurl {
+      inherit url;
+      sha256 = hash;
+    };
 in
 if version == 1 then
   builtins.mapAttrs (_: mkSource) data.pins
