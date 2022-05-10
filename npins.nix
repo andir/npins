@@ -1,4 +1,5 @@
 { lib
+, pkgs
 , rustPlatform
 , nix-gitignore
 , makeWrapper
@@ -36,23 +37,26 @@ let
 
   cargoToml = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
   runtimePath = lib.makeBinPath [ nix nix-prefetch-git git ];
-in
-rustPlatform.buildRustPackage {
-  pname = cargoToml.package.name;
-  version = cargoToml.package.version;
-  cargoLock = {
-    lockFile = src + "/Cargo.lock";
+  self = rustPlatform.buildRustPackage {
+    pname = cargoToml.package.name;
+    version = cargoToml.package.version;
+    cargoLock = {
+      lockFile = src + "/Cargo.lock";
+    };
+
+    inherit src;
+
+    buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
+    nativeBuildInputs = [ makeWrapper ];
+
+    # (Almost) all tests require internet
+    doCheck = false;
+
+    postFixup = ''
+      wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
+    '';
+
+    meta.tests = pkgs.callPackage ./test.nix { npins = self; };
   };
-
-  inherit src;
-
-  buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
-  nativeBuildInputs = [ makeWrapper ];
-
-  # (Almost) all tests require internet
-  doCheck = false;
-
-  postFixup = ''
-    wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
-  '';
-}
+in
+self
