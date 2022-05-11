@@ -110,6 +110,18 @@ let
   '';
 in
 {
+  addDryRun = mkGitTest {
+    name = "add-dry-run";
+    inherit gitRepo;
+    commands = ''
+      npins init --bare
+      npins add -n git http://localhost:8000/foo -b test-branch
+
+      V=$(jq -r .pins npins/sources.json)
+      [[ "$V" = "{}" ]]
+    '';
+  };
+
   gitDependency = mkGitTest {
     name = "from-git-repo";
     inherit gitRepo;
@@ -145,8 +157,8 @@ in
       git ls-remote http://localhost:8000/foo
       nix-instantiate --eval npins -A foo.outPath
 
-      #V=$(jq -r .pins.foo.version npins/sources.json)
-      #[[ "$V" = "v0.2" ]]
+      V=$(jq -r .pins.foo.version npins/sources.json)
+      [[ "$V" = "v0.2" ]]
     '';
   };
 

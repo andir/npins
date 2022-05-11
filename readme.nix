@@ -3,46 +3,28 @@ let
   pins = import ./npins;
   pkgs = import pins.nixpkgs { inherit system; };
   npins = pkgs.callPackage ./default.nix { };
-
-  mkCommandOutput = args:
-    let
-      cmd = pkgs.lib.concatStringsSep " " args;
-    in
-    pkgs.runCommand "cmd-output"
-      {
-        nativeBuildInputs = [ npins ];
-        inherit cmd;
-      } ''
-
-      set -e
-      HEADER=$(echo $cmd | cut -d " " -f 2)
-      echo "### npins $HEADER" > $out
-      echo '```console' >> $out
-      echo "\$ npins $cmd" >> $out
-      npins $cmd >> $out 2>&1
-      echo '```' >> $out
-      echo >> $out
-    '';
-
-
-  commands = [
-    [ "help" ]
-    [ "help" "init" ]
-    [ "help" "add" ]
-    [ "help" "update" ]
-    [ "help" "remove" ]
-  ];
-
 in
 pkgs.runCommand "readme"
 {
-  pre = ./readme.pre.md;
-  post = ./readme.post.md;
-  usage = builtins.map mkCommandOutput commands;
+  nativeBuildInputs = [ npins ];
+  preferLocalBuild = true;
+
+  raw = ./README.md.in;
 } ''
-  cat $pre > $out
-  for file in "''${usage[@]}"; do
-    cat $file >> $out
+  set -euo pipefail
+  content="$(cat $raw)"
+
+  # Match "{{foo}}"
+  regex='\{\{([^\}]*)\}\}'
+
+  # Replace "{{foo}}" with "$(foo)", i.e. run the command
+  while [[ $content =~ $regex ]]; do
+    command="''${BASH_REMATCH[1]}"
+    # Run the command, capture failure gracefully
+    command="$($command 2>&1 || true)"
+
+    content="''${content/"''${BASH_REMATCH[0]}"/"$command"}"
   done
-  cat $post >> $out
+
+  echo "$content" >> $out
 ''

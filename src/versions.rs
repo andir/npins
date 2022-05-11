@@ -282,7 +282,7 @@ mod test {
                         hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb".into() }),
                     },
                     "streamlit".into() => Pin::PyPi {
-                        input: pypi::Pin { name: "streamlit".into() },
+                        input: pypi::Pin { name: "streamlit".into(), version_upper_bound: None },
                         version: Some(GenericVersion { version: "1.3.1".into() }),
                         hashes: Some(GenericUrlHashes { url: "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz".parse().unwrap(), hash: "adec7935c9cf774b9115b2456cf2f48c4f49b9f67159a97db0fe228357c1afdf".into() } )
                     },
