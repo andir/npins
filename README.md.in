@@ -46,30 +46,7 @@ nix-env -f https://github.com/andir/npins/archive/master.tar.gz -i
 
 ```console
 $ npins help
-npins 0.1.0
-
-USAGE:
-    npins [OPTIONS] <SUBCOMMAND>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-
-SUBCOMMANDS:
-    add           Adds a new pin entry
-    help          Prints this message or the help of the given subcommand(s)
-    import-niv    Try to import entries from Niv
-    init          Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix`
-                  and never touch your sources.json
-    remove        Removes one pin entry
-    show          Lists the current pin entries
-    update        Updates all or the given pin to the latest version
-    upgrade       Upgrade the sources.json and default.nix to the latest format version. This may occasionally break
-                  Nix evaluation!
+{{npins help}}
 ```
 
 #### Initialization
@@ -84,20 +61,7 @@ This will create an `npins` folder with a `default.nix` and `sources.json` withi
 
 ```console
 $ npins help init
-npins-init 0.1.0
-Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your
-sources.json
-
-USAGE:
-    npins init [FLAGS] [OPTIONS]
-
-FLAGS:
-        --bare    Don't add an initial `nixpkgs` entry
-    -h, --help    Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+{{npins help init}}
 ```
 
 #### Migrate from Niv
@@ -115,22 +79,7 @@ Note that the import functionality is minimal and only preserves the necessary i
 
 ```console
 $ npins help import-niv
-npins-import-niv 0.1.0
-Try to import entries from Niv
-
-USAGE:
-    npins import-niv [OPTIONS] [path]
-
-FLAGS:
-    -h, --help    Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-    -n, --name <name>           Only import one entry from Niv
-
-ARGS:
-    <path>     [default: nix/sources.json]
+{{npins help import-niv}}
 ```
 
 #### Adding dependencies
@@ -154,49 +103,14 @@ Depending on what kind of dependency you are adding, different arguments must be
 
 ```console
 $ npins help add
-npins-add 0.1.0
-Adds a new pin entry
-
-USAGE:
-    npins add [FLAGS] [OPTIONS] <SUBCOMMAND>
-
-FLAGS:
-    -n, --dry-run    Don't actually apply the changes
-    -h, --help       Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-        --name <name>           
-
-SUBCOMMANDS:
-    channel    Track a Nix channel
-    git        Track a git repository
-    github     Track a GitHub repository
-    gitlab     Track a GitLab repository
-    help       Prints this message or the help of the given subcommand(s)
-    pypi       Track a package on PyPi
+{{npins help add}}
 ```
 
 #### Removing dependencies
 
 ```console
 $ npins help remove
-npins-remove 0.1.0
-Removes one pin entry
-
-USAGE:
-    npins remove [OPTIONS] <name>
-
-FLAGS:
-    -h, --help    Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-
-ARGS:
-    <name>    
+{{npins help remove}}
 ```
 
 #### Show current entries
@@ -205,18 +119,7 @@ This will print the currently pinned dependencies in a human readable format. Th
 
 ```console
 $ npins help show
-npins-show 0.1.0
-Lists the current pin entries
-
-USAGE:
-    npins show [OPTIONS]
-
-FLAGS:
-    -h, --help    Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+{{npins help show}}
 ```
 
 #### Updating dependencies
@@ -225,25 +128,7 @@ You can decide to update only selected dependencies, or all at once. For some pi
 
 ```console
 $ npins help update
-npins-update 0.1.0
-Updates all or the given pin to the latest version
-
-USAGE:
-    npins update [FLAGS] [OPTIONS] [names]...
-
-FLAGS:
-    -n, --dry-run    Print the diff, but don't write back the changes
-    -f, --full       Re-fetch hashes even if the version hasn't changed. Useful to make sure the derivations are in the
-                     Nix store
-    -h, --help       Prints help information
-    -p, --partial    Don't update versions, only re-fetch hashes
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-
-ARGS:
-    <names>...    Update only those pins
+{{npins help update}}
 ```
 
 #### Upgrading the pins file
@@ -252,18 +137,7 @@ To ensure compatibility across releases, the `npins/sources.json` and `npins/def
 
 ```console
 $ npins help upgrade
-npins-upgrade 0.1.0
-Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
-
-USAGE:
-    npins upgrade [OPTIONS]
-
-FLAGS:
-    -h, --help    Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+{{npins help upgrade}}
 ```
 
 ### Packaging Example

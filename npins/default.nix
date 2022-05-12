@@ -9,6 +9,7 @@ let
         if spec.type == "Git" then mkGitSource spec
         else if spec.type == "GitRelease" then mkGitSource spec
         else if spec.type == "PyPi" then mkPyPiSource spec
+        else if spec.type == "Channel" then mkChannelSource spec
         else builtins.throw "Unknown source type ${spec.type}";
     in
     spec // { outPath = path; };
@@ -33,8 +34,14 @@ let
       inherit url;
       sha256 = hash;
     };
+
+  mkChannelSource = { url, hash, ... }:
+    builtins.fetchTarball {
+      inherit url;
+      sha256 = hash;
+    };
 in
-if version == 1 then
+if version == 2 then
   builtins.mapAttrs (_: mkSource) data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"

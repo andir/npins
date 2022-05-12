@@ -41,6 +41,23 @@ impl UpdateStrategy {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct ChannelAddOpts {
+    name: String,
+}
+
+impl ChannelAddOpts {
+    pub fn add(&self) -> Result<(String, Pin)> {
+        Ok((
+            self.name.clone(),
+            channel::Pin {
+                name: self.name.clone(),
+            }
+            .into(),
+        ))
+    }
+}
+
+#[derive(Debug, StructOpt)]
 pub struct GenericGitAddOpts {
     /// Track a branch instead of a release
     #[structopt(short, long)]
@@ -61,7 +78,7 @@ pub struct GenericGitAddOpts {
     #[structopt(
         long = "upper-bound",
         value_name = "version",
-        conflicts_with = "branch"
+        conflicts_with_all = &["branch", "at"]
     )]
     pub version_upper_bound: Option<String>,
 }
@@ -171,7 +188,7 @@ pub struct GitAddOpts {
 impl GitAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
         let url = Url::parse(&self.url)?;
-        let name = match url.path_segments().map(|x| x.rev().next()).flatten() {
+        let name = match url.path_segments().and_then(|x| x.rev().next()) {
             None => return Err(anyhow::anyhow!("Path segment in URL missing.")),
             Some(seg) => seg.to_owned(),
         };
@@ -207,22 +224,37 @@ impl GitAddOpts {
 pub struct PyPiAddOpts {
     /// Name of the package at PyPi.org
     pub name: String,
+
+    /// Use a specific release instead of the latest.
+    #[structopt(long, value_name = "version")]
+    pub at: Option<String>,
+
+    /// Bound the version resolution. For example, setting this to "2" will
+    /// restrict updates to 1.X versions. Conflicts with the --branch option.
+    #[structopt(long = "upper-bound", value_name = "version", conflicts_with = "at")]
+    pub version_upper_bound: Option<String>,
 }
 
 impl PyPiAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
-        Ok((
-            self.name.clone(),
-            pypi::Pin {
+        Ok((self.name.clone(), {
+            let pin = pypi::Pin {
                 name: self.name.clone(),
-            }
-            .into(),
-        ))
+                version_upper_bound: self.version_upper_bound.clone(),
+            };
+            let version = self.at.as_ref().map(|at| GenericVersion {
+                version: at.clone(),
+            });
+            (pin, version).into()
+        }))
     }
 }
 
 #[derive(Debug, StructOpt)]
 pub enum AddCommands {
+    /// Track a Nix channel
+    #[structopt(name = "channel")]
+    Channel(ChannelAddOpts),
     /// Track a GitHub repository
     #[structopt(name = "github")]
     GitHub(GitHubAddOpts),
@@ -239,9 +271,11 @@ pub enum AddCommands {
 
 #[derive(Debug, StructOpt)]
 pub struct AddOpts {
-    #[structopt(long, short)]
+    #[structopt(long)]
     pub name: Option<String>,
-
+    /// Don't actually apply the changes
+    #[structopt(short = "n", long)]
+    pub dry_run: bool,
     #[structopt(subcommand)]
     command: AddCommands,
 }
@@ -249,6 +283,7 @@ pub struct AddOpts {
 impl AddOpts {
     fn run(&self) -> Result<(String, Pin)> {
         let (name, pin) = match &self.command {
+            AddCommands::Channel(c) => c.add()?,
             AddCommands::Git(g) => g.add()?,
             AddCommands::GitHub(gh) => gh.add()?,
             AddCommands::GitLab(gl) => gl.add()?,
@@ -286,7 +321,7 @@ pub struct UpdateOpts {
     #[structopt(short, long, conflicts_with = "partial")]
     pub full: bool,
     /// Print the diff, but don't write back the changes
-    #[structopt(short = "n", long)]
+    #[structopt(short = "n", long, global = true)]
     pub dry_run: bool,
 }
 
@@ -314,9 +349,6 @@ pub enum Command {
 
     /// Adds a new pin entry.
     Add(AddOpts),
-
-    /// Query some release information and then print out the entry
-    Fetch(AddOpts),
 
     /// Lists the current pin entries.
     Show,
@@ -409,9 +441,13 @@ impl Opts {
         } else {
             log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
             let mut pin = NixPins::new_with_nixpkgs();
-            self.update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
-                .await
-                .context("Failed to fetch initial nixpkgs entry")?;
+            self.update_one(
+                pin.pins.get_mut("nixpkgs").unwrap(),
+                UpdateStrategy::Full,
+                false,
+            )
+            .await
+            .context("Failed to fetch initial nixpkgs entry")?;
             pin
         };
         self.write_pins(&initial_pins)?;
@@ -435,39 +471,31 @@ impl Opts {
     async fn add(&self, opts: &AddOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
         let (name, mut pin) = opts.run()?;
+        log::info!("Adding '{}' …", name);
+        /* Fetch the latest version unless the user specified some */
         let strategy = if pin.has_version() {
             UpdateStrategy::HashesOnly
         } else {
             UpdateStrategy::Full
         };
-        self.update_one(&mut pin, strategy)
+        self.update_one(&mut pin, strategy, false)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name.clone(), pin.clone());
-        self.write_pins(&pins)?;
+        if !opts.dry_run {
+            self.write_pins(&pins)?;
+        }
 
-        log::info!("Successfully added pin '{}':", name);
         println!("{}", pin);
         Ok(())
     }
 
-    async fn fetch(&self, opts: &AddOpts) -> Result<()> {
-        let (_name, mut pin) = opts.run()?;
-        let strategy = if pin.has_version() {
-            UpdateStrategy::HashesOnly
-        } else {
-            UpdateStrategy::Full
-        };
-        self.update_one(&mut pin, strategy)
-            .await
-            .context("Failed to fully fetch the pin")?;
-        serde_json::to_writer_pretty(std::io::stdout(), &pin)?;
-        println!();
-
-        Ok(())
-    }
-
-    async fn update_one(&self, pin: &mut Pin, strategy: UpdateStrategy) -> Result<()> {
+    async fn update_one(
+        &self,
+        pin: &mut Pin,
+        strategy: UpdateStrategy,
+        print_diff: bool,
+    ) -> Result<()> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
             pin.update().await?
@@ -479,18 +507,20 @@ impl Opts {
         if !diff1.is_empty() || strategy.must_fetch() {
             let diff2 = pin.fetch().await?;
 
-            if diff1.len() + diff2.len() > 0 {
-                println!("Changes:");
-                for d in diff1 {
-                    print!("{}", d);
+            if print_diff {
+                if diff1.len() + diff2.len() > 0 {
+                    println!("Changes:");
+                    for d in diff1 {
+                        print!("{}", d);
+                    }
+                    for d in diff2 {
+                        print!("{}", d);
+                    }
+                } else {
+                    println!("(no changes)");
                 }
-                for d in diff2 {
-                    print!("{}", d);
-                }
-            } else {
-                println!("(no changes)");
             }
-        } else {
+        } else if print_diff {
             println!("(no changes)");
         }
 
@@ -509,16 +539,16 @@ impl Opts {
 
         if opts.names.is_empty() {
             for (name, pin) in pins.pins.iter_mut() {
-                log::info!("Updating {} …", name);
-                self.update_one(pin, strategy).await?;
+                log::info!("Updating '{}' …", name);
+                self.update_one(pin, strategy, true).await?;
             }
         } else {
             for name in &opts.names {
                 match pins.pins.get_mut(name) {
                     None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
                     Some(pin) => {
-                        log::info!("Updating {} …", name);
-                        self.update_one(pin, strategy).await?;
+                        log::info!("Updating '{}' …", name);
+                        self.update_one(pin, strategy, true).await?;
                     },
                 }
             }
@@ -643,7 +673,6 @@ impl Opts {
             Command::Init(o) => self.init(o).await?,
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
-            Command::Fetch(a) => self.fetch(a).await?,
             Command::Update(o) => self.update(o).await?,
             Command::Upgrade => self.upgrade()?,
             Command::Remove(r) => self.remove(r)?,

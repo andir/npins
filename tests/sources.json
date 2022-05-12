@@ -1,5 +1,11 @@
 {
   "pins": {
+    "nixos-21.11": {
+      "type": "Channel",
+      "name": "nixos-21.11",
+      "url": "https://releases.nixos.org/nixos/21.11/nixos-21.11.335820.521e4d7d13b/nixexprs.tar.xz",
+      "hash": "16p4cxpzlwdj6pv29a2dd0cv439v0dwlddzkdh1wnv7075nw2lyh"
+    },
     "nixos-mailserver": {
       "type": "Git",
       "repository": {
@@ -45,5 +51,5 @@
       "hash": "0a0ljx67q0gh8wza84gk33g31v02bd0a7lzawhn33i42iihms2w7"
     }
   },
-  "version": 1
+  "version": 2
 }

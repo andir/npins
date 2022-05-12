@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use structopt::StructOpt;
 
+pub mod channel;
 pub mod cli;
 pub mod diff;
 pub mod git;
@@ -15,19 +16,24 @@ pub mod nix;
 pub mod pypi;
 pub mod versions;
 
+/// Helper method to build you a client.
+pub fn build_client() -> Result<reqwest::Client, reqwest::Error> {
+    reqwest::Client::builder()
+        .user_agent(concat!(
+            env!("CARGO_PKG_NAME"),
+            " v",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .build()
+}
+
 /// Helper method for doing various API calls
 async fn get_and_deserialize<T, U>(url: U) -> anyhow::Result<T>
 where
     T: for<'a> Deserialize<'a> + 'static,
     U: IntoUrl,
 {
-    let response = reqwest::Client::builder()
-        .user_agent(concat!(
-            env!("CARGO_PKG_NAME"),
-            " v",
-            env!("CARGO_PKG_VERSION")
-        ))
-        .build()?
+    let response = build_client()?
         .get(url)
         .send()
         .await?
@@ -216,6 +222,7 @@ mkPin! {
     (Git, git, "git repository", git::GitPin),
     (GitRelease, git_release, "git release tag", git::GitReleasePin),
     (PyPi, pypi, "pypi package", pypi::Pin),
+    (Channel, channel, "Nix channel", channel::Pin),
 }
 
 /// The main struct the CLI operates on
@@ -231,7 +238,7 @@ impl NixPins {
         let mut pins = BTreeMap::new();
         pins.insert(
             "nixpkgs".to_owned(),
-            git::GitPin::github("nixos", "nixpkgs", "nixpkgs-unstable".to_owned()).into(),
+            channel::Pin::new("nixpkgs-unstable").into(),
         );
         Self { pins }
     }
@@ -274,6 +281,7 @@ async fn main() -> Result<()> {
         .format_timestamp(None)
         .format_target(false)
         .init();
+
     let opts = cli::Opts::from_args();
     opts.run().await?;
     Ok(())
