@@ -292,10 +292,9 @@ in pkgs.stdenv.mkDerivation {
 
 Contributions to this project are welcome in the form of GitHub Issues or PRs. Please consider the following before creating PRs:
 
-- This project has several commit hooks configured via `pre-commit-hooks`, make sure you have these enabled and they are passing
+- This project has several commit hooks configured in the `shell.nix`, make sure you have these enabled and they are passing
 - This readme is templated, edit [README.md.in](./README.md.in) instead (the commit hook will take care of the rest)
-- If you are planning to make any considerable changes, you should first present your plans in a GitHub issue so it can be discussed
-- Simplicity and ease of use is one of the design goals, please keep this in mind when making contributons
+- Consider discussing major features or changes in an issue first
 
 <!-- MARKDOWN LINKS & IMAGES -->
 
