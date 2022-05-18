@@ -1,6 +1,6 @@
 # npins
 
-Simple and convenient dependency pinning in Nix
+Simple and convenient dependency pinning for Nix
 
 <!-- badges -->
 [![License][license-shield]][license-url]
@@ -22,27 +22,81 @@ Simple and convenient dependency pinning in Nix
   - GitHub/GitLab releases are intentionally ignored
 - For git repositories hosted on GitHub or GitLab, `fetchTarball` is used instead of `fetchGit`
 - Track Nix channels
+  - Unlike tracking a channel from its git branch, this gives you access to the `programs.sqlite` database
 - Track PyPi packages
 
 ## Getting Started
 
-`npins` can be built and installed like any other Nix based project. This section provides some information on installing `npins` and runs through the different usage scenarios.
-
 ### Installation
 
-Ideally you will want to install `npins` through an overlay (eventually managed by `npins` itself). You can however use `nix run` to try it in a shell:
+`npins` should readily be available in all sufficiently new `nixpkgs`:
+
+```sh
+nix-shell -p npins
+```
+
+You can easily get a nightly if you want to (requires newstyle Nix commands):
 
 ```sh
 nix run -f https://github.com/andir/npins/archive/master.tar.gz
 ```
 
-You could also install it to your profile using `nix-env` (not recommended):
+You could also install it to your profile using `nix-env` (not recommended, but might be useful for bootstrapping):
 
 ```sh
 nix-env -f https://github.com/andir/npins/archive/master.tar.gz -i
 ```
 
-### Usage
+### Quickstart
+
+```
+$ npins init
+[INFO ] Welcome to npins!
+[INFO ] Writing default.nix
+[INFO ] Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)
+[INFO ] Successfully written initial files to 'npins'.
+
+$ tree
+.
+└── npins
+    ├── default.nix
+    └── sources.json
+
+1 directory, 2 files
+
+$ npins show
+nixpkgs: (Nix channel)
+    name: nixpkgs-unstable
+    url: https://releases.nixos.org/nixpkgs/nixpkgs-22.05pre378171.ff691ed9ba2/nixexprs.tar.xz
+    hash: 04xggrc0qz5sq39mxdhqh0d2mljg9wmmn8nbv71x3vblam1wyp9b
+
+$ cat npins/sources.json
+{
+  "pins": {
+    "nixpkgs": {
+      "type": "Channel",
+      "name": "nixpkgs-unstable",
+      "url": "https://releases.nixos.org/nixpkgs/nixpkgs-22.05pre378171.ff691ed9ba2/nixexprs.tar.xz",
+      "hash": "04xggrc0qz5sq39mxdhqh0d2mljg9wmmn8nbv71x3vblam1wyp9b"
+    }
+  },
+  "version": 2
+}
+```
+
+In Nix, you may then use it like this:
+
+```nix
+let
+  sources = import ./npins;
+  pkgs = import sources.nixpkgs {};
+in
+  …
+```
+
+You may also use attributes from the JSON file, they are exposed 1:1. For example, `sources.myPackage.version` should work for many pin types (provided that that pin actually tracks some version). Note however that the available attribute may change over time; see `npins upgrade` below.
+
+## Usage
 
 ```console
 $ npins help
@@ -72,7 +126,7 @@ SUBCOMMANDS:
                   Nix evaluation!
 ```
 
-#### Initialization
+### Initialization
 
 In order to start using `npins` to track any dependencies you need to first [initialize](#npins-help) the project:
 
@@ -100,7 +154,7 @@ OPTIONS:
                                 [default: npins]
 ```
 
-#### Migrate from Niv
+### Migrate from Niv
 
 You can import your pins from Niv:
 
@@ -133,7 +187,7 @@ ARGS:
     <path>     [default: nix/sources.json]
 ```
 
-#### Adding dependencies
+### Adding dependencies
 
 Some common usage examples:
 
@@ -178,7 +232,7 @@ SUBCOMMANDS:
     pypi       Track a package on PyPi
 ```
 
-#### Removing dependencies
+### Removing dependencies
 
 ```console
 $ npins help remove
@@ -199,7 +253,7 @@ ARGS:
     <name>    
 ```
 
-#### Show current entries
+### Show current entries
 
 This will print the currently pinned dependencies in a human readable format. The machine readable `sources.json` may be accessed directly, but make sure to always check the format version (see below).
 
@@ -219,7 +273,7 @@ OPTIONS:
                                 [default: npins]
 ```
 
-#### Updating dependencies
+### Updating dependencies
 
 You can decide to update only selected dependencies, or all at once. For some pin types, we distinguish between "find out the latest version" and "fetch the latest version". These can be controlled with the `--full` and `--partial` flags.
 
@@ -246,7 +300,7 @@ ARGS:
     <names>...    Update only those pins
 ```
 
-#### Upgrading the pins file
+### Upgrading the pins file
 
 To ensure compatibility across releases, the `npins/sources.json` and `npins/default.nix` are versioned. Whenever the format changes (i.e. because new pin types are added), the version number is increased. Use `npins upgrade` to automatically apply the necessary changes to the `sources.json` and to replace the `default.nix` with one for the current version. No stability guarantees are made on the Nix side across versions.
 
@@ -264,28 +318,6 @@ FLAGS:
 OPTIONS:
     -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
                                 [default: npins]
-```
-
-### Packaging Example
-
-Below is an example of what an expression might look like for packaging some `foobar` dependency which is tracked using `npins`:
-```nix
-let
-   sources = import ./npins;
-   pkgs = import sources.nixpkgs {};
-in pkgs.stdenv.mkDerivation {
-   # Use the name and owner of the repository as package name
-   pname = sources.neovim.owner + "-" + sources.neovim.repository;
-
-   # this will set the version of the package to the git revision
-   version = sources.neovim.revision;
-
-   # or, if you are tracking a tag you can use the name of the release as
-   # defined on GitHub:
-   # version = sources.neovim.release_name;
-   src = sources.neovim;
-}
-
 ```
 
 ## Contributing
