@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use diff::{Diff, OptionExt};
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
@@ -241,6 +241,29 @@ impl NixPins {
             channel::Pin::new("nixpkgs-unstable").into(),
         );
         Self { pins }
+    }
+
+    pub fn read(folder: &std::path::Path) -> Result<Self> {
+        let path = folder.join("sources.json");
+        let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
+            format!(
+                "Failed to open {}. You must initialize npins before you can show current pins.",
+                path.display()
+            )
+        })?);
+        versions::from_value_versioned(serde_json::from_reader(fh)?)
+            .context("Failed to deserialize sources.json")
+    }
+
+    pub fn write(&self, folder: &std::path::Path) -> Result<()> {
+        if !folder.exists() {
+            std::fs::create_dir(&folder)?;
+        }
+        let path = folder.join("sources.json");
+        let fh = std::fs::File::create(&path)
+            .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
+        serde_json::to_writer_pretty(fh, &versions::to_value_versioned(self))?;
+        Ok(())
     }
 }
 

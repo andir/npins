@@ -101,6 +101,7 @@ You may also use attributes from the JSON file, they are exposed 1:1. For exampl
 ```console
 $ npins help
 npins 0.1.0
+Pin dependencies and track upstream repositories
 
 USAGE:
     npins [OPTIONS] <SUBCOMMAND>

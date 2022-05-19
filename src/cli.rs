@@ -5,6 +5,7 @@ use super::*;
 use std::io::Write;
 
 use anyhow::{Context, Result};
+use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
 use url::Url;
@@ -378,8 +379,7 @@ pub enum Command {
     ImportNiv(ImportOpts),
 }
 
-use structopt::clap::AppSettings;
-
+/// Pin dependencies and track upstream repositories
 #[derive(Debug, StructOpt)]
 #[structopt(
     setting(AppSettings::ArgRequiredElseHelp),
@@ -403,29 +403,6 @@ pub struct Opts {
 }
 
 impl Opts {
-    fn read_pins(&self) -> Result<NixPins> {
-        let path = self.folder.join("sources.json");
-        let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
-            format!(
-                "Failed to open {}. You must initialize npins before you can show current pins.",
-                path.display()
-            )
-        })?);
-        versions::from_value_versioned(serde_json::from_reader(fh)?)
-            .context("Failed to deserialize sources.json")
-    }
-
-    fn write_pins(&self, pins: &NixPins) -> Result<()> {
-        if !self.folder.exists() {
-            std::fs::create_dir(&self.folder)?;
-        }
-        let path = self.folder.join("sources.json");
-        let fh = std::fs::File::create(&path)
-            .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
-        serde_json::to_writer_pretty(fh, &versions::to_value_versioned(pins))?;
-        Ok(())
-    }
-
     async fn init(&self, o: &InitOpts) -> Result<()> {
         log::info!("Welcome to npins!");
         let default_nix = include_bytes!("../npins/default.nix");
@@ -462,7 +439,7 @@ impl Opts {
             .context("Failed to fetch initial nixpkgs entry")?;
             pin
         };
-        self.write_pins(&initial_pins)?;
+        initial_pins.write(&self.folder)?;
         log::info!(
             "Successfully written initial files to '{}'.",
             self.folder.display()
@@ -471,7 +448,7 @@ impl Opts {
     }
 
     fn show(&self) -> Result<()> {
-        let pins = self.read_pins()?;
+        let pins = NixPins::read(&self.folder)?;
         for (name, pin) in pins.pins.iter() {
             println!("{}: ({})", name, pin.pin_type());
             println!("{}", pin);
@@ -481,7 +458,7 @@ impl Opts {
     }
 
     async fn add(&self, opts: &AddOpts) -> Result<()> {
-        let mut pins = self.read_pins()?;
+        let mut pins = NixPins::read(&self.folder)?;
         let (name, mut pin) = opts.run()?;
         log::info!("Adding '{}' …", name);
         /* Fetch the latest version unless the user specified some */
@@ -495,7 +472,7 @@ impl Opts {
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name.clone(), pin.clone());
         if !opts.dry_run {
-            self.write_pins(&pins)?;
+            pins.write(&self.folder)?;
         }
 
         println!("{}", pin);
@@ -540,7 +517,7 @@ impl Opts {
     }
 
     async fn update(&self, opts: &UpdateOpts) -> Result<()> {
-        let mut pins = self.read_pins()?;
+        let mut pins = NixPins::read(&self.folder)?;
 
         let strategy = match (opts.partial, opts.full) {
             (false, false) => UpdateStrategy::Normal,
@@ -567,7 +544,7 @@ impl Opts {
         }
 
         if !opts.dry_run {
-            self.write_pins(&pins)?;
+            pins.write(&self.folder)?;
             log::info!("Update successful.");
         }
 
@@ -607,26 +584,25 @@ impl Opts {
         if pins_raw_new != serde_json::Value::Object(pins_raw) {
             log::info!("Done. It is recommended to at least run `update --partial` afterwards.");
         }
-        self.write_pins(&pins)
+        pins.write(&self.folder)
     }
 
     fn remove(&self, r: &RemoveOpts) -> Result<()> {
-        let pins = self.read_pins()?;
+        let mut pins = NixPins::read(&self.folder)?;
 
         if !pins.pins.contains_key(&r.name) {
             return Err(anyhow::anyhow!("Could not find the pin '{}'", r.name));
         }
 
-        let mut new_pins = pins.clone();
-        new_pins.pins.remove(&r.name);
+        pins.pins.remove(&r.name);
 
-        self.write_pins(&new_pins)?;
+        pins.write(&self.folder)?;
         log::info!("Successfully removed pin '{}'.", r.name);
         Ok(())
     }
 
     async fn import_niv(&self, o: &ImportOpts) -> Result<()> {
-        let mut pins = self.read_pins()?;
+        let mut pins = NixPins::read(&self.folder)?;
 
         let niv: BTreeMap<String, serde_json::Value> =
             serde_json::from_reader(std::fs::File::open(&o.path).context(anyhow::format_err!(
@@ -675,7 +651,7 @@ impl Opts {
             }
         }
 
-        self.write_pins(&pins)?;
+        pins.write(&self.folder)?;
         log::info!("Done.");
         Ok(())
     }
