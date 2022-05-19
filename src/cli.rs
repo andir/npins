@@ -289,13 +289,33 @@ pub struct AddOpts {
     /// Don't actually apply the changes
     #[structopt(short = "n", long)]
     pub dry_run: bool,
+    /// Overwrite existing pins with the same name
+    #[structopt(short, long)]
+    pub force: bool,
     #[structopt(subcommand)]
     command: AddCommands,
 }
 
 impl AddOpts {
-    fn run(&self) -> Result<(String, Pin)> {
-        let (name, pin) = match &self.command {
+    async fn run(&self, folder: &std::path::Path, create_non_existing: bool) -> Result<()> {
+        let mut pins = match NixPins::read(folder) {
+            Ok(pins) => pins,
+            Err(err) => {
+                if create_non_existing && !folder.join("sources.json").exists() {
+                    log::warn!(
+                        "No sources.json found in {}, initializating a new one (empty)",
+                        folder
+                            .canonicalize()
+                            .unwrap_or_else(|_| folder.to_path_buf())
+                            .display()
+                    );
+                    NixPins::default()
+                } else {
+                    return Err(err);
+                }
+            },
+        };
+        let (name, mut pin) = match &self.command {
             AddCommands::Channel(c) => c.add()?,
             AddCommands::Git(g) => g.add()?,
             AddCommands::GitHub(gh) => gh.add()?,
@@ -303,23 +323,58 @@ impl AddOpts {
             AddCommands::PyPi(p) => p.add()?,
         };
 
-        let name = if let Some(ref n) = self.name {
-            n.clone()
-        } else {
-            name
-        };
+        /* Optionally use user-provided name */
+        let name = self.name.clone().unwrap_or(name);
         anyhow::ensure!(
             !name.is_empty(),
             "Pin name cannot be empty. Use --name to specify one manually",
         );
 
-        Ok((name, pin))
+        log::info!("Adding '{}' …", name);
+        /* Fetch the latest version unless the user specified some */
+        let strategy = if pin.has_version() {
+            UpdateStrategy::HashesOnly
+        } else {
+            UpdateStrategy::Full
+        };
+        update_one(&mut pin, strategy, false)
+            .await
+            .context("Failed to fully initialize the pin")?;
+        let old = pins.pins.insert(name.clone(), pin.clone());
+        if old.is_some() && !self.force {
+            anyhow::bail!(
+                "Pin {} already exists. Choose a different --name or use --force to overwrite it",
+                name
+            );
+        }
+        if !self.dry_run {
+            pins.write(folder)?;
+        }
+
+        println!("{}", pin);
+        Ok(())
     }
 }
 
 #[derive(Debug, StructOpt)]
 pub struct RemoveOpts {
     pub name: String,
+}
+
+impl RemoveOpts {
+    fn run(&self, folder: &std::path::Path) -> Result<()> {
+        let mut pins = NixPins::read(folder)?;
+
+        if !pins.pins.contains_key(&self.name) {
+            return Err(anyhow::anyhow!("Could not find the pin '{}'", self.name));
+        }
+
+        pins.pins.remove(&self.name);
+
+        pins.write(folder)?;
+        log::info!("Successfully removed pin '{}'.", self.name);
+        Ok(())
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -338,11 +393,94 @@ pub struct UpdateOpts {
     pub dry_run: bool,
 }
 
+impl UpdateOpts {
+    async fn run(&self, folder: &std::path::Path) -> Result<()> {
+        let mut pins = NixPins::read(folder)?;
+
+        let strategy = match (self.partial, self.full) {
+            (false, false) => UpdateStrategy::Normal,
+            (false, true) => UpdateStrategy::Full,
+            (true, false) => UpdateStrategy::HashesOnly,
+            (true, true) => panic!("partial and full are mutually exclusive"),
+        };
+
+        if self.names.is_empty() {
+            for (name, pin) in pins.pins.iter_mut() {
+                log::info!("Updating '{}' …", name);
+                update_one(pin, strategy, true).await?;
+            }
+        } else {
+            for name in &self.names {
+                match pins.pins.get_mut(name) {
+                    None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
+                    Some(pin) => {
+                        log::info!("Updating '{}' …", name);
+                        update_one(pin, strategy, true).await?;
+                    },
+                }
+            }
+        }
+
+        if !self.dry_run {
+            pins.write(folder)?;
+            log::info!("Update successful.");
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, StructOpt)]
 pub struct InitOpts {
     /// Don't add an initial `nixpkgs` entry
     #[structopt(long)]
     pub bare: bool,
+}
+
+impl InitOpts {
+    async fn run(&self, folder: &std::path::Path) -> Result<()> {
+        log::info!("Welcome to npins!");
+        let default_nix = include_bytes!("../npins/default.nix");
+        if !folder.exists() {
+            log::info!("Creating `{}` directory", folder.display());
+            std::fs::create_dir(folder).context("Failed to create npins folder")?;
+        }
+        log::info!("Writing default.nix");
+        let p = folder.join("default.nix");
+        let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
+        fh.write_all(default_nix)?;
+
+        // Only create the pins if the file isn't there yet
+        if folder.join("sources.json").exists() {
+            log::info!(
+                "The file '{}' already exists; nothing to do.",
+                folder.join("pins.json").display()
+            );
+            return Ok(());
+        }
+
+        let initial_pins = if self.bare {
+            log::info!("Writing initial sources.json (empty)");
+            NixPins::default()
+        } else {
+            log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
+            let mut pin = NixPins::new_with_nixpkgs();
+            update_one(
+                pin.pins.get_mut("nixpkgs").unwrap(),
+                UpdateStrategy::Full,
+                false,
+            )
+            .await
+            .context("Failed to fetch initial nixpkgs entry")?;
+            pin
+        };
+        initial_pins.write(folder)?;
+        log::info!(
+            "Successfully written initial files to '{}'.",
+            folder.display()
+        );
+        Ok(())
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -354,261 +492,17 @@ pub struct ImportOpts {
     pub name: Option<String>,
 }
 
-#[derive(Debug, StructOpt)]
-pub enum Command {
-    /// Intializes the npins directory. Running this multiple times will restore/upgrade the
-    /// `default.nix` and never touch your sources.json.
-    Init(InitOpts),
-
-    /// Adds a new pin entry.
-    Add(AddOpts),
-
-    /// Lists the current pin entries.
-    Show,
-
-    /// Updates all or the given pin to the latest version.
-    Update(UpdateOpts),
-
-    /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
-    Upgrade,
-
-    /// Removes one pin entry.
-    Remove(RemoveOpts),
-
-    /// Try to import entries from Niv
-    ImportNiv(ImportOpts),
-}
-
-/// Pin dependencies and track upstream repositories
-#[derive(Debug, StructOpt)]
-#[structopt(
-    setting(AppSettings::ArgRequiredElseHelp),
-    global_setting(AppSettings::VersionlessSubcommands),
-    global_setting(AppSettings::ColoredHelp),
-    global_setting(AppSettings::ColorAuto)
-)]
-pub struct Opts {
-    /// Base folder for sources.json and the boilerplate default.nix
-    #[structopt(
-        global = true,
-        short = "d",
-        long = "directory",
-        default_value = "npins",
-        env = "NPINS_DIRECTORY"
-    )]
-    folder: std::path::PathBuf,
-
-    #[structopt(subcommand)]
-    command: Command,
-}
-
-impl Opts {
-    async fn init(&self, o: &InitOpts) -> Result<()> {
-        log::info!("Welcome to npins!");
-        let default_nix = include_bytes!("../npins/default.nix");
-        if !self.folder.exists() {
-            log::info!("Creating `{}` directory", self.folder.display());
-            std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
-        }
-        log::info!("Writing default.nix");
-        let p = self.folder.join("default.nix");
-        let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
-        fh.write_all(default_nix)?;
-
-        // Only create the pins if the file isn't there yet
-        if self.folder.join("sources.json").exists() {
-            log::info!(
-                "The file '{}' already exists; nothing to do.",
-                self.folder.join("pins.json").display()
-            );
-            return Ok(());
-        }
-
-        let initial_pins = if o.bare {
-            log::info!("Writing initial sources.json (empty)");
-            NixPins::default()
-        } else {
-            log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
-            let mut pin = NixPins::new_with_nixpkgs();
-            self.update_one(
-                pin.pins.get_mut("nixpkgs").unwrap(),
-                UpdateStrategy::Full,
-                false,
-            )
-            .await
-            .context("Failed to fetch initial nixpkgs entry")?;
-            pin
-        };
-        initial_pins.write(&self.folder)?;
-        log::info!(
-            "Successfully written initial files to '{}'.",
-            self.folder.display()
-        );
-        Ok(())
-    }
-
-    fn show(&self) -> Result<()> {
-        let pins = NixPins::read(&self.folder)?;
-        for (name, pin) in pins.pins.iter() {
-            println!("{}: ({})", name, pin.pin_type());
-            println!("{}", pin);
-        }
-
-        Ok(())
-    }
-
-    async fn add(&self, opts: &AddOpts) -> Result<()> {
-        let mut pins = NixPins::read(&self.folder)?;
-        let (name, mut pin) = opts.run()?;
-        log::info!("Adding '{}' …", name);
-        /* Fetch the latest version unless the user specified some */
-        let strategy = if pin.has_version() {
-            UpdateStrategy::HashesOnly
-        } else {
-            UpdateStrategy::Full
-        };
-        self.update_one(&mut pin, strategy, false)
-            .await
-            .context("Failed to fully initialize the pin")?;
-        pins.pins.insert(name.clone(), pin.clone());
-        if !opts.dry_run {
-            pins.write(&self.folder)?;
-        }
-
-        println!("{}", pin);
-        Ok(())
-    }
-
-    async fn update_one(
-        &self,
-        pin: &mut Pin,
-        strategy: UpdateStrategy,
-        print_diff: bool,
-    ) -> Result<()> {
-        /* Skip this for partial updates */
-        let diff1 = if strategy.should_update() {
-            pin.update().await?
-        } else {
-            vec![]
-        };
-
-        /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
-        if !diff1.is_empty() || strategy.must_fetch() {
-            let diff2 = pin.fetch().await?;
-
-            if print_diff {
-                if diff1.len() + diff2.len() > 0 {
-                    println!("Changes:");
-                    for d in diff1 {
-                        print!("{}", d);
-                    }
-                    for d in diff2 {
-                        print!("{}", d);
-                    }
-                } else {
-                    println!("(no changes)");
-                }
-            }
-        } else if print_diff {
-            println!("(no changes)");
-        }
-
-        Ok(())
-    }
-
-    async fn update(&self, opts: &UpdateOpts) -> Result<()> {
-        let mut pins = NixPins::read(&self.folder)?;
-
-        let strategy = match (opts.partial, opts.full) {
-            (false, false) => UpdateStrategy::Normal,
-            (false, true) => UpdateStrategy::Full,
-            (true, false) => UpdateStrategy::HashesOnly,
-            (true, true) => panic!("partial and full are mutually exclusive"),
-        };
-
-        if opts.names.is_empty() {
-            for (name, pin) in pins.pins.iter_mut() {
-                log::info!("Updating '{}' …", name);
-                self.update_one(pin, strategy, true).await?;
-            }
-        } else {
-            for name in &opts.names {
-                match pins.pins.get_mut(name) {
-                    None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
-                    Some(pin) => {
-                        log::info!("Updating '{}' …", name);
-                        self.update_one(pin, strategy, true).await?;
-                    },
-                }
-            }
-        }
-
-        if !opts.dry_run {
-            pins.write(&self.folder)?;
-            log::info!("Update successful.");
-        }
-
-        Ok(())
-    }
-
-    fn upgrade(&self) -> Result<()> {
-        anyhow::ensure!(
-            self.folder.exists(),
-            "Could not find npins folder at {}",
-            self.folder.display(),
-        );
-
-        let nix_path = self.folder.join("default.nix");
-        let nix_file = include_str!("../npins/default.nix");
-        if std::fs::read_to_string(&nix_path)? == nix_file {
-            log::info!("default.nix is already up to date");
-        } else {
-            log::info!("Replacing default.nix with an up to date version");
-            std::fs::write(&nix_path, nix_file).context("Failed to create npins default.nix")?;
-        }
-
-        log::info!("Upgrading sources.json to the newest format version");
-        let path = self.folder.join("sources.json");
-        let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
-            format!(
-                "Failed to open {}. You must initialize npins before you can show current pins.",
-                path.display()
-            )
-        })?);
-
-        let pins_raw: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(fh)
-            .context("sources.json must be a valid JSON file with an object as top level")?;
-
-        let pins_raw_new = versions::upgrade(pins_raw.clone()).context("Upgrading failed")?;
-        let pins: NixPins = serde_json::from_value(pins_raw_new.clone())?;
-        if pins_raw_new != serde_json::Value::Object(pins_raw) {
-            log::info!("Done. It is recommended to at least run `update --partial` afterwards.");
-        }
-        pins.write(&self.folder)
-    }
-
-    fn remove(&self, r: &RemoveOpts) -> Result<()> {
-        let mut pins = NixPins::read(&self.folder)?;
-
-        if !pins.pins.contains_key(&r.name) {
-            return Err(anyhow::anyhow!("Could not find the pin '{}'", r.name));
-        }
-
-        pins.pins.remove(&r.name);
-
-        pins.write(&self.folder)?;
-        log::info!("Successfully removed pin '{}'.", r.name);
-        Ok(())
-    }
-
-    async fn import_niv(&self, o: &ImportOpts) -> Result<()> {
-        let mut pins = NixPins::read(&self.folder)?;
+impl ImportOpts {
+    async fn run(&self, folder: &std::path::Path) -> Result<()> {
+        let mut pins = NixPins::read(folder)?;
 
         let niv: BTreeMap<String, serde_json::Value> =
-            serde_json::from_reader(std::fs::File::open(&o.path).context(anyhow::format_err!(
+            serde_json::from_reader(std::fs::File::open(&self.path).context(
+                anyhow::format_err!(
                 "Could not open sources.json at '{}'",
-                o.path.canonicalize().unwrap_or_else(|_| o.path.clone()).display()
-            ))?)
+                self.path.canonicalize().unwrap_or_else(|_| self.path.clone()).display()
+            ),
+            )?)
             .context("Niv file is not a valid JSON dict")?;
         log::info!("Note that all the imported entries will be updated so they won't necessarily point to the same commits as before!");
 
@@ -639,7 +533,7 @@ impl Opts {
             Ok(())
         }
 
-        if let Some(name) = &o.name {
+        if let Some(name) = &self.name {
             import(name, None, &mut pins, &niv).await?;
         } else {
             for (name, pin) in niv.iter() {
@@ -651,20 +545,208 @@ impl Opts {
             }
         }
 
-        pins.write(&self.folder)?;
+        pins.write(folder)?;
         log::info!("Done.");
         Ok(())
     }
+}
 
+#[derive(Debug, StructOpt)]
+pub enum Command {
+    /// Intializes the npins directory. Running this multiple times will restore/upgrade the
+    /// `default.nix` and never touch your sources.json.
+    Init(InitOpts),
+
+    /// Adds a new pin entry.
+    Add(AddOpts),
+
+    /// Lists the current pin entries.
+    Show,
+
+    /// Updates all or the given pin to the latest version.
+    Update(UpdateOpts),
+
+    /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
+    Upgrade,
+
+    /// Removes one pin entry.
+    Remove(RemoveOpts),
+
+    /// Try to import entries from Niv
+    ImportNiv(ImportOpts),
+}
+
+/// Update a pin according to some strategy
+async fn update_one(pin: &mut Pin, strategy: UpdateStrategy, print_diff: bool) -> Result<()> {
+    /* Skip this for partial updates */
+    let diff1 = if strategy.should_update() {
+        pin.update().await?
+    } else {
+        vec![]
+    };
+
+    /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
+    if !diff1.is_empty() || strategy.must_fetch() {
+        let diff2 = pin.fetch().await?;
+
+        if print_diff {
+            if diff1.len() + diff2.len() > 0 {
+                println!("Changes:");
+                for d in diff1 {
+                    print!("{}", d);
+                }
+                for d in diff2 {
+                    print!("{}", d);
+                }
+            } else {
+                println!("(no changes)");
+            }
+        }
+    } else if print_diff {
+        println!("(no changes)");
+    }
+
+    Ok(())
+}
+
+fn show(folder: &std::path::Path) -> Result<()> {
+    let pins = NixPins::read(folder)?;
+    for (name, pin) in pins.pins.iter() {
+        println!("{}: ({})", name, pin.pin_type());
+        println!("{}", pin);
+    }
+
+    Ok(())
+}
+
+fn upgrade(folder: &std::path::Path, default_nix: bool) -> Result<()> {
+    anyhow::ensure!(
+        folder.exists(),
+        "Could not find npins folder at {}",
+        folder.display(),
+    );
+
+    if default_nix {
+        let nix_path = folder.join("default.nix");
+        let nix_file = include_str!("../npins/default.nix");
+        if std::fs::read_to_string(&nix_path)? == nix_file {
+            log::info!("default.nix is already up to date");
+        } else {
+            log::info!("Replacing default.nix with an up to date version");
+            std::fs::write(&nix_path, nix_file).context("Failed to create npins default.nix")?;
+        }
+    }
+
+    log::info!("Upgrading sources.json to the newest format version");
+    let path = folder.join("sources.json");
+    let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
+        format!(
+            "Failed to open {}. You must initialize npins before you can show current pins.",
+            path.display()
+        )
+    })?);
+
+    let pins_raw: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(fh)
+        .context("sources.json must be a valid JSON file with an object as top level")?;
+
+    let pins_raw_new = versions::upgrade(pins_raw.clone()).context("Upgrading failed")?;
+    let pins: NixPins = serde_json::from_value(pins_raw_new.clone())?;
+    if pins_raw_new != serde_json::Value::Object(pins_raw) {
+        log::info!("Done. It is recommended to at least run `update --partial` afterwards.");
+    }
+    pins.write(folder)
+}
+
+/// Pin dependencies and track upstream repositories
+#[derive(Debug, StructOpt)]
+#[structopt(
+    setting(AppSettings::ArgRequiredElseHelp),
+    global_setting(AppSettings::VersionlessSubcommands),
+    global_setting(AppSettings::ColoredHelp),
+    global_setting(AppSettings::ColorAuto)
+)]
+pub struct Opts {
+    /// Base folder for sources.json and the boilerplate default.nix
+    #[structopt(
+        global = true,
+        short = "d",
+        long = "directory",
+        default_value = "npins",
+        env = "NPINS_DIRECTORY"
+    )]
+    folder: std::path::PathBuf,
+
+    #[structopt(subcommand)]
+    command: Command,
+}
+
+impl Opts {
     pub async fn run(&self) -> Result<()> {
         match &self.command {
-            Command::Init(o) => self.init(o).await?,
-            Command::Show => self.show()?,
-            Command::Add(a) => self.add(a).await?,
-            Command::Update(o) => self.update(o).await?,
-            Command::Upgrade => self.upgrade()?,
-            Command::Remove(r) => self.remove(r)?,
-            Command::ImportNiv(o) => self.import_niv(o).await?,
+            Command::Init(o) => o.run(&self.folder).await?,
+            Command::Show => show(&self.folder)?,
+            Command::Add(a) => a.run(&self.folder, false).await?,
+            Command::Update(o) => o.run(&self.folder).await?,
+            Command::Upgrade => upgrade(&self.folder, true)?,
+            Command::Remove(r) => r.run(&self.folder)?,
+            Command::ImportNiv(o) => o.run(&self.folder).await?,
+        };
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub enum NixpkgsCommand {
+    /// Adds a new pin entry, creates a new sources.json if necessary.
+    Add(AddOpts),
+
+    /// Lists the current pin entries.
+    Show,
+
+    /// Updates all or the given pin to the latest version.
+    Update(UpdateOpts),
+
+    /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
+    Upgrade,
+
+    /// Removes one pin entry.
+    Remove(RemoveOpts),
+}
+
+/// Npins version specific to `nixpkgs`. There is no `default.nix` and
+/// the sources.json is expected to be in the current directory.
+/// Some subcommands are omitted, instead it provides recursive bulk operations
+#[derive(Debug, StructOpt)]
+#[structopt(
+    setting(AppSettings::ArgRequiredElseHelp),
+    global_setting(AppSettings::VersionlessSubcommands),
+    global_setting(AppSettings::ColoredHelp),
+    global_setting(AppSettings::ColorAuto)
+)]
+pub struct NixpkgsOpts {
+    /// Base working directory.
+    #[structopt(
+        global = true,
+        short = "d",
+        long = "directory",
+        default_value = ".",
+        env = "NPINS_DIRECTORY"
+    )]
+    folder: std::path::PathBuf,
+
+    #[structopt(subcommand)]
+    command: NixpkgsCommand,
+}
+
+impl NixpkgsOpts {
+    pub async fn run(&self) -> Result<()> {
+        match &self.command {
+            NixpkgsCommand::Show => show(&self.folder)?,
+            NixpkgsCommand::Add(a) => a.run(&self.folder, true).await?,
+            NixpkgsCommand::Update(o) => o.run(&self.folder).await?,
+            NixpkgsCommand::Upgrade => upgrade(&self.folder, false)?,
+            NixpkgsCommand::Remove(r) => r.run(&self.folder)?,
         };
 
         Ok(())

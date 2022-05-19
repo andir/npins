@@ -37,6 +37,7 @@ let
 
   cargoToml = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
   runtimePath = lib.makeBinPath [ nix nix-prefetch-git git ];
+
   self = rustPlatform.buildRustPackage {
     pname = cargoToml.package.name;
     version = cargoToml.package.version;
@@ -54,6 +55,10 @@ let
 
     postFixup = ''
       wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
+    '';
+
+    postInstall = ''
+      ln -s $out/bin/npins $out/bin/npins-pkgs
     '';
 
     meta.tests = pkgs.callPackage ./test.nix { npins = self; };

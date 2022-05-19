@@ -122,6 +122,20 @@ in
     '';
   };
 
+  force-add = mkGitTest {
+    name = "force-add";
+    inherit gitRepo;
+    commands = ''
+      npins init --bare
+      npins add git http://localhost:8000/foo -b test-branch
+      ! npins add git http://localhost:8000/foo -b test-branch
+      npins add -f git http://localhost:8000/foo
+
+      V=$(jq -r .pins.foo.version npins/sources.json)
+      [[ "$V" = "v0.2" ]]
+    '';
+  };
+
   gitDependency = mkGitTest {
     name = "from-git-repo";
     inherit gitRepo;
@@ -173,6 +187,19 @@ in
 
       V=$(jq -r .pins.bar.version npins/sources.json)
       [[ "$V" = "v0.2" ]]
+    '';
+  };
+
+  nixpkgs = mkGitTest {
+    name = "npins-pkgs";
+    inherit gitRepo;
+    commands = ''
+      ! npins-pkgs init --bare # Command should not exist
+      npins init --bare
+      npins add git http://localhost:8000/foo -b test-branch
+      npins-pkgs add git http://localhost:8000/foo -b test-branch
+
+      cmp ./sources.json ./npins/sources.json
     '';
   };
 }

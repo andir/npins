@@ -217,6 +217,7 @@ USAGE:
 
 FLAGS:
     -n, --dry-run    Don't actually apply the changes
+    -f, --force      Overwrite existing pins with the same name
     -h, --help       Prints help information
 
 OPTIONS:

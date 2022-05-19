@@ -304,8 +304,32 @@ async fn main() -> Result<()> {
         .format_timestamp(None)
         .format_target(false)
         .init();
+    /* We have a separate CLI for nixpkgs usage. Both get compiled into the same binary, but two
+     * are exposed in /bin where one symlinks to the other. arg0 is used to distinguish which of
+     * them was called. Additionally, on debug builds, the environment variable NPINS_PKGS is
+     * checked to make development easier.
+     */
+    let mut nixpkgs_mode = matches!(
+        std::env::args()
+            .next()
+            .map(std::path::PathBuf::from)
+            .as_deref()
+            .and_then(std::path::Path::file_name)
+            .and_then(std::ffi::OsStr::to_str),
+        Some("npins-pkgs"),
+    );
+    if cfg!(debug_assertions) {
+        nixpkgs_mode |= std::env::var_os("NPINS_PKGS")
+            .map(|var| !var.is_empty())
+            .unwrap_or(false);
+    }
 
-    let opts = cli::Opts::from_args();
-    opts.run().await?;
+    if nixpkgs_mode {
+        let opts = cli::NixpkgsOpts::from_args();
+        opts.run().await?;
+    } else {
+        let opts = cli::Opts::from_args();
+        opts.run().await?;
+    }
     Ok(())
 }
