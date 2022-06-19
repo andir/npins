@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use diff::{Diff, OptionExt};
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
@@ -242,6 +242,29 @@ impl NixPins {
         );
         Self { pins }
     }
+
+    pub fn read(folder: &std::path::Path) -> Result<Self> {
+        let path = folder.join("sources.json");
+        let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
+            format!(
+                "Failed to open {}. You must initialize npins before you can show current pins.",
+                path.display()
+            )
+        })?);
+        versions::from_value_versioned(serde_json::from_reader(fh)?)
+            .context("Failed to deserialize sources.json")
+    }
+
+    pub fn write(&self, folder: &std::path::Path) -> Result<()> {
+        if !folder.exists() {
+            std::fs::create_dir(&folder)?;
+        }
+        let path = folder.join("sources.json");
+        let fh = std::fs::File::create(&path)
+            .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
+        serde_json::to_writer_pretty(fh, &versions::to_value_versioned(self))?;
+        Ok(())
+    }
 }
 
 /// Just a version string
@@ -281,8 +304,32 @@ async fn main() -> Result<()> {
         .format_timestamp(None)
         .format_target(false)
         .init();
+    /* We have a separate CLI for nixpkgs usage. Both get compiled into the same binary, but two
+     * are exposed in /bin where one symlinks to the other. arg0 is used to distinguish which of
+     * them was called. Additionally, on debug builds, the environment variable NPINS_PKGS is
+     * checked to make development easier.
+     */
+    let mut nixpkgs_mode = matches!(
+        std::env::args()
+            .next()
+            .map(std::path::PathBuf::from)
+            .as_deref()
+            .and_then(std::path::Path::file_name)
+            .and_then(std::ffi::OsStr::to_str),
+        Some("npins-pkgs"),
+    );
+    if cfg!(debug_assertions) {
+        nixpkgs_mode |= std::env::var_os("NPINS_PKGS")
+            .map(|var| !var.is_empty())
+            .unwrap_or(false);
+    }
 
-    let opts = cli::Opts::from_args();
-    opts.run().await?;
+    if nixpkgs_mode {
+        let opts = cli::NixpkgsOpts::from_args();
+        opts.run().await?;
+    } else {
+        let opts = cli::Opts::from_args();
+        opts.run().await?;
+    }
     Ok(())
 }

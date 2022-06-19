@@ -101,6 +101,7 @@ You may also use attributes from the JSON file, they are exposed 1:1. For exampl
 ```console
 $ npins help
 npins 0.1.0
+Pin dependencies and track upstream repositories
 
 USAGE:
     npins [OPTIONS] <SUBCOMMAND>
@@ -216,6 +217,7 @@ USAGE:
 
 FLAGS:
     -n, --dry-run    Don't actually apply the changes
+    -f, --force      Overwrite existing pins with the same name
     -h, --help       Prints help information
 
 OPTIONS:
