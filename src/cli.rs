@@ -187,9 +187,26 @@ pub struct GitAddOpts {
 
 impl GitAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
-        let url = Url::parse(&self.url)?;
+        let url = Url::parse(&self.url)
+            .map_err(|e| {
+                match e {
+                    url::ParseError::RelativeUrlWithoutBase => {
+                        anyhow::format_err!("URL scheme is missing. For git URLs, add the fully qualified scheme like git+ssh://. For local repositories, add file://")
+                    },
+                    url::ParseError::InvalidPort => {
+                        anyhow::format_err!("Invalid port number. For git URLs, try inserting a '/' after the ':' before the user name, like so: git+ssh://git@gitlab-instance.net:/user/repo.git")
+                    },
+                    e => e.into(),
+                }
+            })
+            .context("Failed to parse repository URL")?;
+
+        if url.scheme().contains('.') {
+            log::warn!("Your URL scheme ('{}:') contains a '.', which is unusual. Please double-check its correctness.", url.scheme());
+            log::warn!("Very likely you forgot to specify the scheme, and the host name parsed as such instead.");
+        }
         let name = match url.path_segments().and_then(|x| x.rev().next()) {
-            None => return Err(anyhow::anyhow!("Path segment in URL missing.")),
+            None => anyhow::bail!("Path of URL must start with a '/'. Also make sure that the URL starts with a scheme."),
             Some(seg) => seg.to_owned(),
         };
         let name = name.strip_suffix(".git").unwrap_or(&name);

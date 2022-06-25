@@ -485,7 +485,7 @@ pub async fn fetch_ref(repo: &Url, ref_: impl AsRef<str>) -> Result<RemoteInfo> 
 
     anyhow::ensure!(
         !remotes.is_empty(),
-        "git ls-remote output is empty. Are you sure '{}' exists?",
+        "git ls-remote output is empty. Are you sure '{}' exists? Note: If you want to tag a revision, you need to also specify a branch ('--branch').",
         ref_,
     );
     anyhow::ensure!(
