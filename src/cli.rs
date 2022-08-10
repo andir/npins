@@ -135,6 +135,13 @@ pub struct GitLabAddOpts {
     )]
     pub server: url::Url,
 
+    #[structopt(
+        long,
+        help = "Use a private token to access the repository",
+        value_name = "token"
+    )]
+    pub private_token: Option<String>,
+
     #[structopt(flatten)]
     pub more: GenericGitAddOpts,
 }
@@ -152,6 +159,7 @@ impl GitLabAddOpts {
                         self.repo_path.join("/"),
                         branch.clone(),
                         Some(self.server.clone()),
+                        self.private_token.clone(),
                     );
                     let version = self.more.at.as_ref()
                     .map(|at| git::GitRevision {
@@ -164,6 +172,7 @@ impl GitLabAddOpts {
                         Some(self.server.clone()),
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
+                        self.private_token.clone(),
                     );
                     let version = self.more.at.as_ref()
                         .map(|at| GenericVersion {

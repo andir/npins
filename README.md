@@ -199,6 +199,7 @@ npins add github ytdl-org youtube-dl
 npins add github ytdl-org youtube-dl -b master # Track nightly
 npins add github ytdl-org youtube-dl -b master --at c7965b9fc2cae54f244f31f5373cb81a40e822ab # We want *that* commit
 npins add gitlab simple-nixos-mailserver nixos-mailserver --at v2.3.0 # We want *that* tag (note: tag, not version)
+npins add gitlab my-org my-private-repo --token H_BRqzV3NcaPvXcYs2Xf # Use a token to access a private repository
 npins add pypi streamlit # Use latest version
 npins add pypi streamlit --at 1.9.0 # We want *that* version
 npins add pypi streamlit --upper-bound 2.0.0 # We only want 1.X
@@ -318,6 +319,28 @@ FLAGS:
 OPTIONS:
     -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
                                 [default: npins]
+```
+
+### Using private GitLab repositories
+
+There are two ways of specifying the access token (not deploy token!), either via an environment variable or via a parameter.
+The access token needs at least the `read_api` and `read_repository` scopes and the `Reporter` role.
+The `read_api` scope is not available for deploy tokens, hence they are not usable for npins.
+
+Specifying the token via environment variable means that npins will use the token for adding/updating the pin but not write it to sources.json.
+To update the repository in the future, the variable needs to be set again and nix needs to be configured accordingly to be able to fetch it (see the `netrc-file` option).
+Environment example:
+```console
+$ GITLAB_TOKEN=H_BRqzV3NcaPvXcYs2Xf npins add gitlab my-org my-private-repo
+```
+
+When specifying the token via the `--token` parameter, the token is written to sources.json so future invocations of npins will use it as well.
+The token is also embedded into the URL that nix downloads, so no further nix configuration is necessary.
+As npins adds the token to your sources.json, this feature is not advised for publicly available repositories.
+When a pin has specified a token, the `GITLAB_TOKEN` environment variable is ignored.
+Parameter example:
+```console
+$ npins add gitlab my-org my-private-repo --token H_BRqzV3NcaPvXcYs2Xf
 ```
 
 ## Contributing

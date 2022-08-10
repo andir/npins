@@ -95,6 +95,10 @@ pub enum Repository {
         ///
         /// It must fit into the schema `<server>/<owner>/<repo>` to get a repository's URL.
         server: Url,
+        /// access token for private repositories
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default)]
+        private_token: Option<String>,
     },
 }
 
@@ -106,7 +110,19 @@ impl Repository {
             Repository::GitHub { owner, repo } => {
                 format!("{}/{}/{}.git", get_github_url(), owner, repo).parse()?
             },
-            Repository::GitLab { repo_path, server } => {
+            Repository::GitLab {
+                repo_path,
+                server,
+                private_token,
+            } => {
+                let mut server = server.clone();
+                if let Some(token) = private_token {
+                    server.set_username("oauth2").ok();
+                    server.set_password(Some(token)).ok();
+                } else if let Ok(token) = std::env::var("GITLAB_TOKEN") {
+                    server.set_username("oauth2").ok();
+                    server.set_password(Some(&token)).ok();
+                }
                 server.join(&format!("{}.git", repo_path))?
             },
         })
@@ -126,7 +142,11 @@ impl Repository {
                 )
                 .parse()?,
             ),
-            Repository::GitLab { repo_path, server } => {
+            Repository::GitLab {
+                repo_path,
+                server,
+                private_token,
+            } => {
                 let mut url = server.clone();
                 url.path_segments_mut()
                     .map_err(|()| anyhow::format_err!("GitLab server URL must be a base"))?
@@ -142,6 +162,9 @@ impl Repository {
                         .iter(),
                     );
                 url.set_query(Some(&format!("sha={}", revision)));
+                if let Some(token) = private_token {
+                    url.set_query(Some(&format!("private_token={}", token)));
+                }
                 Some(url)
             },
         })
@@ -161,7 +184,11 @@ impl Repository {
                 )
                 .parse()?,
             ),
-            Repository::GitLab { repo_path, server } => {
+            Repository::GitLab {
+                repo_path,
+                server,
+                private_token,
+            } => {
                 let mut url = server.clone();
                 url.path_segments_mut()
                     .map_err(|()| anyhow::format_err!("GitLab server URL must be a base"))?
@@ -177,6 +204,9 @@ impl Repository {
                         .iter(),
                     );
                 url.set_query(Some(&format!("ref={}", tag)));
+                if let Some(token) = private_token {
+                    url.set_query(Some(&format!("private_token={}", token)));
+                }
                 Some(url)
             },
         })
@@ -220,11 +250,17 @@ impl GitPin {
         }
     }
 
-    pub fn gitlab(repo_path: String, branch: String, server: Option<Url>) -> Self {
+    pub fn gitlab(
+        repo_path: String,
+        branch: String,
+        server: Option<Url>,
+        private_token: Option<String>,
+    ) -> Self {
         Self {
             repository: Repository::GitLab {
                 repo_path,
                 server: server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap()),
+                private_token,
             },
             branch,
         }
@@ -329,11 +365,13 @@ impl GitReleasePin {
         server: Option<Url>,
         pre_releases: bool,
         version_upper_bound: Option<String>,
+        private_token: Option<String>,
     ) -> Self {
         Self {
             repository: Repository::GitLab {
                 repo_path,
                 server: server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap()),
+                private_token,
             },
             pre_releases,
             version_upper_bound,
@@ -543,6 +581,9 @@ fn latest_release<'a>(
 #[cfg(test)]
 mod test {
     use super::*;
+    use envtestkit::lock::lock_test;
+    use envtestkit::set_env;
+    use std::ffi::OsString;
 
     #[tokio::test]
     async fn test_latest_release() {
@@ -754,6 +795,7 @@ mod test {
             repository: Repository::GitLab {
                 repo_path: "maxigaz/gitlab-dark".into(),
                 server: "https://gitlab.com/".parse().unwrap(),
+                private_token: None,
             },
             branch: "master".into(),
         };
@@ -780,6 +822,7 @@ mod test {
             repository: Repository::GitLab {
                 repo_path: "maxigaz/gitlab-dark".into(),
                 server: "https://gitlab.com/".parse().unwrap(),
+                private_token: None,
             },
             pre_releases: false,
             version_upper_bound: None,
@@ -810,6 +853,7 @@ mod test {
             repository: Repository::GitLab {
                 repo_path: "Archive/gnome-games".into(),
                 server: "https://gitlab.gnome.org/".parse().unwrap(),
+                private_token: None,
             },
             branch: "master".into(),
         };
@@ -836,6 +880,7 @@ mod test {
             repository: Repository::GitLab {
                 repo_path: "Archive/gnome-games".into(),
                 server: "https://gitlab.gnome.org/".parse().unwrap(),
+                private_token: None,
             },
             pre_releases: false,
             version_upper_bound: None,
@@ -854,6 +899,172 @@ mod test {
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?ref=40.0".parse().unwrap()),
                 hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
             }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_gitlab_private_update() -> Result<()> {
+        let _lock = lock_test();
+        let _test = set_env(OsString::from("GITLAB_TOKEN"), "some-invalid-value");
+        let pin = GitPin {
+            repository: Repository::GitLab {
+                repo_path: "npins-test/npins-private-test".into(),
+                server: "https://gitlab.com/".parse().unwrap(),
+                private_token: Some("glpat-MSsRZG1SNdJU1MzBNosV".into()),
+            },
+            branch: "main".into(),
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            git::GitRevision {
+                revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
+            }
+        );
+        assert_eq!(
+            pin.fetch(&version).await?,
+            OptionalUrlHashes {
+                url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
+                hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_gitlab_private_release_update() -> Result<()> {
+        let _lock = lock_test();
+        let _test = set_env(OsString::from("GITLAB_TOKEN"), "some-invalid-value");
+        let mut pin = GitReleasePin {
+            repository: Repository::GitLab {
+                repo_path: "npins-test/npins-private-test".into(),
+                server: "https://gitlab.com/".parse().unwrap(),
+                private_token: Some("glpat-MSsRZG1SNdJU1MzBNosV".into()),
+            },
+            pre_releases: false,
+            version_upper_bound: Some("1.0.1".into()),
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            GenericVersion {
+                version: "v1.0.0".into(),
+            }
+        );
+        // Test whether updating works
+        pin.version_upper_bound = None;
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            GenericVersion {
+                version: "v1.0.1".into(),
+            }
+        );
+        // Test fetching
+        assert_eq!(
+            pin.fetch(&version).await?,
+            ReleasePinHashes {
+                revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
+                url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
+                hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_gitlab_selfhosted_private_update() -> Result<()> {
+        let _lock = lock_test();
+        let _test = set_env(OsString::from("GITLAB_TOKEN"), "some-invalid-value");
+        let pin = GitPin {
+            repository: Repository::GitLab {
+                repo_path: "npins-test/npins-private-test".into(),
+                server: "https://git.helsinki.tools/".parse().unwrap(),
+                private_token: Some("xqgHNxVNdzvMy6cDvreJ".into()),
+            },
+            branch: "main".into(),
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            git::GitRevision {
+                revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
+            }
+        );
+        assert_eq!(
+            pin.fetch(&version).await?,
+            OptionalUrlHashes {
+                url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
+                hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_gitlab_selfhosted_private_release_update() -> Result<()> {
+        let _lock = lock_test();
+        let _test = set_env(OsString::from("GITLAB_TOKEN"), "some-invalid-value");
+        let mut pin = GitReleasePin {
+            repository: Repository::GitLab {
+                repo_path: "npins-test/npins-private-test".into(),
+                server: "https://git.helsinki.tools/".parse().unwrap(),
+                private_token: Some("xqgHNxVNdzvMy6cDvreJ".into()),
+            },
+            pre_releases: false,
+            version_upper_bound: Some("1.0.1".into()),
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            GenericVersion {
+                version: "v1.0.0".into(),
+            }
+        );
+        // Test whether updating works
+        pin.version_upper_bound = None;
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            GenericVersion {
+                version: "v1.0.1".into(),
+            }
+        );
+        // Test fetching
+        assert_eq!(
+            pin.fetch(&version).await?,
+            ReleasePinHashes {
+                revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
+                url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
+                hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_gitlab_private_update_from_env() -> Result<()> {
+        let _lock = lock_test();
+        let _test = set_env(OsString::from("GITLAB_TOKEN"), "glpat-MSsRZG1SNdJU1MzBNosV");
+        let pin = GitPin {
+            repository: Repository::GitLab {
+                repo_path: "npins-test/npins-private-test".into(),
+                server: "https://gitlab.com/".parse().unwrap(),
+                private_token: None,
+            },
+            branch: "main".into(),
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            git::GitRevision {
+                revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
+            }
+        );
+        // The token was not written to the URL
+        assert_eq!(pin.repository.url(&version.revision)?.expect("no url returned"),
+            "https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?sha=122f7072f026644fbed6abc17c5c2ab3ae107046".parse().unwrap()
         );
         Ok(())
     }
