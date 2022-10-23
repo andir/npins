@@ -100,7 +100,7 @@ You may also use attributes from the JSON file, they are exposed 1:1. For exampl
 
 ```console
 $ npins help
-npins 0.1.0
+npins 0.2.0
 
 USAGE:
     npins [OPTIONS] <SUBCOMMAND>
@@ -138,7 +138,7 @@ This will create an `npins` folder with a `default.nix` and `sources.json` withi
 
 ```console
 $ npins help init
-npins-init 0.1.0
+npins-init 0.2.0
 Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your
 sources.json
 
@@ -169,7 +169,7 @@ Note that the import functionality is minimal and only preserves the necessary i
 
 ```console
 $ npins help import-niv
-npins-import-niv 0.1.0
+npins-import-niv 0.2.0
 Try to import entries from Niv
 
 USAGE:
@@ -209,7 +209,7 @@ Depending on what kind of dependency you are adding, different arguments must be
 
 ```console
 $ npins help add
-npins-add 0.1.0
+npins-add 0.2.0
 Adds a new pin entry
 
 USAGE:
@@ -237,7 +237,7 @@ SUBCOMMANDS:
 
 ```console
 $ npins help remove
-npins-remove 0.1.0
+npins-remove 0.2.0
 Removes one pin entry
 
 USAGE:
@@ -260,7 +260,7 @@ This will print the currently pinned dependencies in a human readable format. Th
 
 ```console
 $ npins help show
-npins-show 0.1.0
+npins-show 0.2.0
 Lists the current pin entries
 
 USAGE:
@@ -280,7 +280,7 @@ You can decide to update only selected dependencies, or all at once. For some pi
 
 ```console
 $ npins help update
-npins-update 0.1.0
+npins-update 0.2.0
 Updates all or the given pin to the latest version
 
 USAGE:
@@ -307,7 +307,7 @@ To ensure compatibility across releases, the `npins/sources.json` and `npins/def
 
 ```console
 $ npins help upgrade
-npins-upgrade 0.1.0
+npins-upgrade 0.2.0
 Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
 
 USAGE:
