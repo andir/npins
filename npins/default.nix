@@ -19,10 +19,12 @@ let
     # At the moment, either it is a plain git repository (which has an url), or it is a GitHub/GitLab repository
     # In the latter case, there we will always be an url to the tarball
     if url != null then
-      (builtins.fetchTarball {
+      (builtins.fetchTarball ({
         inherit url;
         sha256 = hash; # FIXME: check nix version & use SRI hashes
-      })
+      } // (if repository ? filename then {
+        name = repository.filename;
+      } else { })))
     else assert repository.type == "Git"; builtins.fetchGit {
       url = repository.url;
       rev = revision;
@@ -35,13 +37,14 @@ let
       sha256 = hash;
     };
 
-  mkChannelSource = { url, hash, ... }:
+  mkChannelSource = { url, hash, filename, ... }:
     builtins.fetchTarball {
+      name = filename;
       inherit url;
       sha256 = hash;
     };
 in
-if version == 3 then
+if version == 4 then
   builtins.mapAttrs (_: mkSource) data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"

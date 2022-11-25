@@ -6,12 +6,21 @@ pub struct PrefetchInfo {
     hash: String,
 }
 
-pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
+pub async fn nix_prefetch_tarball(
+    url: impl AsRef<str>,
+    filename: Option<impl AsRef<str>>,
+) -> Result<String> {
     let url = url.as_ref();
-    let output = tokio::process::Command::new("nix-prefetch-url")
-        .arg("--unpack") // force calculation of the unpacked NAR hash
+    let mut cmd = tokio::process::Command::new("nix-prefetch-url");
+    cmd.arg("--unpack") // force calculation of the unpacked NAR hash
         .arg("--type")
-        .arg("sha256")
+        .arg("sha256");
+
+    if let Some(filename) = filename {
+        cmd.arg("--name").arg(filename.as_ref());
+    }
+
+    let output = cmd
         .arg(url)
         .output()
         .await
