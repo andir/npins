@@ -32,7 +32,10 @@ pkgs.mkShell
     nix_2_3
     nix-prefetch-git
     git
-  ];
+  ] ++ (lib.optionals stdenv.isDarwin [
+    pkgs.libiconv
+    pkgs.darwin.apple_sdk.frameworks.Security
+  ]);
 
   inherit (pre-commit) shellHook;
 }
