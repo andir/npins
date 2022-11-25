@@ -41,6 +41,8 @@ impl diff::Diff for GitRevision {
 pub struct OptionalUrlHashes {
     pub url: Option<url::Url>,
     pub hash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
 }
 
 impl diff::Diff for OptionalUrlHashes {
@@ -60,6 +62,8 @@ pub struct ReleasePinHashes {
     pub revision: String,
     pub url: Option<Url>,
     pub hash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
 }
 
 impl diff::Diff for ReleasePinHashes {
@@ -211,6 +215,17 @@ impl Repository {
             },
         })
     }
+
+    fn filename(&self) -> Option<String> {
+        match self {
+            Repository::GitLab { repo_path, .. } => Some(format!(
+                "npins-gitlab-{}.tar.gz",
+                repo_path.split('/').last().unwrap().to_owned()
+            )),
+            Repository::GitHub { repo, .. } => Some(format!("npins-github-{}.tar.gz", repo)),
+            Repository::Git { .. } => None,
+        }
+    }
 }
 
 /// Track a given branch on a repository and always use the latest commit
@@ -284,12 +299,17 @@ impl Updatable for GitPin {
 
     async fn fetch(&self, version: &GitRevision) -> Result<OptionalUrlHashes> {
         let url = self.repository.url(&version.revision)?;
+        let filename = self.repository.filename();
         let hash = match url.as_ref() {
-            Some(url) => nix::nix_prefetch_tarball(url).await?,
+            Some(url) => nix::nix_prefetch_tarball(url, filename.as_ref()).await?,
             None => nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision).await?,
         };
 
-        Ok(OptionalUrlHashes { url, hash })
+        Ok(OptionalUrlHashes {
+            url,
+            hash,
+            filename,
+        })
     }
 }
 
@@ -442,8 +462,10 @@ impl Updatable for GitReleasePin {
             .await?
             .revision;
 
+        let filename = self.repository.filename();
+
         let hash = match url.as_ref() {
-            Some(url) => nix::nix_prefetch_tarball(url).await?,
+            Some(url) => nix::nix_prefetch_tarball(url, filename.as_ref()).await?,
             None => nix::nix_prefetch_git(&repo_url, &revision).await?,
         };
 
@@ -451,6 +473,7 @@ impl Updatable for GitReleasePin {
             url,
             hash,
             revision,
+            filename,
         })
     }
 }
@@ -699,6 +722,7 @@ mod test {
             OptionalUrlHashes {
                 url: None,
                 hash: "17giznxp84h53jsm334dkp1fz6x9ff2yqfkq34ihq0ray1x3yhyd".into(),
+                filename: None,
             }
         );
         Ok(())
@@ -726,6 +750,7 @@ mod test {
                 url: None,
                 hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
                 revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
+                filename: None,
             }
         );
         Ok(())
@@ -752,6 +777,7 @@ mod test {
             OptionalUrlHashes {
                 url: Some("https://github.com/oliverwatkins/swing_library/archive/1edb0a9cebe046cc915a218c57dbf7f40739aeee.tar.gz".parse().unwrap()),
                 hash: "17giznxp84h53jsm334dkp1fz6x9ff2yqfkq34ihq0ray1x3yhyd".into(),
+                filename: Some("npins-github-swing_library.tar.gz".into()),
             }
         );
         Ok(())
@@ -784,6 +810,7 @@ mod test {
                         .unwrap()
                 ),
                 hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+                filename: Some("npins-github-MidiOSC.tar.gz".into()),
             }
         );
         Ok(())
@@ -811,6 +838,7 @@ mod test {
             OptionalUrlHashes {
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?sha=e7145078163692697b843915a665d4f41139a65c".parse().unwrap()),
                 hash: "0nmcr0g0cms4yx9wsgbyvxyvdlqwa9qdb8179g47rs0y04iylcsv".into(),
+                filename: Some("npins-gitlab-gitlab-dark.tar.gz".into()),
             }
         );
         Ok(())
@@ -842,6 +870,7 @@ mod test {
                     .parse()
                     .unwrap()),
                 hash: "0nmcr0g0cms4yx9wsgbyvxyvdlqwa9qdb8179g47rs0y04iylcsv".into(),
+                filename: Some("npins-gitlab-gitlab-dark.tar.gz".into()),
             }
         );
         Ok(())
@@ -869,6 +898,7 @@ mod test {
             OptionalUrlHashes {
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?sha=bca2071b6923d45d9aabac27b3ea1e40f5fa3006".parse().unwrap()),
                 hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
+                filename: Some("npins-gitlab-gnome-games.tar.gz".into()),
             }
         );
         Ok(())
@@ -898,6 +928,7 @@ mod test {
                 revision: "2c89145d52d072a4ca5da900c2676d890bfab1ff".into(),
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?ref=40.0".parse().unwrap()),
                 hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
+                filename: Some("npins-gitlab-gnome-games.tar.gz".into()),
             }
         );
         Ok(())
@@ -925,8 +956,9 @@ mod test {
         assert_eq!(
             pin.fetch(&version).await?,
             OptionalUrlHashes {
-                url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
+                url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?sha=122f7072f026644fbed6abc17c5c2ab3ae107046&private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
+                filename: Some("npins-gitlab-npins-private-test.tar.gz".into()),
             }
         );
         Ok(())
@@ -966,8 +998,9 @@ mod test {
             pin.fetch(&version).await?,
             ReleasePinHashes {
                 revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
-                url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
+                url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?ref=v1.0.1&private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
+                filename: Some("npins-gitlab-npins-private-test.tar.gz".into()),
             }
         );
         Ok(())
@@ -995,8 +1028,9 @@ mod test {
         assert_eq!(
             pin.fetch(&version).await?,
             OptionalUrlHashes {
-                url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
+                url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?sha=122f7072f026644fbed6abc17c5c2ab3ae107046&private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
+                filename: Some("npins-gitlab-npins-private-test.tar.gz".into()),
             }
         );
         Ok(())
@@ -1036,8 +1070,9 @@ mod test {
             pin.fetch(&version).await?,
             ReleasePinHashes {
                 revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
-                url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
+                url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?ref=v1.0.1&private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
+                filename: Some("npins-gitlab-npins-private-test.tar.gz".into()),
             }
         );
         Ok(())

@@ -226,25 +226,59 @@ fn upgrade_v3_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
     /* Only the fields we care about */
     #[derive(Debug, Deserialize)]
     #[serde(tag = "type")]
+    enum Repository {
+        GitLab {
+            repo_path: String,
+        },
+        GitHub {
+            repo: String,
+        },
+        /* Don't care */
+        #[serde(other)]
+        Invalid,
+    }
+
+    /* Only the fields we care about */
+    #[derive(Debug, Deserialize)]
+    #[serde(tag = "type")]
     enum OldPin {
         Channel {
             url: url::Url,
+        },
+        Git {
+            repository: Repository,
+        },
+        GitRelease {
+            repository: Repository,
         },
         #[serde(other)]
         Invalid,
     }
     let pin: OldPin = serde_json::from_value(serde_json::Value::Object(raw_pin.clone()))?;
-    log::warn!("{:?}", pin);
     match pin {
-        OldPin::Channel {
-            url
-        } => {
+        OldPin::Channel { url } => {
             raw_pin.insert("filename".into(), json!(channel::Pin::calc_filename(&url)?));
+        },
+        OldPin::GitRelease { repository, .. } |
+        OldPin::Git { repository, .. } => {
+            let filename = match repository {
+                Repository::GitLab { repo_path } => {
+                    Some(format!("npins-gitlab-{}.tar.gz", repo_path.split('/').last().unwrap().to_owned()))
+                },
+                Repository::GitHub { repo } => {
+                    Some(format!("npins-github-{}.tar.gz", repo))
+                },
+                _ => {
+                    None
+                }
+            };
+            if let Some(filename) = filename {
+                raw_pin.insert("filename".into(), json!(filename));
+            }
         },
         /* Do nothing here */
         OldPin::Invalid => {},
     }
-    log::warn!("{:?}", raw_pin);
 
     Ok(())
 }
@@ -326,12 +360,12 @@ mod test {
                     "nixos-mailserver".into() => Pin::Git {
                         input: git::GitPin::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap(), "nixos-21.11".into()),
                         version: Some(git::GitRevision { revision: "6e3a7b2ea6f0d68b82027b988aa25d3423787303".into() }),
-                        hashes: Some(git::OptionalUrlHashes { url: None, hash: "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44".into() } ),
+                        hashes: Some(git::OptionalUrlHashes { url: None, hash: "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44".into(), filename: None } ),
                     },
                     "nixpkgs".into() => Pin::Git {
                         input: git::GitPin::github("nixos", "nixpkgs", "nixpkgs-unstable".into()),
                         version: Some(git::GitRevision { revision: "5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2".into() }),
-                        hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb".into() }),
+                        hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb".into(), filename: None }),
                     },
                     "streamlit".into() => Pin::PyPi {
                         input: pypi::Pin { name: "streamlit".into(), version_upper_bound: None },
