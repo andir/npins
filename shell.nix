@@ -34,9 +34,5 @@ pkgs.mkShell
     git
   ];
 
-  # https://github.com/cachix/pre-commit-hooks.nix/issues/131
-  shellHook =
-    if (!(stdenv.isDarwin && stdenv.isAarch64))
-    then pre-commit.shellHook
-    else "";
+  inherit (pre-commit) shellHook;
 }
