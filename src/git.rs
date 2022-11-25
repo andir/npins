@@ -286,7 +286,11 @@ impl Updatable for GitPin {
         let url = self.repository.url(&version.revision)?;
         let hash = match url.as_ref() {
             Some(url) => nix::nix_prefetch_tarball(url).await?,
-            None => nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision).await?,
+            None => {
+                nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision)
+                    .await?
+                    .sha256
+            },
         };
 
         Ok(OptionalUrlHashes { url, hash })
@@ -444,7 +448,7 @@ impl Updatable for GitReleasePin {
 
         let hash = match url.as_ref() {
             Some(url) => nix::nix_prefetch_tarball(url).await?,
-            None => nix::nix_prefetch_git(&repo_url, &revision).await?,
+            None => nix::nix_prefetch_git(&repo_url, &revision).await?.sha256,
         };
 
         Ok(ReleasePinHashes {

@@ -30,7 +30,16 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     Ok(String::from(stdout.trim()))
 }
 
-pub async fn nix_prefetch_git(url: impl AsRef<str>, git_ref: impl AsRef<str>) -> Result<String> {
+#[derive(Debug)]
+pub struct NixPrefetchGitResponse {
+    pub sha256: String,
+    pub path: String,
+}
+
+pub async fn nix_prefetch_git(
+    url: impl AsRef<str>,
+    git_ref: impl AsRef<str>,
+) -> Result<NixPrefetchGitResponse> {
     let url = url.as_ref();
     let output = tokio::process::Command::new("nix-prefetch-git")
         .arg(url)
@@ -56,7 +65,7 @@ pub async fn nix_prefetch_git(url: impl AsRef<str>, git_ref: impl AsRef<str>) ->
 
     #[allow(unused)]
     #[derive(Debug, serde::Deserialize)]
-    struct NixPrefetchGitResponse {
+    struct NixPrefetchGitCliResponse {
         url: String,
         rev: String,
         date: String,
@@ -70,8 +79,33 @@ pub async fn nix_prefetch_git(url: impl AsRef<str>, git_ref: impl AsRef<str>) ->
         leave_dot_git: bool,
     }
 
-    let info: NixPrefetchGitResponse = serde_json::from_slice(&output.stdout)
+    let info: NixPrefetchGitCliResponse = serde_json::from_slice(&output.stdout)
         .context("Failed to deserialize nix-pfetch-git JSON response.")?;
 
-    Ok(info.sha256)
+    Ok(NixPrefetchGitResponse {
+        sha256: info.sha256,
+        path: info.path,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[tokio::test]
+    async fn test_nix_prefetch_git() {
+        let result = super::nix_prefetch_git(
+            "https://github.com/left-pad/left-pad.git",
+            "2fca6157fcca165438e0f9495cf0e5a4e6f71349",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result.sha256,
+            "06cb6fv6y9giiiljzjf8k9n7qzb7aaibaryhdwr7lb618lhjvwfi"
+        );
+        assert_eq!(
+            result.path,
+            "/nix/store/31bxz3mxqhsinhnyvgdpdc13b86j372w-left-pad-2fca615"
+        );
+    }
 }
