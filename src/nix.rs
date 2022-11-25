@@ -108,4 +108,17 @@ mod tests {
             "/nix/store/31bxz3mxqhsinhnyvgdpdc13b86j372w-left-pad-2fca615"
         );
     }
+
+    #[tokio::test]
+    async fn test_nix_prefetch_tarball() {
+        let result = super::nix_prefetch_tarball(
+            "https://github.com/left-pad/left-pad/archive/refs/tags/v1.3.0.tar.gz",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result,
+            "0mjvb0b51ivwi9sfkiqnjbj2y1rfblydnb0s4wdk46c7lsf1jisg"
+        )
+    }
 }
