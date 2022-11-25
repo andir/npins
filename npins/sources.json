@@ -10,7 +10,8 @@
       "branch": "nixpkgs-unstable",
       "revision": "a529f0c125a78343b145a8eb2b915b0295e4f459",
       "url": "https://github.com/nixos/nixpkgs/archive/a529f0c125a78343b145a8eb2b915b0295e4f459.tar.gz",
-      "hash": "0d945bdpsxaqz4d9hvsmzhcbriqwga3i0bf1ppj6lrrbqhr4pj7v"
+      "hash": "0d945bdpsxaqz4d9hvsmzhcbriqwga3i0bf1ppj6lrrbqhr4pj7v",
+      "filename": "npins-github-nixpkgs.tar.gz"
     },
     "pre-commit-hooks.nix": {
       "type": "Git",
@@ -22,8 +23,9 @@
       "branch": "master",
       "revision": "ff9c0b459ddc4b79c06e19d44251daa8e9cd1746",
       "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/ff9c0b459ddc4b79c06e19d44251daa8e9cd1746.tar.gz",
-      "hash": "0z09ndxvbk6w4j28lzgj0b9qqcbwrvr58c0xsm0rf0xsdipi0nwf"
+      "hash": "0z09ndxvbk6w4j28lzgj0b9qqcbwrvr58c0xsm0rf0xsdipi0nwf",
+      "filename": "npins-github-pre-commit-hooks.nix.tar.gz"
     }
   },
-  "version": 3
+  "version": 4
 }
