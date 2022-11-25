@@ -24,6 +24,7 @@ impl Pin {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct ChannelVersion {
     pub url: url::Url,
+    pub filename: String,
 }
 
 impl diff::Diff for ChannelVersion {
@@ -62,15 +63,35 @@ impl Updatable for Pin {
             .url()
             .clone();
 
-        Ok(ChannelVersion { url })
+        Ok(ChannelVersion {
+            url: url.clone(),
+            filename: Self::calc_filename(&url)?,
+        })
     }
 
     async fn fetch(&self, version: &ChannelVersion) -> Result<ChannelHash> {
         /* Prefetch an URL that looks like
          * https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f
          */
-        let hash = nix::nix_prefetch_tarball(&version.url).await?;
+        let hash =
+            nix::nix_prefetch_tarball(&version.url, Some(Self::calc_filename(&version.url)?)).await?;
 
         Ok(ChannelHash { hash })
+    }
+}
+
+impl Pin {
+    pub fn calc_filename(url: &url::Url) -> Result<String> {
+        let name_parts = url.path_segments().unwrap().collect::<Vec<&str>>();
+        let basename = name_parts
+            .get(1)
+            .ok_or_else(|| anyhow::format_err!("Unsupported channel URL {}", url))?;
+        let ending = name_parts
+            .last()
+            .ok_or_else(|| anyhow::format_err!("Unsupported channel URL {}", url))?
+            .split('.')
+            .skip(1)
+            .collect::<Vec<&str>>();
+        Ok(format!("npins-channel-{}.{}", basename, ending.join(".")))
     }
 }

@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
 /// The current format version
-pub const LATEST: u64 = 3;
+pub const LATEST: u64 = 4;
 
 /// Custom manual deserialize wrapper that checks the version
 pub fn from_value_versioned(value: Value) -> Result<NixPins> {
@@ -80,6 +80,23 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
             log::info!("There is nothing to do");
         },
         3 => {
+            let pins = pins_raw
+                .get_mut("pins")
+                .and_then(Value::as_object_mut)
+                .ok_or_else(|| anyhow::format_err!("sources.json must contain a `pins` object"))?;
+            for (name, pin) in pins.iter_mut() {
+                upgrade_v3_pin(
+                    name,
+                    pin.as_object_mut()
+                        .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?,
+                )
+                .context(anyhow::format_err!(
+                    "Pin {} could not be upgraded to the latest format version",
+                    name
+                ))?;
+            }
+        },
+        4 => {
             log::info!("sources.json is already up to date");
         },
         unknown => {
@@ -199,6 +216,35 @@ fn upgrade_v0_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
         OldPin::PyPi { .. } => {},
         OldPin::Invalid => anyhow::bail!("Unknown pin type {}", raw_pin["type"]),
     }
+
+    Ok(())
+}
+
+fn upgrade_v3_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
+    log::debug!("Updating {} to v4", name);
+
+    /* Only the fields we care about */
+    #[derive(Debug, Deserialize)]
+    #[serde(tag = "type")]
+    enum OldPin {
+        Channel {
+            url: url::Url,
+        },
+        #[serde(other)]
+        Invalid,
+    }
+    let pin: OldPin = serde_json::from_value(serde_json::Value::Object(raw_pin.clone()))?;
+    log::warn!("{:?}", pin);
+    match pin {
+        OldPin::Channel {
+            url
+        } => {
+            raw_pin.insert("filename".into(), json!(channel::Pin::calc_filename(&url)?));
+        },
+        /* Do nothing here */
+        OldPin::Invalid => {},
+    }
+    log::warn!("{:?}", raw_pin);
 
     Ok(())
 }
