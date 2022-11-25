@@ -259,18 +259,14 @@ fn upgrade_v3_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
         OldPin::Channel { url } => {
             raw_pin.insert("filename".into(), json!(channel::Pin::calc_filename(&url)?));
         },
-        OldPin::GitRelease { repository, .. } |
-        OldPin::Git { repository, .. } => {
+        OldPin::GitRelease { repository, .. } | OldPin::Git { repository, .. } => {
             let filename = match repository {
-                Repository::GitLab { repo_path } => {
-                    Some(format!("npins-gitlab-{}.tar.gz", repo_path.split('/').last().unwrap().to_owned()))
-                },
-                Repository::GitHub { repo } => {
-                    Some(format!("npins-github-{}.tar.gz", repo))
-                },
-                _ => {
-                    None
-                }
+                Repository::GitLab { repo_path } => Some(format!(
+                    "npins-gitlab-{}.tar.gz",
+                    repo_path.split('/').last().unwrap().to_owned()
+                )),
+                Repository::GitHub { repo } => Some(format!("npins-github-{}.tar.gz", repo)),
+                _ => None,
             };
             if let Some(filename) = filename {
                 raw_pin.insert("filename".into(), json!(filename));
