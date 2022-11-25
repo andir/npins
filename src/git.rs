@@ -161,9 +161,9 @@ impl Repository {
                         ]
                         .iter(),
                     );
-                url.set_query(Some(&format!("sha={}", revision)));
+                url.query_pairs_mut().append_pair("sha", revision);
                 if let Some(token) = private_token {
-                    url.set_query(Some(&format!("private_token={}", token)));
+                    url.query_pairs_mut().append_pair("private_token", token);
                 }
                 Some(url)
             },
@@ -203,9 +203,9 @@ impl Repository {
                         ]
                         .iter(),
                     );
-                url.set_query(Some(&format!("ref={}", tag)));
+                url.query_pairs_mut().append_pair("ref", tag);
                 if let Some(token) = private_token {
-                    url.set_query(Some(&format!("private_token={}", token)));
+                    url.query_pairs_mut().append_pair("private_token", token);
                 }
                 Some(url)
             },
