@@ -32,11 +32,10 @@ pkgs.mkShell
     nix_2_3
     nix-prefetch-git
     git
-  ];
+  ] ++ (lib.optionals stdenv.isDarwin [
+    pkgs.libiconv
+    pkgs.darwin.apple_sdk.frameworks.Security
+  ]);
 
-  # https://github.com/cachix/pre-commit-hooks.nix/issues/131
-  shellHook =
-    if (!(stdenv.isDarwin && stdenv.isAarch64))
-    then pre-commit.shellHook
-    else "";
+  inherit (pre-commit) shellHook;
 }
