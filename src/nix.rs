@@ -6,10 +6,16 @@ pub struct PrefetchInfo {
     hash: String,
 }
 
-pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
+pub struct NixPrefetchTarballResult {
+    pub sha256: String,
+    pub path: String,
+}
+
+pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<NixPrefetchTarballResult> {
     let url = url.as_ref();
     let output = tokio::process::Command::new("nix-prefetch-url")
         .arg("--unpack") // force calculation of the unpacked NAR hash
+        .arg("--print-path")
         .arg("--type")
         .arg("sha256")
         .arg(url)
@@ -27,7 +33,21 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(String::from(stdout.trim()))
+    let lines = stdout.lines().collect::<Vec<_>>();
+
+    if lines.len() != 2 {
+        anyhow::bail!(
+            "Expected two lines of nix-prefetch-url output but got {} instead",
+            lines.len()
+        );
+    }
+
+    let result = NixPrefetchTarballResult {
+        path: lines[1].to_string(),
+        sha256: lines[0].to_string(),
+    };
+
+    Ok(result)
 }
 
 #[derive(Debug)]
@@ -117,8 +137,13 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            result,
+            result.sha256,
             "0mjvb0b51ivwi9sfkiqnjbj2y1rfblydnb0s4wdk46c7lsf1jisg"
-        )
+        );
+
+        assert_eq!(
+            result.path,
+            "/nix/store/3s32rkwphk7pz09babd4svygjv3d4dfw-v1.3.0.tar.gz"
+        );
     }
 }
