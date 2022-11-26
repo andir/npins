@@ -91,7 +91,7 @@ pub trait Updatable:
     async fn update(&self, old: Option<&Self::Version>) -> Result<Self::Version>;
 
     /// Fetch hashes for a given version
-    async fn fetch(&self, version: &Self::Version) -> Result<Self::Hashes>;
+    async fn fetch(&self, version: &Self::Version) -> Result<(Option<String>, Self::Hashes)>;
 }
 
 /// Create the `Pin` type
@@ -152,8 +152,8 @@ macro_rules! mkPin {
                         let version = version.as_ref()
                             .ok_or_else(|| anyhow::format_err!("No version information available, call `update` first or manually set one"))?;
                         /* Use very explicit syntax to force the correct types and get good compile errors */
-                        let new_hashes = <$input_name as Updatable>::fetch(input, &version).await?;
-                        hashes.insert_diffed(new_hashes)
+                        let (path, new_hashes) = <$input_name as Updatable>::fetch(input, &version).await?;
+                        let diff = hashes.insert_diffed(new_hashes);
                     }),*
                 })
             }

@@ -102,7 +102,7 @@ impl Updatable for Pin {
         Ok(GenericVersion { version })
     }
 
-    async fn fetch(&self, version: &GenericVersion) -> Result<GenericUrlHashes> {
+    async fn fetch(&self, version: &GenericVersion) -> Result<(Option<String>, GenericUrlHashes)> {
         /* Fetch the JSON metadata for a Pypi package.
          * Url template: `https://pypi.org/pypi/$pname/json`
          * JSON schema (as in the returned value): https://warehouse.pypa.io/api-reference/json.html
@@ -131,10 +131,13 @@ impl Updatable for Pin {
             )
         })?;
 
-        Ok(GenericUrlHashes {
-            hash,
-            url: latest_source.url.parse()?,
-        })
+        Ok((
+            None,
+            GenericUrlHashes {
+                hash,
+                url: latest_source.url.parse()?,
+            },
+        ))
     }
 }
 
@@ -189,10 +192,10 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            GenericUrlHashes {
+            (None, GenericUrlHashes {
                 hash: "3953b158b7b690642d68cd6beb1d59f6e10526f2ee10a6fb4636a913cc95e718".into(),
                 url: "https://files.pythonhosted.org/packages/d1/d5/0c270c22d61ff6b883d0f24956f13e904b131b5ac2829e0af1cda99d70b1/gaiatest-0.34.tar.gz".parse().unwrap(),
-            }
+            })
         );
         Ok(())
     }
@@ -215,10 +218,10 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            GenericUrlHashes {
+            (None, GenericUrlHashes {
                 hash: "39d09c6627255fcf39c938937995665b6377799c4fa141f6b481bcb5e6a688ac".into(),
                 url: "https://files.pythonhosted.org/packages/fd/75/6e72889c3b154a179040b94963a50901966ff30b68600271df374b2ded7a/streamlit-0.89.0.tar.gz".parse().unwrap(),
-            }
+            })
         );
         Ok(())
     }
