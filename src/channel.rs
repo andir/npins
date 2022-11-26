@@ -69,8 +69,8 @@ impl Updatable for Pin {
         /* Prefetch an URL that looks like
          * https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f
          */
-        let hash = nix::nix_prefetch_tarball(&version.url).await?;
+        let r = nix::nix_prefetch_tarball(&version.url).await?;
 
-        Ok(ChannelHash { hash })
+        Ok(ChannelHash { hash: r.hash })
     }
 }

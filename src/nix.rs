@@ -1,17 +1,11 @@
 use anyhow::{Context, Result};
 
-#[allow(unused)]
 pub struct PrefetchInfo {
-    store_path: String,
-    hash: String,
+    pub store_path: String,
+    pub hash: String,
 }
 
-pub struct NixPrefetchTarballResult {
-    pub sha256: String,
-    pub path: String,
-}
-
-pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<NixPrefetchTarballResult> {
+pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<PrefetchInfo> {
     let url = url.as_ref();
     let output = tokio::process::Command::new("nix-prefetch-url")
         .arg("--unpack") // force calculation of the unpacked NAR hash
@@ -42,24 +36,18 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<NixPrefetchTar
         );
     }
 
-    let result = NixPrefetchTarballResult {
-        path: lines[1].to_string(),
-        sha256: lines[0].to_string(),
+    let result = PrefetchInfo {
+        store_path: lines[1].to_string(),
+        hash: lines[0].to_string(),
     };
 
     Ok(result)
 }
 
-#[derive(Debug)]
-pub struct NixPrefetchGitResponse {
-    pub sha256: String,
-    pub path: String,
-}
-
 pub async fn nix_prefetch_git(
     url: impl AsRef<str>,
     git_ref: impl AsRef<str>,
-) -> Result<NixPrefetchGitResponse> {
+) -> Result<PrefetchInfo> {
     let url = url.as_ref();
     let output = tokio::process::Command::new("nix-prefetch-git")
         .arg(url)
@@ -85,7 +73,7 @@ pub async fn nix_prefetch_git(
 
     #[allow(unused)]
     #[derive(Debug, serde::Deserialize)]
-    struct NixPrefetchGitCliResponse {
+    struct NixPrefetchGitResponse {
         url: String,
         rev: String,
         date: String,
@@ -99,12 +87,12 @@ pub async fn nix_prefetch_git(
         leave_dot_git: bool,
     }
 
-    let info: NixPrefetchGitCliResponse = serde_json::from_slice(&output.stdout)
+    let info: NixPrefetchGitResponse = serde_json::from_slice(&output.stdout)
         .context("Failed to deserialize nix-pfetch-git JSON response.")?;
 
-    Ok(NixPrefetchGitResponse {
-        sha256: info.sha256,
-        path: info.path,
+    Ok(PrefetchInfo {
+        hash: info.sha256,
+        store_path: info.path,
     })
 }
 
@@ -120,11 +108,11 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            result.sha256,
+            result.hash,
             "06cb6fv6y9giiiljzjf8k9n7qzb7aaibaryhdwr7lb618lhjvwfi"
         );
         assert_eq!(
-            result.path,
+            result.store_path,
             "/nix/store/31bxz3mxqhsinhnyvgdpdc13b86j372w-left-pad-2fca615"
         );
     }
@@ -137,12 +125,12 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            result.sha256,
+            result.hash,
             "0mjvb0b51ivwi9sfkiqnjbj2y1rfblydnb0s4wdk46c7lsf1jisg"
         );
 
         assert_eq!(
-            result.path,
+            result.store_path,
             "/nix/store/3s32rkwphk7pz09babd4svygjv3d4dfw-v1.3.0.tar.gz"
         );
     }
