@@ -5,6 +5,7 @@ let
 
   mkSource = spec:
     assert spec ? type; let
+      metadata = if spec ? metadata then spec.metadata else { };
       path =
         if spec.type == "Git" then mkGitSource spec
         else if spec.type == "GitRelease" then mkGitSource spec
@@ -12,7 +13,7 @@ let
         else if spec.type == "Channel" then mkChannelSource spec
         else builtins.throw "Unknown source type ${spec.type}";
     in
-    spec // { outPath = path; };
+    spec // { outPath = path; inherit metadata; };
 
   mkGitSource = { repository, revision, url ? null, hash, ... }:
     assert repository ? type;

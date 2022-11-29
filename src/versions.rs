@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
 /// The current format version
-pub const LATEST: u64 = 3;
+pub const LATEST: u64 = 4;
 
 /// Custom manual deserialize wrapper that checks the version
 pub fn from_value_versioned(value: Value) -> Result<NixPins> {

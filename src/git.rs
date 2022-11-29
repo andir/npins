@@ -822,7 +822,7 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            (None, OptionalUrlHashes {
+            (Some("/nix/store/q2pcdrxcbi51dwks482d4qb7syhf48sa-archive.tar.gz?sha=e7145078163692697b843915a665d4f41139a65c".to_string()), OptionalUrlHashes {
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?sha=e7145078163692697b843915a665d4f41139a65c".parse().unwrap()),
                 hash: "0nmcr0g0cms4yx9wsgbyvxyvdlqwa9qdb8179g47rs0y04iylcsv".into(),
             })
@@ -850,7 +850,7 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            (None, ReleasePinHashes {
+            (Some("/nix/store/gsb5ynm21sh3zhv40f00h4kl48mw7762-archive.tar.gz?ref=v1.16.0".to_string()), ReleasePinHashes {
                 revision: "d42ec2b04df9da97e465883fcd1f9a5d6e794027".into(),
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?ref=v1.16.0"
                     .parse()
@@ -880,7 +880,7 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            (None, OptionalUrlHashes {
+            (Some("/nix/store/jckwdid6lvakcjvvzm57pjggvssir9r1-archive.tar.gz?sha=bca2071b6923d45d9aabac27b3ea1e40f5fa3006".to_string()), OptionalUrlHashes {
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?sha=bca2071b6923d45d9aabac27b3ea1e40f5fa3006".parse().unwrap()),
                 hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
             })
@@ -908,7 +908,7 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            (None, ReleasePinHashes {
+            (Some("/nix/store/ykafcnfshbnrhzyv126bs21pglqh29bq-archive.tar.gz?ref=40.0".to_string()), ReleasePinHashes {
                 revision: "2c89145d52d072a4ca5da900c2676d890bfab1ff".into(),
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?ref=40.0".parse().unwrap()),
                 hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
@@ -938,7 +938,7 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            (None, OptionalUrlHashes {
+            (Some("/nix/store/yw30cm2p09dlhfwn8sdkhvpgn0hwgkrp-archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".to_string()), OptionalUrlHashes {
                 url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
             })
@@ -978,7 +978,7 @@ mod test {
         // Test fetching
         assert_eq!(
             pin.fetch(&version).await?,
-            (None, ReleasePinHashes {
+            (Some("/nix/store/yw30cm2p09dlhfwn8sdkhvpgn0hwgkrp-archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".to_string()), ReleasePinHashes {
                 revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
                 url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
@@ -1008,7 +1008,7 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            (None, OptionalUrlHashes {
+            (Some("/nix/store/b35hifih4f3vhfkn44xwz5y01gf7s16g-archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".to_string()), OptionalUrlHashes {
                 url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
             })
@@ -1048,7 +1048,7 @@ mod test {
         // Test fetching
         assert_eq!(
             pin.fetch(&version).await?,
-            (None, ReleasePinHashes {
+            (Some("/nix/store/b35hifih4f3vhfkn44xwz5y01gf7s16g-archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".to_string()), ReleasePinHashes {
                 revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
                 url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),

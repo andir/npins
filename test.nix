@@ -175,4 +175,33 @@ in
       [[ "$V" = "v0.2" ]]
     '';
   };
+
+  fetchCargoLock = mkGitTest {
+    name = "cargo-lock-self";
+    gitRepo = mkGitRepo {
+      extraCommands = ''
+        cp -rv ${./Cargo.lock} ${./Cargo.toml} ${./npins} ${./src}  .
+        git add Cargo.lock Cargo.toml npins src
+        git commit -m "add npins"
+      '';
+    };
+    commands = ''
+      npins init --bare
+      npins add git http://localhost:8000/foo
+
+      cat <<EOF > cargo-lock-metadata.nix
+      let
+        pkgs = import ${pkgs.path} {};
+        pins = import ./npins;
+      in pkgs.rustPlatform.buildRustPackage {
+        pname = "npins";
+        version = pins.npins.revision;
+        cargoLock.lockFileContents = builtins.toJSON pins.npins.metadata.cargoLock;
+        src = pins.nins;
+      }
+      EOF
+
+      nix-instantiate --eval cargo-lock-metadata.nix 
+    '';
+  };
 }
