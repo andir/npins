@@ -282,14 +282,14 @@ impl Updatable for GitPin {
         Ok(GitRevision { revision: latest })
     }
 
-    async fn fetch(&self, version: &GitRevision) -> Result<OptionalUrlHashes> {
+    async fn fetch(&self, version: &GitRevision) -> Result<(Option<String>, OptionalUrlHashes)> {
         let url = self.repository.url(&version.revision)?;
-        let hash = match url.as_ref() {
+        let r = match url.as_ref() {
             Some(url) => nix::nix_prefetch_tarball(url).await?,
             None => nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision).await?,
         };
 
-        Ok(OptionalUrlHashes { url, hash })
+        Ok((Some(r.store_path), OptionalUrlHashes { url, hash: r.hash }))
     }
 }
 
@@ -433,7 +433,7 @@ impl Updatable for GitReleasePin {
         Ok(GenericVersion { version: latest })
     }
 
-    async fn fetch(&self, version: &GenericVersion) -> Result<ReleasePinHashes> {
+    async fn fetch(&self, version: &GenericVersion) -> Result<(Option<String>, ReleasePinHashes)> {
         let repo_url = self.repository.git_url()?;
 
         let url = self.repository.release_url(&version.version)?;
@@ -442,16 +442,19 @@ impl Updatable for GitReleasePin {
             .await?
             .revision;
 
-        let hash = match url.as_ref() {
+        let r = match url.as_ref() {
             Some(url) => nix::nix_prefetch_tarball(url).await?,
             None => nix::nix_prefetch_git(&repo_url, &revision).await?,
         };
 
-        Ok(ReleasePinHashes {
-            url,
-            hash,
-            revision,
-        })
+        Ok((
+            Some(r.store_path),
+            ReleasePinHashes {
+                url,
+                hash: r.hash,
+                revision,
+            },
+        ))
     }
 }
 
@@ -696,10 +699,15 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            OptionalUrlHashes {
-                url: None,
-                hash: "17giznxp84h53jsm334dkp1fz6x9ff2yqfkq34ihq0ray1x3yhyd".into(),
-            }
+            (
+                Some(
+                    "/nix/store/xwc2lqbajqghcwz8h4cn80f5qh86v3xh-swing_library-1edb0a9".to_string()
+                ),
+                OptionalUrlHashes {
+                    url: None,
+                    hash: "17giznxp84h53jsm334dkp1fz6x9ff2yqfkq34ihq0ray1x3yhyd".into(),
+                }
+            )
         );
         Ok(())
     }
@@ -722,11 +730,14 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            ReleasePinHashes {
-                url: None,
-                hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
-                revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
-            }
+            (
+                Some("/nix/store/r6vb2i7538vnc9jkwg2z8blpiw898c5n-MidiOSC-35be5b2".to_owned()),
+                ReleasePinHashes {
+                    url: None,
+                    hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+                    revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
+                }
+            )
         );
         Ok(())
     }
@@ -749,10 +760,10 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            OptionalUrlHashes {
+            (Some("/nix/store/zw9mpn6k0y1qjrinwqfhf3rgrfd914jb-1edb0a9cebe046cc915a218c57dbf7f40739aeee.tar.gz".to_owned()), OptionalUrlHashes {
                 url: Some("https://github.com/oliverwatkins/swing_library/archive/1edb0a9cebe046cc915a218c57dbf7f40739aeee.tar.gz".parse().unwrap()),
                 hash: "17giznxp84h53jsm334dkp1fz6x9ff2yqfkq34ihq0ray1x3yhyd".into(),
-            }
+            })
         );
         Ok(())
     }
@@ -776,15 +787,18 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            ReleasePinHashes {
-                revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
-                url: Some(
-                    "https://api.github.com/repos/jstutters/MidiOSC/tarball/v1.1"
-                        .parse()
-                        .unwrap()
-                ),
-                hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
-            }
+            (
+                Some("/nix/store/v5lkiir4709rw858b8hq390ljzw3n2rv-v1.1".to_owned()),
+                ReleasePinHashes {
+                    revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
+                    url: Some(
+                        "https://api.github.com/repos/jstutters/MidiOSC/tarball/v1.1"
+                            .parse()
+                            .unwrap()
+                    ),
+                    hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+                }
+            )
         );
         Ok(())
     }
@@ -808,10 +822,10 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            OptionalUrlHashes {
+            (Some("/nix/store/q2pcdrxcbi51dwks482d4qb7syhf48sa-archive.tar.gz?sha=e7145078163692697b843915a665d4f41139a65c".to_string()), OptionalUrlHashes {
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?sha=e7145078163692697b843915a665d4f41139a65c".parse().unwrap()),
                 hash: "0nmcr0g0cms4yx9wsgbyvxyvdlqwa9qdb8179g47rs0y04iylcsv".into(),
-            }
+            })
         );
         Ok(())
     }
@@ -836,13 +850,13 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            ReleasePinHashes {
+            (Some("/nix/store/gsb5ynm21sh3zhv40f00h4kl48mw7762-archive.tar.gz?ref=v1.16.0".to_string()), ReleasePinHashes {
                 revision: "d42ec2b04df9da97e465883fcd1f9a5d6e794027".into(),
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?ref=v1.16.0"
                     .parse()
                     .unwrap()),
                 hash: "0nmcr0g0cms4yx9wsgbyvxyvdlqwa9qdb8179g47rs0y04iylcsv".into(),
-            }
+            })
         );
         Ok(())
     }
@@ -866,10 +880,10 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            OptionalUrlHashes {
+            (Some("/nix/store/jckwdid6lvakcjvvzm57pjggvssir9r1-archive.tar.gz?sha=bca2071b6923d45d9aabac27b3ea1e40f5fa3006".to_string()), OptionalUrlHashes {
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?sha=bca2071b6923d45d9aabac27b3ea1e40f5fa3006".parse().unwrap()),
                 hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
-            }
+            })
         );
         Ok(())
     }
@@ -894,11 +908,11 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            ReleasePinHashes {
+            (Some("/nix/store/ykafcnfshbnrhzyv126bs21pglqh29bq-archive.tar.gz?ref=40.0".to_string()), ReleasePinHashes {
                 revision: "2c89145d52d072a4ca5da900c2676d890bfab1ff".into(),
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?ref=40.0".parse().unwrap()),
                 hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
-            }
+            })
         );
         Ok(())
     }
@@ -924,10 +938,10 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            OptionalUrlHashes {
+            (Some("/nix/store/yw30cm2p09dlhfwn8sdkhvpgn0hwgkrp-archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".to_string()), OptionalUrlHashes {
                 url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
-            }
+            })
         );
         Ok(())
     }
@@ -964,11 +978,11 @@ mod test {
         // Test fetching
         assert_eq!(
             pin.fetch(&version).await?,
-            ReleasePinHashes {
+            (Some("/nix/store/yw30cm2p09dlhfwn8sdkhvpgn0hwgkrp-archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".to_string()), ReleasePinHashes {
                 revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
                 url: Some("https://gitlab.com/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=glpat-MSsRZG1SNdJU1MzBNosV".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
-            }
+            })
         );
         Ok(())
     }
@@ -994,10 +1008,10 @@ mod test {
         );
         assert_eq!(
             pin.fetch(&version).await?,
-            OptionalUrlHashes {
+            (Some("/nix/store/b35hifih4f3vhfkn44xwz5y01gf7s16g-archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".to_string()), OptionalUrlHashes {
                 url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
-            }
+            })
         );
         Ok(())
     }
@@ -1034,11 +1048,11 @@ mod test {
         // Test fetching
         assert_eq!(
             pin.fetch(&version).await?,
-            ReleasePinHashes {
+            (Some("/nix/store/b35hifih4f3vhfkn44xwz5y01gf7s16g-archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".to_string()), ReleasePinHashes {
                 revision: "122f7072f026644fbed6abc17c5c2ab3ae107046".into(),
                 url: Some("https://git.helsinki.tools/api/v4/projects/npins-test%2Fnpins-private-test/repository/archive.tar.gz?private_token=xqgHNxVNdzvMy6cDvreJ".parse().unwrap()),
                 hash: "0vdhx429r1w6yffh8gqhyj5g7zkp5dab2jgc630wllplziyfqg7z".into(),
-            }
+            })
         );
         Ok(())
     }

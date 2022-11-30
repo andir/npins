@@ -1,15 +1,15 @@
 use anyhow::{Context, Result};
 
-#[allow(unused)]
 pub struct PrefetchInfo {
-    store_path: String,
-    hash: String,
+    pub store_path: String,
+    pub hash: String,
 }
 
-pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
+pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<PrefetchInfo> {
     let url = url.as_ref();
     let output = tokio::process::Command::new("nix-prefetch-url")
         .arg("--unpack") // force calculation of the unpacked NAR hash
+        .arg("--print-path")
         .arg("--type")
         .arg("sha256")
         .arg(url)
@@ -27,10 +27,27 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(String::from(stdout.trim()))
+    let lines = stdout.lines().collect::<Vec<_>>();
+
+    if lines.len() != 2 {
+        anyhow::bail!(
+            "Expected two lines of nix-prefetch-url output but got {} instead",
+            lines.len()
+        );
+    }
+
+    let result = PrefetchInfo {
+        store_path: lines[1].to_string(),
+        hash: lines[0].to_string(),
+    };
+
+    Ok(result)
 }
 
-pub async fn nix_prefetch_git(url: impl AsRef<str>, git_ref: impl AsRef<str>) -> Result<String> {
+pub async fn nix_prefetch_git(
+    url: impl AsRef<str>,
+    git_ref: impl AsRef<str>,
+) -> Result<PrefetchInfo> {
     let url = url.as_ref();
     let output = tokio::process::Command::new("nix-prefetch-git")
         .arg(url)
@@ -73,5 +90,48 @@ pub async fn nix_prefetch_git(url: impl AsRef<str>, git_ref: impl AsRef<str>) ->
     let info: NixPrefetchGitResponse = serde_json::from_slice(&output.stdout)
         .context("Failed to deserialize nix-pfetch-git JSON response.")?;
 
-    Ok(info.sha256)
+    Ok(PrefetchInfo {
+        hash: info.sha256,
+        store_path: info.path,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[tokio::test]
+    async fn test_nix_prefetch_git() {
+        let result = super::nix_prefetch_git(
+            "https://github.com/left-pad/left-pad.git",
+            "2fca6157fcca165438e0f9495cf0e5a4e6f71349",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result.hash,
+            "06cb6fv6y9giiiljzjf8k9n7qzb7aaibaryhdwr7lb618lhjvwfi"
+        );
+        assert_eq!(
+            result.store_path,
+            "/nix/store/31bxz3mxqhsinhnyvgdpdc13b86j372w-left-pad-2fca615"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_nix_prefetch_tarball() {
+        let result = super::nix_prefetch_tarball(
+            "https://github.com/left-pad/left-pad/archive/refs/tags/v1.3.0.tar.gz",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result.hash,
+            "0mjvb0b51ivwi9sfkiqnjbj2y1rfblydnb0s4wdk46c7lsf1jisg"
+        );
+
+        assert_eq!(
+            result.store_path,
+            "/nix/store/3s32rkwphk7pz09babd4svygjv3d4dfw-v1.3.0.tar.gz"
+        );
+    }
 }

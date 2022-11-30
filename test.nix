@@ -40,8 +40,8 @@ let
       git tag '${tag}'
       git checkout -B 'master' # TODO remove this and tests fail (:
 
-      ${extraCommands}
       '') tags}
+      ${extraCommands}
 
       git update-server-info
       cp -r .git $out
@@ -174,5 +174,57 @@ in
       V=$(jq -r .pins.bar.version npins/sources.json)
       [[ "$V" = "v0.2" ]]
     '';
+  };
+
+  fetchCargoLock = mkGitTest {
+    name = "cargo-lock-self";
+    gitRepo = mkGitRepo {
+      extraCommands = ''
+        cp -rv ${./npins} npins
+        cp -rv ${./src} src
+        cp -rv ${./Cargo.lock} Cargo.lock
+        cp -rv ${./Cargo.toml} Cargo.toml
+        git add Cargo.lock Cargo.toml npins src
+        ls -la
+        git commit -m "add npins"
+      '';
+    };
+    commands =
+      let
+        patchedNixpkgs = pkgs.runCommand "patched-nixpkgs"
+          {
+            pkgs = pkgs.path;
+          } ''
+          cp -rv $pkgs $out
+          chmod +rw -R $out
+          cp ${./import-cargo-lock.nix} $out/pkgs/build-support/rust/import-cargo-lock.nix
+        '';
+      in
+      ''
+        npins init --bare
+        npins add --name npins git http://localhost:8000/foo -b master
+
+        cat <<EOF > cargo-lock-metadata.nix
+        let
+          pkgs = import ${patchedNixpkgs} {
+               overlays = [
+                  (self: super: {
+                    importCargoLock = self.callPackage ${./import-cargo-lock.nix} { };
+                  })
+               ];
+          };
+          pins = import ./npins;
+        in toString (pkgs.rustPlatform.buildRustPackage {
+          pname = "npins";
+          version = pins.npins.revision;
+          cargoLock.lockFileData = (builtins.elemAt pins.npins.metadata 0).CargoLock.json;
+          src = pins.npins;
+        })
+        EOF
+
+        cat npins/sources.json
+
+        nix-instantiate --eval cargo-lock-metadata.nix
+      '';
   };
 }

@@ -91,7 +91,47 @@ pub trait Updatable:
     async fn update(&self, old: Option<&Self::Version>) -> Result<Self::Version>;
 
     /// Fetch hashes for a given version
-    async fn fetch(&self, version: &Self::Version) -> Result<Self::Hashes>;
+    async fn fetch(&self, version: &Self::Version) -> Result<(Option<String>, Self::Hashes)>;
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub enum Metadata {
+    #[cfg(feature = "cargo-lock")]
+    CargoLock { json: serde_json::Value },
+}
+
+#[cfg(feature = "cargo-lock")]
+fn toml_to_json(value: toml::Value) -> serde_json::Value {
+    match value {
+        toml::Value::String(s) => s.into(),
+        toml::Value::Boolean(b) => b.into(),
+        toml::Value::Integer(i) => i.into(),
+        toml::Value::Float(f) => f.into(),
+        toml::Value::Datetime(dt) => dt.to_string().into(),
+        toml::Value::Array(a) => a.into_iter().map(toml_to_json).collect(),
+        toml::Value::Table(t) => {
+            serde_json::Value::Object(t.into_iter().map(|(k, v)| (k, toml_to_json(v))).collect())
+        },
+    }
+}
+
+impl Metadata {
+    async fn update(&mut self, path: impl AsRef<str>) -> Result<()> {
+        let path = path.as_ref();
+        match self {
+            #[cfg(feature = "cargo-lock")]
+            Metadata::CargoLock { json } => {
+                use tokio::io::AsyncReadExt;
+                let p = format!("{}/Cargo.lock", path); // FIXME: configurable, use proper path types yadayada
+                let mut fh = tokio::fs::File::open(p).await?;
+                let mut buffer = vec![];
+                fh.read_to_end(&mut buffer).await?;
+                let parsed = toml::from_slice(&buffer)?;
+                *json = toml_to_json(parsed);
+            },
+        }
+        Ok(())
+    }
 }
 
 /// Create the `Pin` type
@@ -122,6 +162,7 @@ macro_rules! mkPin {
                     version: Option<<$input_name as Updatable>::Version>,
                     #[serde(flatten)]
                     hashes: Option<<$input_name as Updatable>::Hashes>,
+		    metadata: Option<Vec<Metadata>>,
                 }
             ),*
         }
@@ -129,7 +170,9 @@ macro_rules! mkPin {
         impl Pin {
             /* Constructors */
             $(fn $lower_name(input: $input_name, version: Option<<$input_name as Updatable>::Version>) -> Self {
-                Self::$name { input, version, hashes: None }
+                Self::$name { input, version, hashes: None, metadata: Some(vec![Metadata::CargoLock {
+		    json: serde_json::Value::Null,
+		}]) }
             })*
 
             /* If an error is returned, `self` remains unchanged */
@@ -148,12 +191,31 @@ macro_rules! mkPin {
              */
             async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
-                    $(Self::$name { input, version, hashes } => {
+                    $(Self::$name { input, version, hashes, metadata } => {
                         let version = version.as_ref()
                             .ok_or_else(|| anyhow::format_err!("No version information available, call `update` first or manually set one"))?;
                         /* Use very explicit syntax to force the correct types and get good compile errors */
-                        let new_hashes = <$input_name as Updatable>::fetch(input, &version).await?;
-                        hashes.insert_diffed(new_hashes)
+                        let (path, new_hashes) = <$input_name as Updatable>::fetch(input, &version).await?;
+                        let diff = hashes.insert_diffed(new_hashes);
+
+			// Handle the metadata update if there is a
+			// metadata entry, there was a diff and we got
+			// a source path back from the fetcher.
+			// FIXME: add some error logging if we can't
+			// update metadata due to missing path
+			// information despite there being a diff.
+			if !diff.is_empty() && metadata.as_ref().map(|l| !l.is_empty()).unwrap_or(false) && path.is_some() {
+			    if let (Some(m), Some(path)) = (&metadata, path) {
+				let mut new_metadata: Vec<Metadata> = vec![];
+				for mut entry in m.into_iter().cloned() {
+				    entry.update(&path).await?;
+				    new_metadata.push(entry);
+				}
+				let _ = std::mem::replace(metadata, Some(new_metadata));
+			    }
+			}
+
+			diff
                     }),*
                 })
             }
@@ -181,7 +243,8 @@ macro_rules! mkPin {
         impl std::fmt::Display for Pin {
             fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match self {
-                    $(Self::$name { input, version, hashes } => {
+                    $(Self::$name { input, version, hashes, .. } => {
+			// FIXME: log metadata variants that are enabled
                         /* Concat all properties and then print them */
                         let properties = input.properties().into_iter()
                             .chain(version.iter().flat_map(Diff::properties))
