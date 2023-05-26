@@ -8,9 +8,9 @@
         "repo": "nixpkgs"
       },
       "branch": "nixpkgs-unstable",
-      "revision": "a529f0c125a78343b145a8eb2b915b0295e4f459",
-      "url": "https://github.com/nixos/nixpkgs/archive/a529f0c125a78343b145a8eb2b915b0295e4f459.tar.gz",
-      "hash": "0d945bdpsxaqz4d9hvsmzhcbriqwga3i0bf1ppj6lrrbqhr4pj7v"
+      "revision": "21eb6c6ba74dcbe3ea5926ee46287300fb066630",
+      "url": "https://github.com/nixos/nixpkgs/archive/21eb6c6ba74dcbe3ea5926ee46287300fb066630.tar.gz",
+      "hash": "1p0v1n5px47xlaj3qhqys0l0ia8a8bvgali6lhyjxs2bgspx5fb4"
     },
     "pre-commit-hooks.nix": {
       "type": "Git",
@@ -20,9 +20,9 @@
         "repo": "pre-commit-hooks.nix"
       },
       "branch": "master",
-      "revision": "ff9c0b459ddc4b79c06e19d44251daa8e9cd1746",
-      "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/ff9c0b459ddc4b79c06e19d44251daa8e9cd1746.tar.gz",
-      "hash": "0z09ndxvbk6w4j28lzgj0b9qqcbwrvr58c0xsm0rf0xsdipi0nwf"
+      "revision": "61e567d6497bc9556f391faebe5e410e6623217f",
+      "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/61e567d6497bc9556f391faebe5e410e6623217f.tar.gz",
+      "hash": "10fqd8hbr33ip61xyg9yfdibgdgb5war8l4lsx81adpgf4hsr1dd"
     }
   },
   "version": 3
