@@ -87,6 +87,10 @@ pub struct GenericGitAddOpts {
     /// that start with that string.
     #[structopt(long = "release-prefix")]
     pub release_prefix: Option<String>,
+
+    /// Also fetch submodules
+    #[structopt(long)]
+    pub submodules: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -104,7 +108,12 @@ impl GitHubAddOpts {
             self.repository.clone(),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::github(&self.owner, &self.repository, branch.clone());
+                    let pin = git::GitPin::github(
+                        &self.owner,
+                        &self.repository,
+                        branch.clone(),
+                        self.more.submodules,
+                    );
                     let version = self.more.at.as_ref().map(|at| git::GitRevision {
                         revision: at.clone(),
                     });
@@ -117,6 +126,7 @@ impl GitHubAddOpts {
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.more.release_prefix.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref().map(|at| GenericVersion {
                         version: at.clone(),
@@ -144,7 +154,7 @@ pub struct GitLabAddOpts {
 
     #[structopt(
         long,
-        help = "Use a private token to access the repository",
+        help = "Use a private token to access the repository.",
         value_name = "token"
     )]
     pub private_token: Option<String>,
@@ -167,6 +177,7 @@ impl GitLabAddOpts {
                         branch.clone(),
                         Some(self.server.clone()),
                         self.private_token.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref()
                     .map(|at| git::GitRevision {
@@ -180,7 +191,8 @@ impl GitLabAddOpts {
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.private_token.clone(),
-			self.more.release_prefix.clone(),
+                        self.more.release_prefix.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref()
                         .map(|at| GenericVersion {
@@ -232,7 +244,7 @@ impl GitAddOpts {
             name.to_owned(),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::git(url, branch.clone());
+                    let pin = git::GitPin::git(url, branch.clone(), self.more.submodules);
                     let version = self.more.at.as_ref().map(|at| git::GitRevision {
                         revision: at.clone(),
                     });
@@ -244,6 +256,7 @@ impl GitAddOpts {
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.more.release_prefix.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref().map(|at| GenericVersion {
                         version: at.clone(),

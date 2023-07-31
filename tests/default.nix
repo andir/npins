@@ -6,65 +6,71 @@ let
   mkSource =
     spec:
     assert spec ? type;
-    if spec.type == "Git" then
-      mkGitSource spec
-    else if spec.type == "GitRelease" then
-      mkGitSource spec
-    else if spec.type == "PyPi" then
-      mkPyPiSource spec
-    else if spec.type == "Channel" then
-      mkChannelSource spec
-    else
-      builtins.throw "Unknown source type ${spec.type}";
+    let
+      path =
+        if spec.type == "Git" then
+          mkGitSource spec
+        else if spec.type == "GitRelease" then
+          mkGitSource spec
+        else if spec.type == "PyPi" then
+          mkPyPiSource spec
+        else if spec.type == "Channel" then
+          mkChannelSource spec
+        else
+          builtins.throw "Unknown source type ${spec.type}";
+    in
+    spec // { outPath = path; };
 
   mkGitSource =
-    spec@{
+    {
       repository,
-      branch,
       revision,
+      url ? null,
+      submodules,
       hash,
       ...
     }:
     assert repository ? type;
-    let
-      path =
-        if spec ? url then
-          (builtins.fetchTarball {
-            url = spec.url;
-            sha256 = hash; # FIXME: check nix version & use SRI hashes
-          })
-        else
-          assert repository.type == "Git";
-          builtins.fetchGit {
-            url = repository.url;
-            ref = "refs/heads/${branch}";
-            rev = revision;
-            # hash = hash;
-          };
-    in
-    spec // { outPath = path; };
+    # At the moment, either it is a plain git repository (which has an url), or it is a GitHub/GitLab repository
+    # In the latter case, there we will always be an url to the tarball
+    if url != null && !submodules then
+      builtins.fetchTarball {
+        inherit url;
+        sha256 = hash; # FIXME: check nix version & use SRI hashes
+      }
+    else
+      let
+        url =
+          if repository.type == "Git" then
+            repository.url
+          else if repository.type == "GitHub" then
+            "https://github.com/${repository.owner}/${repository.repo}.git"
+          else if repository.type == "GitLab" then
+            "${repository.server}/${repository.repo_path}.git"
+          else
+            throw "Invalid JSON file";
+      in
+      builtins.fetchGit {
+        rev = revision;
+        # hash = hash;
+        inherit url submodules;
+      };
 
   mkPyPiSource =
-    spec:
-    let
-      path = builtins.fetchurl {
-        url = spec.url;
-        sha256 = spec.hash;
-      };
-    in
-    spec // { outPath = path; };
+    { url, hash, ... }:
+    builtins.fetchurl {
+      inherit url;
+      sha256 = hash;
+    };
 
   mkChannelSource =
-    spec:
-    let
-      path = builtins.fetchTarball {
-        url = spec.url;
-        sha256 = spec.hash;
-      };
-    in
-    spec // { outPath = path; };
+    { url, hash, ... }:
+    builtins.fetchTarball {
+      inherit url;
+      sha256 = hash;
+    };
 in
-if version == 3 then
+if version == 4 then
   builtins.mapAttrs (_: mkSource) data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"

@@ -26,6 +26,7 @@ let
       repository,
       revision,
       url ? null,
+      submodules,
       hash,
       branch ? null,
       ...
@@ -33,14 +34,22 @@ let
     assert repository ? type;
     # At the moment, either it is a plain git repository (which has an url), or it is a GitHub/GitLab repository
     # In the latter case, there we will always be an url to the tarball
-    if url != null then
-      (builtins.fetchTarball {
+    if url != null && !submodules then
+      builtins.fetchTarball {
         inherit url;
         sha256 = hash; # FIXME: check nix version & use SRI hashes
-      })
+      }
     else
-      assert repository.type == "Git";
       let
+        url =
+          if repository.type == "Git" then
+            repository.url
+          else if repository.type == "GitHub" then
+            "https://github.com/${repository.owner}/${repository.repo}.git"
+          else if repository.type == "GitLab" then
+            "${repository.server}/${repository.repo_path}.git"
+          else
+            throw "Invalid JSON file";
         urlToName =
           url: rev:
           let
@@ -51,13 +60,13 @@ let
             appendShort = if (builtins.match "[a-f0-9]*" rev) != null then "-${short}" else "";
           in
           "${if matched == null then "source" else builtins.head matched}${appendShort}";
-        name = urlToName repository.url revision;
+        name = urlToName url revision;
       in
       builtins.fetchGit {
-        url = repository.url;
         rev = revision;
         inherit name;
         # hash = hash;
+        inherit url submodules;
       };
 
   mkPyPiSource =

@@ -247,6 +247,7 @@ USAGE:
 FLAGS:
     -h, --help            Prints help information
         --pre-releases    Also track pre-releases. Conflicts with the --branch option
+        --submodules      Also fetch submodules
 
 OPTIONS:
         --at <tag or rev>                    Use a specific commit/release instead of the latest. This may be a tag
