@@ -280,6 +280,95 @@ in
     '';
   };
 
+  githubBranch = mkGithubTest {
+    name = "github-branch";
+    repositories."foo/bar" = gitRepo;
+    apiTarballs = [ "v0.2" ];
+    commands = ''
+      npins init --bare
+      npins add github foo bar --branch test-branch
+      nix-instantiate --eval npins -A bar.outPath
+
+      # Check version and url
+      eq "$(jq -r .pins.bar.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.bar.revision npins/sources.json)" "$(resolveGitCommit ${gitRepo} test-branch)"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/archive/$(resolveGitCommit ${gitRepo} test-branch).tar.gz"
+    '';
+  };
+
+  gitSubmodule = mkGitTest rec {
+    name = "git-submodule";
+    repositories."bar" = gitRepo;
+    repositories."foo" = mkGitRepo {
+      name = "repo-with-submodules";
+      extraCommands = ''
+        git submodule init
+
+        # In order to be able to add the submodule, we need to fake host it
+        cd ..
+        ${pkgs.python3}/bin/python -m http.server 8000 &
+        timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        ln -s ${repositories.bar} "bar"
+        cd tmp
+
+        git submodule add "http://localhost:8000/bar"
+      '';
+    };
+
+    commands = ''
+      npins init --bare
+      npins add git http://localhost:8000/foo --branch main
+      npins add --name foo2 git http://localhost:8000/foo --branch main --submodules
+
+      # Both have the same revision and no URL
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"})"
+      eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"})"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
+
+      nix-instantiate --eval npins -A foo.outPath
+      nix-instantiate --eval npins -A foo2.outPath
+    '';
+  };
+
+  githubSubmodule = mkGithubTest rec {
+    name = "github-submodule";
+    apiTarballs = [ "cbbbea814edccc7bf23af61bd620647ed7c0a436" ];
+    repositories."owner/bar" = gitRepo;
+    repositories."owner/foo" = mkGitRepo {
+      name = "repo-with-submodules";
+      extraCommands = ''
+        git submodule init
+
+        # In order to be able to add the submodule, we need to fake host it
+        cd ..
+        ${pkgs.python3}/bin/python -m http.server 8000 &
+        timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        mkdir owner
+        ln -s ${repositories."owner/bar"} "owner/bar.git"
+        cd tmp
+
+        git submodule add "http://localhost:8000/owner/bar.git"
+      '';
+    };
+
+    commands = ''
+      npins init --bare
+      npins add github owner foo --branch main
+      npins add --name foo2 github owner foo --branch main --submodules
+
+      # Both have the same revision, but only foo has an URL
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/owner/foo/archive/$(resolveGitCommit ${repositories."owner/foo"}).tar.gz"
+      eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
+    '';
+  };
+
   nixPrefetch =
     let
       mkPrefetchGitTest =

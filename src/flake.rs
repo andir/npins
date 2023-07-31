@@ -88,6 +88,7 @@ impl TryFrom<FlakePin> for Pin {
                 flake.original.ref_.unwrap_or_else(|| "master".to_owned()),
                 None,
                 None,
+                false,
             )
             .into(),
             Github => git::GitPin::github(
@@ -100,6 +101,7 @@ impl TryFrom<FlakePin> for Pin {
                     .repo
                     .context("missing field repo in github flake input")?,
                 flake.original.ref_.unwrap_or_else(|| "master".to_owned()),
+                false,
             )
             .into(),
             Git => {
@@ -113,6 +115,7 @@ impl TryFrom<FlakePin> for Pin {
                 git::GitPin::git(
                     flake.locked.url.context("missing url on git flake input")?,
                     ref_,
+                    false,
                 )
                 .into()
             },
