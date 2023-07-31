@@ -8,6 +8,7 @@
         "repo": "nixfmt"
       },
       "branch": "rfc101-style",
+      "submodules": false,
       "revision": "8d13b593fa8d8d6e5075f541f3231222a08e84df",
       "url": "https://github.com/piegamesde/nixfmt/archive/8d13b593fa8d8d6e5075f541f3231222a08e84df.tar.gz",
       "hash": "1blpqs2ifw10xvfpfk77p1bq35gzgssng2m8wqw0kqydcz7fzm8y"
@@ -20,6 +21,7 @@
         "repo": "nixpkgs"
       },
       "branch": "nixpkgs-unstable",
+      "submodules": false,
       "revision": "c669412a552f31c45adad47894e7fd6a8698e53f",
       "url": "https://github.com/nixos/nixpkgs/archive/c669412a552f31c45adad47894e7fd6a8698e53f.tar.gz",
       "hash": "1w65pjn6xiyi5vncnyj0ac1cgcx7hyymcbz7fz3bw7xjd5qqywz1"
@@ -32,10 +34,11 @@
         "repo": "pre-commit-hooks.nix"
       },
       "branch": "master",
+      "submodules": false,
       "revision": "2849da033884f54822af194400f8dff435ada242",
       "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/2849da033884f54822af194400f8dff435ada242.tar.gz",
       "hash": "0ag90l0hrkhm02mkmm8yf3fnjjawv99czc7bp0szzgknps0xrzxb"
     }
   },
-  "version": 3
+  "version": 4
 }
