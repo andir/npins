@@ -110,6 +110,20 @@ let
   '';
 in
 {
+  noDefaultNix = mkGitTest {
+    name = "add-dry-run";
+    inherit gitRepo;
+    commands = ''
+      npins init --bare --no-default-nix
+      npins add -n git http://localhost:8000/foo -b test-branch
+
+      test -e npins/default.nix && exit 1
+      V=$(jq -r .pins npins/sources.json)
+      [[ "$V" = "{}" ]]
+    '';
+  };
+
+
   addDryRun = mkGitTest {
     name = "add-dry-run";
     inherit gitRepo;

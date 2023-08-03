@@ -146,8 +146,9 @@ USAGE:
     npins init [FLAGS] [OPTIONS]
 
 FLAGS:
-        --bare    Don't add an initial `nixpkgs` entry
-    -h, --help    Prints help information
+        --bare              Don't add an initial `nixpkgs` entry
+    -h, --help              Prints help information
+        --no-default-nix    Don't add the initial default.nix
 
 OPTIONS:
     -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
