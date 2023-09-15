@@ -38,7 +38,7 @@ nix-shell -p npins
 You can easily get a nightly if you want to (requires newstyle Nix commands):
 
 ```sh
-nix run -f https://github.com/andir/npins/archive/master.tar.gz
+nix shell -f https://github.com/andir/npins/archive/master.tar.gz
 ```
 
 You could also install it to your profile using `nix-env` (not recommended, but might be useful for bootstrapping):
