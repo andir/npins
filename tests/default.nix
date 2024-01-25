@@ -3,15 +3,28 @@ let
   data = builtins.fromJSON (builtins.readFile ./sources.json);
   version = data.version;
 
-  mkSource = spec:
+  mkSource =
+    spec:
     assert spec ? type;
-    if spec.type == "Git" then mkGitSource spec
-    else if spec.type == "GitRelease" then mkGitSource spec
-    else if spec.type == "PyPi" then mkPyPiSource spec
-    else if spec.type == "Channel" then mkChannelSource spec
-    else builtins.throw "Unknown source type ${spec.type}";
+    if spec.type == "Git" then
+      mkGitSource spec
+    else if spec.type == "GitRelease" then
+      mkGitSource spec
+    else if spec.type == "PyPi" then
+      mkPyPiSource spec
+    else if spec.type == "Channel" then
+      mkChannelSource spec
+    else
+      builtins.throw "Unknown source type ${spec.type}";
 
-  mkGitSource = spec@{ repository, branch, revision, hash, ... }:
+  mkGitSource =
+    spec@{
+      repository,
+      branch,
+      revision,
+      hash,
+      ...
+    }:
     assert repository ? type;
     let
       path =
@@ -20,17 +33,19 @@ let
             url = spec.url;
             sha256 = hash; # FIXME: check nix version & use SRI hashes
           })
-        else assert repository.type == "Git"; builtins.fetchGit {
-          url = repository.url;
-          ref = "refs/heads/${branch}";
-          rev = revision;
-          # hash = hash;
-        };
+        else
+          assert repository.type == "Git";
+          builtins.fetchGit {
+            url = repository.url;
+            ref = "refs/heads/${branch}";
+            rev = revision;
+            # hash = hash;
+          };
     in
-    spec // { outPath = path; }
-  ;
+    spec // { outPath = path; };
 
-  mkPyPiSource = spec:
+  mkPyPiSource =
+    spec:
     let
       path = builtins.fetchurl {
         url = spec.url;
@@ -39,7 +54,8 @@ let
     in
     spec // { outPath = path; };
 
-  mkChannelSource = spec:
+  mkChannelSource =
+    spec:
     let
       path = builtins.fetchTarball {
         url = spec.url;
