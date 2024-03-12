@@ -30,9 +30,17 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     Ok(String::from(stdout.trim()))
 }
 
-pub async fn nix_prefetch_git(url: impl AsRef<str>, git_ref: impl AsRef<str>) -> Result<String> {
+pub async fn nix_prefetch_git(
+    url: impl AsRef<str>,
+    git_ref: impl AsRef<str>,
+    submodules: bool,
+) -> Result<String> {
     let url = url.as_ref();
-    let output = tokio::process::Command::new("nix-prefetch-git")
+    let mut output = tokio::process::Command::new("nix-prefetch-git");
+    if submodules {
+        output.arg("--fetch-submodules");
+    }
+    let output = output
         .arg(url)
         .arg(git_ref.as_ref())
         .output()

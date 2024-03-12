@@ -81,6 +81,9 @@ pub struct GenericGitAddOpts {
         conflicts_with_all = &["branch", "at"]
     )]
     pub version_upper_bound: Option<String>,
+    /// Also fetch submodules
+    #[structopt(long)]
+    pub submodules: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -98,7 +101,12 @@ impl GitHubAddOpts {
             self.repository.clone(),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::github(&self.owner, &self.repository, branch.clone());
+                    let pin = git::GitPin::github(
+                        &self.owner,
+                        &self.repository,
+                        branch.clone(),
+                        self.more.submodules,
+                    );
                     let version = self.more.at.as_ref().map(|at| git::GitRevision {
                         revision: at.clone(),
                     });
@@ -110,6 +118,7 @@ impl GitHubAddOpts {
                         &self.repository,
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref().map(|at| GenericVersion {
                         version: at.clone(),
@@ -137,7 +146,7 @@ pub struct GitLabAddOpts {
 
     #[structopt(
         long,
-        help = "Use a private token to access the repository",
+        help = "Use a private token to access the repository.",
         value_name = "token"
     )]
     pub private_token: Option<String>,
@@ -160,6 +169,7 @@ impl GitLabAddOpts {
                         branch.clone(),
                         Some(self.server.clone()),
                         self.private_token.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref()
                     .map(|at| git::GitRevision {
@@ -173,6 +183,7 @@ impl GitLabAddOpts {
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.private_token.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref()
                         .map(|at| GenericVersion {
@@ -224,7 +235,7 @@ impl GitAddOpts {
             name.to_owned(),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::git(url, branch.clone());
+                    let pin = git::GitPin::git(url, branch.clone(), self.more.submodules);
                     let version = self.more.at.as_ref().map(|at| git::GitRevision {
                         revision: at.clone(),
                     });
@@ -235,6 +246,7 @@ impl GitAddOpts {
                         url,
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref().map(|at| GenericVersion {
                         version: at.clone(),
@@ -297,6 +309,8 @@ pub enum AddCommands {
 
 #[derive(Debug, StructOpt)]
 pub struct AddOpts {
+    /// Add the pin with a custom name.
+    /// If a pin with that name already exists, it willl be overwritten
     #[structopt(long)]
     pub name: Option<String>,
     /// Don't actually apply the changes

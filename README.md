@@ -222,7 +222,8 @@ FLAGS:
 OPTIONS:
     -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
                                 [default: npins]
-        --name <name>           
+        --name <name>           Add the pin with a custom name. If a pin with that name already exists, it willl be
+                                overwritten
 
 SUBCOMMANDS:
     channel    Track a Nix channel
