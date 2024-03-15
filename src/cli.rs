@@ -356,6 +356,10 @@ pub struct InitOpts {
     /// Don't add an initial `nixpkgs` entry
     #[structopt(long)]
     pub bare: bool,
+
+    /// Don't add the initial default.nix
+    #[structopt(long)]
+    pub no_default_nix: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -447,10 +451,13 @@ impl Opts {
             log::info!("Creating `{}` directory", self.folder.display());
             std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
         }
-        log::info!("Writing default.nix");
-        let p = self.folder.join("default.nix");
-        let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
-        fh.write_all(default_nix)?;
+
+        if !o.no_default_nix {
+            log::info!("Writing default.nix");
+            let p = self.folder.join("default.nix");
+            let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
+            fh.write_all(default_nix)?;
+        }
 
         // Only create the pins if the file isn't there yet
         if self.folder.join("sources.json").exists() {
