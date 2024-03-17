@@ -297,6 +297,7 @@ pub enum AddCommands {
 
 #[derive(Debug, StructOpt)]
 pub struct AddOpts {
+    /// Custom name for the pin entry
     #[structopt(long)]
     pub name: Option<String>,
     /// Don't actually apply the changes
