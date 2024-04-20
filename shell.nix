@@ -6,7 +6,11 @@ let
   pkgs = import pins.nixpkgs {
     inherit system;
     overlays = [
-      (self: super: { nixfmt = super.nixfmt.overrideAttrs (old: { src = pins.nixfmt; }); })
+      (self: super: {
+        nixfmt = super.nixfmt.overrideAttrs (old: {
+          src = pins.nixfmt;
+        });
+      })
     ];
   };
   inherit (pkgs) stdenv lib;

@@ -9,16 +9,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.3.4
-      - uses: nixbuild/nix-quick-install-action@v6
-        with:
-          nix_conf: |
-             extra-substituters = https://cache.h4ck.space/
-             trusted-public-keys = zeta:9zm3cHRlqz3T9HnRsodtQGGqHOLDAiB+8d0kOKnFI0M= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
-      - uses: nixbuild/nixbuild-action@v8
-        with:
-          nixbuild_ssh_key: ${{ secrets.nixbuild_ssh_key }}
-        if: ${{ github.ref_name == 'master' }}
+      - uses: actions/checkout@v4.1.3
+      - uses: DeterminateSystems/nix-installer-action@v10
+      - uses: DeterminateSystems/magic-nix-cache-action@v4
       - name: Build
         run: nix-build
       - name: Run pre-commit hooks
