@@ -33,14 +33,12 @@ let
       git add test.txt
       git commit -v -m "init"
 
-      ${pkgs.lib.concatMapStringsSep "\n"
-        (tag: ''
-          echo '${tag}' > test.txt
-          git add test.txt
-          git commit -v -m 'commit for tag ${tag}'
-          git tag '${tag}'
-        '')
-        tags}
+      ${pkgs.lib.concatMapStringsSep "\n" (tag: ''
+        echo '${tag}' > test.txt
+        git add test.txt
+        git commit -v -m 'commit for tag ${tag}'
+        git tag '${tag}'
+      '') tags}
 
       git checkout -B '${branchName}' # TODO remove this and tests fail (:
       ${extraCommands}

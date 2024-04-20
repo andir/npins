@@ -36,8 +36,7 @@ let
         let
           suffix = lib.removePrefix baseDir path;
         in
-        _:
-        lib.any (r: builtins.match r suffix != null) expressions;
+        _: lib.any (r: builtins.match r suffix != null) expressions;
       name = "source";
     };
 
