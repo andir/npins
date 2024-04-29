@@ -10,6 +10,7 @@ use structopt::StructOpt;
 pub mod channel;
 pub mod cli;
 pub mod diff;
+pub mod flake;
 pub mod git;
 pub mod niv;
 pub mod nix;
