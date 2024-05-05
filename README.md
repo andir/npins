@@ -233,6 +233,35 @@ SUBCOMMANDS:
     pypi       Track a package on PyPi
 ```
 
+There are several options for tracking git branches, releases and tags:
+
+```console
+$ npins help add git
+npins-add-git 0.2.3
+Track a git repository
+
+USAGE:
+    npins add git [FLAGS] [OPTIONS] <url>
+
+FLAGS:
+    -h, --help            Prints help information
+        --pre-releases    Also track pre-releases. Conflicts with the --branch option
+
+OPTIONS:
+        --at <tag or rev>                    Use a specific commit/release instead of the latest. This may be a tag
+                                             name, or a git revision when --branch is set
+    -b, --branch <branch>                    Track a branch instead of a release
+    -d, --directory <folder>                 Base folder for sources.json and the boilerplate default.nix [env:
+                                             NPINS_DIRECTORY=]  [default: npins]
+        --release-prefix <release-prefix>    Optional prefix required for each release name / tag. For example, setting
+                                             this to "release/" will only consider those that start with that string
+        --upper-bound <version>              Bound the version resolution. For example, setting this to "2" will
+                                             restrict updates to 1.X versions. Conflicts with the --branch option
+
+ARGS:
+    <url>    The git remote URL. For example <https://github.com/andir/ate.git>
+```
+
 ### Removing dependencies
 
 ```console
