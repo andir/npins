@@ -24,7 +24,7 @@ let
       rustfmt.enable = true;
       update-readme = {
         enable = true;
-        files = "((readme\\.pre\\.md|readme\\.post\\.md|^readme\\.nix|Cargo\\.toml)|\\.rs)$";
+        files = "((^README\\.md\\.in|^README\\.md|^readme\\.nix|^Cargo\\.toml)|\\.rs)$";
         entry = toString (
           pkgs.writeShellScript "update-readme" ''
             ${pkgs.nix}/bin/nix-build ${toString ./readme.nix} -o readme && cp readme README.md
