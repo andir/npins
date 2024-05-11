@@ -793,7 +793,7 @@ impl Opts {
                     .get(name)
                     .context(format!("flake input {name} not found"))?,
                 &mut pins,
-                &nodes,
+                nodes,
             )
             .await?;
         } else {
