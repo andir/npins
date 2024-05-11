@@ -222,7 +222,7 @@ impl GitAddOpts {
             log::warn!("Your URL scheme ('{}:') contains a '.', which is unusual. Please double-check its correctness.", url.scheme());
             log::warn!("Very likely you forgot to specify the scheme, and the host name parsed as such instead.");
         }
-        let name = match url.path_segments().and_then(|x| x.rev().next()) {
+        let name = match url.path_segments().and_then(|mut x| x.next_back()) {
             None => anyhow::bail!("Path of URL must start with a '/'. Also make sure that the URL starts with a scheme."),
             Some(seg) => seg.to_owned(),
         };
@@ -393,7 +393,9 @@ pub enum Command {
     Init(InitOpts),
 
     /// Adds a new pin entry.
-    Add(AddOpts),
+    // Boxing AddOpts as it is by far our largest structure, reduces
+    // memory requirements for smaller devices (even if maginal)
+    Add(Box<AddOpts>),
 
     /// Lists the current pin entries.
     Show,
