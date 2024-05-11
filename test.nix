@@ -77,6 +77,7 @@ let
           nix
           gitMinimal
           jq
+          nix-prefetch-git
         ];
       }
       ''
@@ -210,4 +211,30 @@ in
       [[ "$V" = "v0.2" ]]
     '';
   };
+
+  nixPrefetch =
+    let
+      mkPrefetchGitTest =
+        name: npinsArgs:
+        mkGitTest {
+          name = "nix-prefetch-git-${name}";
+          inherit gitRepo;
+          commands = ''
+            npins init --bare
+            npins add git http://localhost:8000/foo ${npinsArgs}
+            before=$(ls /build)
+
+            nix-instantiate --eval npins -A foo.outPath.outPath
+            after=$(ls /build)
+            cat npins/sources.json
+
+            [[ "$before" = "$after" ]]
+          '';
+        };
+    in
+    {
+      branch = mkPrefetchGitTest "branch" "--branch test-branch";
+      tag = mkPrefetchGitTest "tag" "--at v0.2";
+      hash = mkPrefetchGitTest "hash" "--branch test-branch --at 9ba40d123c3e6adb35c99ad04fd9de6bcdc1c9d5";
+    };
 }
