@@ -703,10 +703,13 @@ impl Opts {
             import(name, None, &mut pins, &niv).await?;
         } else {
             for (name, pin) in niv.iter() {
-                println!("Importing {}", name);
+                log::info!("Importing {}", name);
                 if let Err(err) = import(name, Some(pin), &mut pins, &niv).await {
                     log::error!("Failed to import pin '{}'", name);
                     log::error!("{}", err);
+                    err.chain()
+                        .skip(1)
+                        .for_each(|cause| log::error!("\t{}", cause));
                 }
             }
         }
@@ -798,10 +801,13 @@ impl Opts {
             .await?;
         } else {
             for (name, input_name) in inputs.iter() {
-                println!("Importing {}", name);
-                if let Err(err) = import(input_name, &mut pins, &nodes).await {
+                log::info!("Importing {}", name);
+                if let Err(err) = import(input_name, &mut pins, nodes).await {
                     log::error!("Failed to import pin '{}'", name);
                     log::error!("{}", err);
+                    err.chain()
+                        .skip(1)
+                        .for_each(|cause| log::error!("\t{}", cause));
                 }
             }
         }
