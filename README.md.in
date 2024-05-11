@@ -161,6 +161,13 @@ $ npins help add
 {{npins help add}}
 ```
 
+There are several options for tracking git branches, releases and tags:
+
+```console
+$ npins help add git
+{{npins help add git}}
+```
+
 ### Removing dependencies
 
 ```console

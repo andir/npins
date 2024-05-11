@@ -293,7 +293,7 @@ mod test {
                         hashes: Some(GenericUrlHashes { url: "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz".parse().unwrap(), hash: "adec7935c9cf774b9115b2456cf2f48c4f49b9f67159a97db0fe228357c1afdf".into() } )
                     },
                     "youtube-dl".into() => Pin::GitRelease {
-                        input: git::GitReleasePin::github("ytdl-org", "youtube-dl", false, None),
+                        input: git::GitReleasePin::github("ytdl-org", "youtube-dl", false, None, None),
                         version: Some(GenericVersion { version: "youtube-dl 2021.12.17".into() }),
                         hashes: None,
                     }

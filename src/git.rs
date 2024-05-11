@@ -313,6 +313,15 @@ pub struct GitReleasePin {
     ///
     /// Versions will be parsed the in the same rather lenient way as the tags themselves.
     pub version_upper_bound: Option<String>,
+
+    /// Optionally filter the considered release names / tags by a prefix
+    ///
+    /// Some projects have a more elaborate tag structure that
+    /// contains prefixes such as `release/` or `basepoint/` in the
+    /// actual tag. With this option set the tags are filtered for all
+    /// those tags that contain the specified prefix and have the
+    /// prefix stripped before any version comparison happens.
+    pub release_prefix: Option<String>,
 }
 
 impl diff::Diff for GitReleasePin {
@@ -328,6 +337,9 @@ impl diff::Diff for GitReleasePin {
                 .map(|version_upper_bound| {
                     ("version_upper_bound".into(), version_upper_bound.clone())
                 }),
+            self.release_prefix
+                .as_ref()
+                .map(|release_prefix| ("release_prefix".into(), release_prefix.clone())),
         ]
         .into_iter()
         .flat_map(Option::into_iter)
@@ -336,11 +348,17 @@ impl diff::Diff for GitReleasePin {
 }
 
 impl GitReleasePin {
-    pub fn git(url: Url, pre_releases: bool, version_upper_bound: Option<String>) -> Self {
+    pub fn git(
+        url: Url,
+        pre_releases: bool,
+        version_upper_bound: Option<String>,
+        release_prefix: Option<String>,
+    ) -> Self {
         Self {
             repository: Repository::Git { url },
             pre_releases,
             version_upper_bound,
+            release_prefix,
         }
     }
 
@@ -349,6 +367,7 @@ impl GitReleasePin {
         repo: impl Into<String>,
         pre_releases: bool,
         version_upper_bound: Option<String>,
+        release_prefix: Option<String>,
     ) -> Self {
         Self {
             repository: Repository::GitHub {
@@ -357,6 +376,7 @@ impl GitReleasePin {
             },
             pre_releases,
             version_upper_bound,
+            release_prefix,
         }
     }
 
@@ -366,6 +386,7 @@ impl GitReleasePin {
         pre_releases: bool,
         version_upper_bound: Option<String>,
         private_token: Option<String>,
+        release_prefix: Option<String>,
     ) -> Self {
         Self {
             repository: Repository::GitLab {
@@ -375,6 +396,7 @@ impl GitReleasePin {
             },
             pre_releases,
             version_upper_bound,
+            release_prefix,
         }
     }
 }
@@ -404,12 +426,27 @@ impl Updatable for GitReleasePin {
                 .filter_map(|tag| tag.ref_.strip_prefix("refs/tags/")),
             self.pre_releases,
             version_upper_bound.as_ref(),
+            self.release_prefix.as_deref(),
         )
-        .ok_or_else(|| anyhow::format_err!("Repository has no matching release tags"))?;
+            .ok_or_else(|| anyhow::format_err!("Repository has no matching release tags"))?;
+
+        // If we have a release prefix strip it from the previous version for semver comparison.
+        // If the old version didn't have a prefix we keep it as is.
+        let old = match (old, &self.release_prefix) {
+            (Some(version), None) => Some(version.clone()),
+            (Some(old), Some(prefix)) => {
+                let version = match old.version.strip_prefix(prefix) {
+                    None => old.version.clone(),
+                    Some(v) => v.into(),
+                };
+                Some(GenericVersion { version })
+            },
+            (None, _) => None,
+        };
 
         if let Some(old) = old {
             let old_version = lenient_semver_parser::parse::<Version>(&old.version);
-            let latest = lenient_semver_parser::parse::<Version>(&latest)
+            let latest = lenient_semver_parser::parse::<Version>(&latest.name)
                 /* The first thing we do is filter tags with this exact requirement. */
                 .expect("Latest version must parse as SemVer");
             match old_version {
@@ -430,7 +467,9 @@ impl Updatable for GitReleasePin {
             }
         }
 
-        Ok(GenericVersion { version: latest })
+        Ok(GenericVersion {
+            version: latest.tag,
+        })
     }
 
     async fn fetch(&self, version: &GenericVersion) -> Result<ReleasePinHashes> {
@@ -548,13 +587,40 @@ pub async fn fetch_tags(repo: &Url) -> Result<Vec<RemoteInfo>> {
     Ok(remotes)
 }
 
+#[cfg_attr(test, derive(PartialEq, Debug))]
+struct LatestRelease {
+    /// The tag as used by git, e.g. release/2.0
+    tag: String,
+
+    /// The tag as communicated to the user, e.g. 2.0
+    name: String,
+}
+
+#[cfg(test)]
+impl LatestRelease {
+    fn tag(tag: impl Into<String>) -> Self {
+        let tag = tag.into();
+        Self {
+            name: tag.clone(),
+            tag,
+        }
+    }
+}
+
 /// Take an iterator of tags and spit out the latest release
 fn latest_release<'a>(
     tags: impl Iterator<Item = &'a str>,
     pre_releases: bool,
     version_upper_bound: Option<&Version>,
-) -> Option<String> {
-    tags
+    prefix: Option<&str>,
+) -> Option<LatestRelease> {
+    // Optionally filter all tags by a prefix
+    let tags: Box<dyn Iterator<Item = &'a str>> = match prefix {
+        None => Box::new(tags),
+        Some(prefix) => Box::new(tags.filter_map(move |tag| tag.strip_prefix(prefix))),
+    };
+
+    let tag = tags
         /* Try to parse as version, ignore those that are invalid (not every tag will be a release) */
         .filter_map(|tag| lenient_semver_parser::parse::<Version>(tag)
             .ok()
@@ -569,7 +635,15 @@ fn latest_release<'a>(
         })
         /* Get the latest version */
         .max_by(|(_, version_a), (_, version_b)| version_a.cmp(version_b))
-        .map(|(tag, _)| tag.to_owned())
+        .map(|(tag, _)| tag.to_owned());
+
+    tag.map(|tag| LatestRelease {
+        tag: match prefix {
+            Some(p) => format!("{p}{tag}"),
+            None => tag.clone(),
+        },
+        name: tag,
+    })
 }
 
 /* All repositories used for tests are dead, super dead, or
@@ -589,24 +663,56 @@ mod test {
     async fn test_latest_release() {
         let v2 = lenient_semver_parser::parse::<Version>("2").unwrap();
         assert_eq!(
-            latest_release(["foo"].iter().copied(), false, None).as_deref(),
+            latest_release(["foo"].iter().copied(), false, None, None),
             None
         );
         assert_eq!(
-            latest_release(["1.0", "foo"].iter().copied(), false, None).as_deref(),
-            Some("1.0")
+            latest_release(["1.0", "foo"].iter().copied(), false, None, None),
+            Some(LatestRelease::tag("1.0"))
         );
         assert_eq!(
-            latest_release(["1.0", "2.0"].iter().copied(), false, Some(&v2)).as_deref(),
-            Some("1.0")
+            latest_release(["1.0", "2.0"].iter().copied(), false, Some(&v2), None),
+            Some(LatestRelease::tag("1.0"))
         );
         assert_eq!(
-            latest_release(["1.0", "2.0", "2.0-pre"].iter().copied(), false, Some(&v2)).as_deref(),
-            Some("1.0")
+            latest_release(
+                ["1.0", "2.0", "2.0-pre"].iter().copied(),
+                false,
+                Some(&v2),
+                None
+            ),
+            Some(LatestRelease::tag("1.0"))
         );
         assert_eq!(
-            latest_release(["1.0", "2.0", "2.0-pre"].iter().copied(), true, Some(&v2)).as_deref(),
-            Some("2.0-pre")
+            latest_release(
+                ["1.0", "2.0", "2.0-pre"].iter().copied(),
+                true,
+                Some(&v2),
+                None
+            ),
+            Some(LatestRelease::tag("2.0-pre"))
+        );
+
+        assert_eq!(
+            latest_release(
+                [
+                    "foo/1.0",
+                    "bar/2.0",
+                    "baz/2.0-pre",
+                    "zes/1.0",
+                    "zes/2.0",
+                    "zes/2.1-b1"
+                ]
+                .iter()
+                .copied(),
+                false,
+                None,
+                Some("zes/")
+            ),
+            Some(LatestRelease {
+                tag: "zes/2.0".into(),
+                name: "2.0".into()
+            })
         );
     }
 
@@ -712,6 +818,7 @@ mod test {
             },
             pre_releases: false,
             version_upper_bound: None,
+            release_prefix: None,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -766,6 +873,7 @@ mod test {
             },
             pre_releases: false,
             version_upper_bound: None,
+            release_prefix: None,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -826,6 +934,7 @@ mod test {
             },
             pre_releases: false,
             version_upper_bound: None,
+            release_prefix: None,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -884,6 +993,7 @@ mod test {
             },
             pre_releases: false,
             version_upper_bound: None,
+            release_prefix: None,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -944,6 +1054,7 @@ mod test {
             },
             pre_releases: false,
             version_upper_bound: Some("1.0.1".into()),
+            release_prefix: None,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1014,6 +1125,7 @@ mod test {
             },
             pre_releases: false,
             version_upper_bound: Some("1.0.1".into()),
+            release_prefix: None,
         };
         let version = pin.update(None).await?;
         assert_eq!(

@@ -81,6 +81,12 @@ pub struct GenericGitAddOpts {
         conflicts_with_all = &["branch", "at"]
     )]
     pub version_upper_bound: Option<String>,
+
+    /// Optional prefix required for each release name / tag. For
+    /// example, setting this to "release/" will only consider those
+    /// that start with that string.
+    #[structopt(long = "release-prefix")]
+    pub release_prefix: Option<String>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -110,6 +116,7 @@ impl GitHubAddOpts {
                         &self.repository,
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
+                        self.more.release_prefix.clone(),
                     );
                     let version = self.more.at.as_ref().map(|at| GenericVersion {
                         version: at.clone(),
@@ -173,6 +180,7 @@ impl GitLabAddOpts {
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.private_token.clone(),
+			self.more.release_prefix.clone(),
                     );
                     let version = self.more.at.as_ref()
                         .map(|at| GenericVersion {
@@ -235,6 +243,7 @@ impl GitAddOpts {
                         url,
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
+                        self.more.release_prefix.clone(),
                     );
                     let version = self.more.at.as_ref().map(|at| GenericVersion {
                         version: at.clone(),
