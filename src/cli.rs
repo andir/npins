@@ -378,6 +378,15 @@ pub struct ImportOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct ImportFlakeOpts {
+    #[structopt(default_value = "flake.lock", parse(from_os_str))]
+    pub path: PathBuf,
+    /// Only import one entry from the flake
+    #[structopt(short, long)]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, StructOpt)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your sources.json.
@@ -400,6 +409,9 @@ pub enum Command {
 
     /// Try to import entries from Niv
     ImportNiv(ImportOpts),
+
+    /// Try to import entries from flake.lock
+    ImportFlake(ImportFlakeOpts),
 }
 
 use structopt::clap::AppSettings;
@@ -691,10 +703,111 @@ impl Opts {
             import(name, None, &mut pins, &niv).await?;
         } else {
             for (name, pin) in niv.iter() {
-                println!("Importing {}", name);
+                log::info!("Importing {}", name);
                 if let Err(err) = import(name, Some(pin), &mut pins, &niv).await {
                     log::error!("Failed to import pin '{}'", name);
                     log::error!("{}", err);
+                    err.chain()
+                        .skip(1)
+                        .for_each(|cause| log::error!("\t{}", cause));
+                }
+            }
+        }
+
+        self.write_pins(&pins)?;
+        log::info!("Done.");
+        Ok(())
+    }
+
+    async fn import_flake(&self, o: &ImportFlakeOpts) -> Result<()> {
+        let mut pins = self.read_pins()?;
+
+        let flake: serde_json::Value =
+            serde_json::from_reader(std::fs::File::open(&o.path).context(anyhow::format_err!(
+                "Could not open flake.lock at '{}'",
+                o.path.canonicalize().unwrap_or_else(|_| o.path.clone()).display()
+            ))?)
+            .context("Nix lock file is not a valid JSON object")?;
+        log::info!("Note that all the imported entries will be updated so they won't necessarily point to the same commits as before!");
+
+        let nodes: &serde_json::Map<String, serde_json::Value> = flake
+            .get("nodes")
+            .context("flake.lock missing key `nodes`")?
+            .as_object()
+            .context("`nodes` key does not contain an object")?;
+
+        let root_name = flake
+            .get("root")
+            .context("missing `root` key")?
+            .as_str()
+            .context("`root` key of flake lockfile is not a string")?;
+        let root = nodes
+            .get(root_name)
+            .context("flake.lock missing key `root`")?
+            .get("inputs")
+            .context("`root` key missing `inputs` key")?
+            .as_object()
+            .context("`root` key is not an object")?;
+
+        let inputs: BTreeMap<String, String> = root
+            .into_iter()
+            .map(|(key, value)| Some((key.to_string(), value.as_str()?.to_string())))
+            .collect::<Option<_>>()
+            .context(format!(
+                "root flake input `{root_name}` had unexpected format and could not be read"
+            ))?;
+
+        async fn import(
+            name: &str,
+            npins: &mut NixPins,
+            nodes: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<()> {
+            let pin = nodes
+                .get(name)
+                .ok_or_else(|| anyhow::format_err!("Pin '{}' not found in flake.lock", name))?;
+            anyhow::ensure!(
+                !npins.pins.contains_key(name),
+                "Pin '{}' exists in both files, this is a collision. Please delete the entry in one of the files.",
+                name
+            );
+
+            let pin: flake::FlakePin = serde_json::from_value(pin.clone())
+                .context("Pin is either invalid, or we don't support it")?;
+
+            if pin.is_indirect() {
+                log::info!("skipping indirect input {}", name);
+                return Ok(());
+            }
+
+            let mut pin: Pin = pin
+                .try_into()
+                .context("Could not convert pin to npins format")?;
+
+            pin.update().await?;
+            pin.fetch().await.context("Failed to update the pin")?;
+            npins.pins.insert(name.to_string(), pin);
+
+            Ok(())
+        }
+
+        if let Some(name) = &o.name {
+            import(
+                inputs
+                    .get(name)
+                    .context(format!("flake input {name} not found"))?,
+                &mut pins,
+                nodes,
+            )
+            .await?;
+        } else {
+            for (name, input_name) in inputs.iter() {
+                log::info!("Importing {}", name);
+                if let Err(err) = import(input_name, &mut pins, nodes).await {
+                    log::error!("Failed to import pin '{}'", name);
+                    log::error!("{}", err);
+                    err.chain()
+                        .skip(1)
+                        .for_each(|cause| log::error!("\t{}", cause));
                 }
             }
         }
@@ -713,6 +826,7 @@ impl Opts {
             Command::Upgrade => self.upgrade()?,
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,
+            Command::ImportFlake(o) => self.import_flake(o).await?,
         };
 
         Ok(())
