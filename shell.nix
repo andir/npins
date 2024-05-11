@@ -40,6 +40,7 @@ pkgs.mkShell {
     with pkgs;
     [
       cargo
+      clippy
       rustc
       rust-analyzer
       rustfmt
