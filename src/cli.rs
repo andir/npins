@@ -427,6 +427,8 @@ use structopt::clap::AppSettings;
 )]
 pub struct Opts {
     /// Base folder for sources.json and the boilerplate default.nix
+    /// The default value can also be configured in the package recipe:
+    ///     npins.override { directory = "some-directory"; }
     #[structopt(
         global = true,
         short = "d",

@@ -12,6 +12,10 @@
   nix, # for nix-prefetch-url
   nix-prefetch-git,
   git, # for git ls-remote
+
+  # configure a default directory for source references
+  # at build time; see src/cli.rs for details
+  directory ? null,
 }:
 let
   paths = [
@@ -48,7 +52,8 @@ let
     nix-prefetch-git
     git
   ];
-  self = rustPlatform.buildRustPackage {
+
+  npins = rustPlatform.buildRustPackage {
     pname = cargoToml.package.name;
     version = cargoToml.package.version;
     cargoLock = {
@@ -58,16 +63,17 @@ let
     inherit src;
 
     buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
-    nativeBuildInputs = [ makeWrapper ];
 
     # (Almost) all tests require internet
     doCheck = false;
 
-    postFixup = ''
-      wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
-    '';
-
-    meta.tests = pkgs.callPackage ./test.nix { npins = self; };
+    meta.tests = pkgs.callPackage ./test.nix { inherit npins; };
   };
+
+  dir = with lib; optionalString (!isNull directory) "--set-default NPINS_DIRECTORY ${directory}";
 in
-self
+runCommand npins.name { nativeBuildInputs = [ makeWrapper ]; } ''
+  mkdir -p $out/bin
+  cp -r ${npins}/* $out
+  wrapProgram $out/bin/npins ${dir} --prefix PATH : "${runtimePath}"
+''

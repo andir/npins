@@ -110,8 +110,9 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix The default value can also
+                                be configured in the package recipe: npins.override { directory = "some-directory"; }
+                                [env: NPINS_DIRECTORY=]  [default: npins]
 
 SUBCOMMANDS:
     add             Adds a new pin entry
@@ -151,8 +152,9 @@ FLAGS:
     -h, --help    Prints help information
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix The default value can also
+                                be configured in the package recipe: npins.override { directory = "some-directory"; }
+                                [env: NPINS_DIRECTORY=]  [default: npins]
 ```
 
 ### Migrate from Niv
@@ -180,8 +182,9 @@ FLAGS:
     -h, --help    Prints help information
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix The default value can also
+                                be configured in the package recipe: npins.override { directory = "some-directory"; }
+                                [env: NPINS_DIRECTORY=]  [default: npins]
     -n, --name <name>           Only import one entry from Niv
 
 ARGS:
@@ -221,8 +224,9 @@ FLAGS:
     -h, --help       Prints help information
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix The default value can also
+                                be configured in the package recipe: npins.override { directory = "some-directory"; }
+                                [env: NPINS_DIRECTORY=]  [default: npins]
         --name <name>           Custom name for the pin entry
 
 SUBCOMMANDS:
@@ -252,8 +256,9 @@ OPTIONS:
         --at <tag or rev>                    Use a specific commit/release instead of the latest. This may be a tag
                                              name, or a git revision when --branch is set
     -b, --branch <branch>                    Track a branch instead of a release
-    -d, --directory <folder>                 Base folder for sources.json and the boilerplate default.nix [env:
-                                             NPINS_DIRECTORY=]  [default: npins]
+    -d, --directory <folder>                 Base folder for sources.json and the boilerplate default.nix The default
+                                             value can also be configured in the package recipe: npins.override {
+                                             directory = "some-directory"; } [env: NPINS_DIRECTORY=]  [default: npins]
         --release-prefix <release-prefix>    Optional prefix required for each release name / tag. For example, setting
                                              this to "release/" will only consider those that start with that string
         --upper-bound <version>              Bound the version resolution. For example, setting this to "2" will
@@ -277,8 +282,9 @@ FLAGS:
     -h, --help    Prints help information
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix The default value can also
+                                be configured in the package recipe: npins.override { directory = "some-directory"; }
+                                [env: NPINS_DIRECTORY=]  [default: npins]
 
 ARGS:
     <name>    
@@ -300,8 +306,9 @@ FLAGS:
     -h, --help    Prints help information
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix The default value can also
+                                be configured in the package recipe: npins.override { directory = "some-directory"; }
+                                [env: NPINS_DIRECTORY=]  [default: npins]
 ```
 
 ### Updating dependencies
@@ -324,8 +331,9 @@ FLAGS:
     -p, --partial    Don't update versions, only re-fetch hashes
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix The default value can also
+                                be configured in the package recipe: npins.override { directory = "some-directory"; }
+                                [env: NPINS_DIRECTORY=]  [default: npins]
 
 ARGS:
     <names>...    Update only those pins
@@ -347,8 +355,9 @@ FLAGS:
     -h, --help    Prints help information
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix The default value can also
+                                be configured in the package recipe: npins.override { directory = "some-directory"; }
+                                [env: NPINS_DIRECTORY=]  [default: npins]
 ```
 
 ### Using private GitLab repositories
