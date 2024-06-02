@@ -57,7 +57,13 @@ let
 
     inherit src;
 
-    buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
+    buildInputs = lib.optional stdenv.isDarwin (
+      with darwin.apple_sdk.frameworks;
+      [
+        Security
+        SystemConfiguration
+      ]
+    );
     nativeBuildInputs = [ makeWrapper ];
 
     # (Almost) all tests require internet
