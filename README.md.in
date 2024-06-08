@@ -240,7 +240,7 @@ Contributions to this project are welcome in the form of GitHub Issues or PRs. P
 [issues-url]: https://github.com/andir/npins/issues
 [license-shield]: https://img.shields.io/github/license/andir/npins.svg?style=for-the-badge
 [license-url]: https://github.com/andir/npins/blob/master/LICENSE
-[test-shield]: https://img.shields.io/github/workflow/status/andir/npins/test/master?style=for-the-badge
+[test-shield]: https://img.shields.io/github/actions/workflow/status/andir/npins/test.yml?branch=master&style=flat-square
 [test-url]: https://github.com/andir/npins/actions
 [pr-shield]: https://img.shields.io/github/issues-pr/andir/npins.svg?style=for-the-badge
 [pr-url]: https://github.com/andir/npins/pulls
