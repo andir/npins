@@ -160,6 +160,15 @@ let
                 ln -s ${testTarball} $tarballPath/${path}
                 ln -s ${testTarball} $archivePath/${path}.tar.gz
               '') apiTarballs}
+
+              chmod -R +rw $archivePath
+              chmod -R +rw $tarballPath
+              pwd
+              ls -la $tarballPath
+              # For each of the commits in the repo create the tarballs
+              git config --global --add safe.directory ${gitRepo}
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX XX
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
             ''
           ))
           (lib.concatStringsSep "\n")
@@ -251,19 +260,17 @@ in
   githubBranch = mkGithubTest {
     name = "github-branch";
     repositories."foo/bar" = gitRepo;
-    apiTarballs = [
-      "v0.2"
-      "b606f4ab240e230dd5916969b31a44d46e74eea1"
-    ];
+    apiTarballs = [ "v0.2" ];
     commands = ''
       npins init --bare
       npins add github foo bar --branch test-branch
       nix-instantiate --eval npins -A bar.outPath
 
       # Check version and url
+      set -x
       [[ "$(jq -r .pins.bar.version npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.bar.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
-      [[ "$(jq -r .pins.bar.url npins/sources.json)" = "http://localhost:8000/foo/bar/archive/b606f4ab240e230dd5916969b31a44d46e74eea1.tar.gz" ]]
+      [[ "$(jq -r .pins.bar.revision npins/sources.json)" = "4a9f34428ed83d50b2d398f0bfaf79ae5716c905" ]]
+      [[ "$(jq -r .pins.bar.url npins/sources.json)" = "http://localhost:8000/foo/bar/archive/4a9f34428ed83d50b2d398f0bfaf79ae5716c905.tar.gz" ]]
     '';
   };
 
@@ -326,6 +333,7 @@ in
     };
 
     commands = ''
+      set -x
       npins init --bare
       npins add github owner foo --branch main
       npins add --name foo2 github owner foo --branch main --submodules
