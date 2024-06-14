@@ -160,6 +160,15 @@ let
                 ln -s ${testTarball} $tarballPath/${path}
                 ln -s ${testTarball} $archivePath/${path}.tar.gz
               '') apiTarballs}
+
+              chmod -R +rw $archivePath
+              chmod -R +rw $tarballPath
+              pwd
+              ls -la $tarballPath
+              # For each of the commits in the repo create the tarballs
+              git config --global --add safe.directory ${gitRepo}
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX XX
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
             ''
           ))
           (lib.concatStringsSep "\n")
