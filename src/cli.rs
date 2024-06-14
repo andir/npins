@@ -387,6 +387,17 @@ pub struct ImportFlakeOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct GitHubActionUpdateOpts {
+    /// Path to the template for the commit message
+    #[structopt(parse(from_os_str))]
+    commit_message_template_file: Option<PathBuf>,
+
+    /// Path to the template for the PR message
+    #[structopt(parse(from_os_str))]
+    pr_template_file: Option<PathBuf>,
+}
+
+#[derive(Debug, StructOpt)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your sources.json.
@@ -414,6 +425,11 @@ pub enum Command {
 
     /// Try to import entries from flake.lock
     ImportFlake(ImportFlakeOpts),
+
+    /// Run the GitHub Action update.
+    /// This produces a commit message and a PR message file according
+    /// to the provided arguments.
+    GitHubActionsUpdate(GitHubActionUpdateOpts),
 }
 
 fn print_diff(diff: impl AsRef<[diff::DiffEntry]>) {
@@ -813,6 +829,10 @@ impl Opts {
         Ok(())
     }
 
+    async fn github_actions_update(&self, _opts: &GitHubActionUpdateOpts) -> Result<()> {
+        Ok(())
+    }
+
     pub async fn run(&self) -> Result<()> {
         match &self.command {
             Command::Init(o) => self.init(o).await?,
@@ -823,6 +843,7 @@ impl Opts {
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,
             Command::ImportFlake(o) => self.import_flake(o).await?,
+            Command::GitHubActionsUpdate(o) => self.github_actions_update(o).await?,
         };
 
         Ok(())
