@@ -390,12 +390,28 @@ pub struct ImportFlakeOpts {
 #[derive(Debug, StructOpt)]
 pub struct GitHubActionUpdateOpts {
     /// Path to the template for the commit message
-    #[structopt(parse(from_os_str))]
+    #[structopt(long, parse(from_os_str), env = "NPINS_COMMIT_MESSAGE_TEMPLATE_FILE")]
     commit_message_template_file: Option<PathBuf>,
 
+    #[structopt(
+        long,
+        parse(from_os_str),
+        env = "NPINS_COMMIT_MESSAGE_OUTPUT_FILE",
+        default_value = "npins_commit_message.txt"
+    )]
+    commit_message_output_file: PathBuf,
+
     /// Path to the template for the PR message
-    #[structopt(parse(from_os_str))]
+    #[structopt(long, parse(from_os_str), env = "NPINS_PR_TEMPLATE_FILE")]
     pr_template_file: Option<PathBuf>,
+
+    #[structopt(
+        long,
+        parse(from_os_str),
+        env = "NPINS_PR_MESSAGE_OUTPUT_FILE",
+        default_value = "npins_pr_message.txt"
+    )]
+    pr_message_output_file: PathBuf,
 }
 
 #[derive(Debug, StructOpt)]
@@ -429,6 +445,7 @@ pub enum Command {
 
     #[cfg(feature = "github-actions")]
     /// Run the GitHub Action update.
+    ///
     /// This produces a commit message and a PR message file according
     /// to the provided arguments.
     GitHubActionsUpdate(GitHubActionUpdateOpts),
