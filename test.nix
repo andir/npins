@@ -5,6 +5,22 @@
   npins ? pkgs.callPackage ./npins.nix { },
 }:
 let
+  # utility bash functions used throught the tests
+  prelude = pkgs.writeShellScript "prelude" ''
+    function eq() {
+      local a=$1
+      local b=$2
+      printf '[[ "%s" = "%s" ]]' "$a" "$b"
+      if [[ "$a" = "$b" ]]; then echo " OK"; else echo " FAIL"; exit 1; fi
+    }
+
+    function resolveGitCommit() {
+      local repo=$1
+      local commitish=''${2:-main}
+      git  -C $repo rev-list  -n1 $commitish
+    }
+  '';
+
   inherit (pkgs) lib;
   # Generate a git repository hat can be served via HTTP.
   #
@@ -87,6 +103,7 @@ let
         export NIX_DATA_DIR=$TMPDIR
         export NIX_STORE_DIR=$TMPDIR
         export NIX_LOG_DIR=$TMPDIR
+        source ${prelude}
 
         echo -e "\n\nRunning test ${name}\n"
         cd $(mktemp -d)
@@ -140,6 +157,7 @@ let
         export NIX_LOG_DIR=$TMPDIR
         export NPINS_GITHUB_HOST=http://localhost:8000
         export NPINS_GITHUB_API_HOST=http://localhost:8000/api
+        source ${prelude}
 
         echo "Running test ${name}"
         cd $(mktemp -d)
