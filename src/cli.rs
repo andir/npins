@@ -850,6 +850,51 @@ impl Opts {
 
     #[cfg(feature = "github-actions")]
     async fn github_actions_update(&self, _opts: &GitHubActionUpdateOpts) -> Result<()> {
+        const COMMIT_MSG_TEMPLATE: &'static str = r#"npins: Update dependencies
+{{#each pins as |pin|}}
+  * {{pin.name}}
+    {{#each pin.diff as |d|}}
+      {{ d }}
+    {{/each}}
+{{/each}}
+"#;
+        #[derive(Serialize)]
+        pub struct Entry {
+            name: String,
+            diff: Vec<String>,
+        }
+
+        let mut pins = self.read_pins()?;
+
+        let mut diffs = vec![];
+        for (name, pin) in pins.pins.iter_mut() {
+            println!("Updating: {}", name);
+            let diff = self.update_one(pin, UpdateStrategy::Normal).await?;
+            if !diff.is_empty() {
+                let diff = diff.iter().map(|d| format!("{}", d)).collect();
+                diffs.push(Entry {
+                    name: name.clone(),
+                    diff,
+                });
+            }
+        }
+
+        self.write_pins(&pins)?;
+
+        let mut handlebars = handlebars::Handlebars::new();
+
+        #[derive(Serialize)]
+        struct Data {
+            pins: Vec<Entry>,
+        };
+        let data = Data { pins: diffs };
+        println!(
+            "{}",
+            handlebars
+                .render_template(COMMIT_MSG_TEMPLATE, &data)
+                .unwrap()
+        );
+
         Ok(())
     }
 
