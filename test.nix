@@ -224,9 +224,9 @@ in
       nix-instantiate --eval npins -A foo.outPath
 
       # Check version and url
-      [[ "$(jq -r .pins.foo.version npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.foo.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
-      [[ "$(jq -r .pins.foo.url npins/sources.json)" = "null" ]]
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"} HEAD)"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
     '';
   };
 
@@ -242,7 +242,7 @@ in
     '';
   };
 
-  gitTag = mkGitTest {
+  gitTag = mkGitTest rec {
     name = "from-git-repo-tag";
     repositories."foo" = gitRepo;
     commands = ''
@@ -253,9 +253,9 @@ in
       nix-instantiate --eval npins -A foo.outPath
 
       # Check version and url
-      [[ "$(jq -r .pins.foo.version npins/sources.json)" = "v0.2" ]]
-      [[ "$(jq -r .pins.foo.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
-      [[ "$(jq -r .pins.foo.url npins/sources.json)" = "null" ]]
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "v0.2"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"} HEAD)"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
     '';
   };
 
@@ -269,9 +269,9 @@ in
       nix-instantiate --eval npins -A bar.outPath
 
       # Check version and url
-      [[ "$(jq -r .pins.bar.version npins/sources.json)" = "v0.2" ]]
-      [[ "$(jq -r .pins.bar.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
-      [[ "$(jq -r .pins.bar.url npins/sources.json)" = "http://localhost:8000/api/repos/foo/bar/tarball/v0.2" ]]
+      eq "$(jq -r .pins.bar.version npins/sources.json)" "v0.2"
+      eq "$(jq -r .pins.bar.revision npins/sources.json)" "$(resolveGitCommit ${gitRepo} v0.2)"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/api/repos/foo/bar/tarball/v0.2"
     '';
   };
 
