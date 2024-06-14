@@ -8,7 +8,7 @@ license = "EUPL-1.2"
 
 [features]
 default = []
-github-actions = ["dep:handlebars"]
+github-actions = ["dep:handlebars", "dep:rand"]
 
 [dependencies]
 serde = { version = "^1.0", features = [ "derive" ] }
@@ -25,6 +25,8 @@ lenient_semver_parser = { version = "0.4.2", default-features = false }
 lenient_version = { version = "0.4.2" }
 
 handlebars = { version = "^5.1", optional = true }
+
+rand = { version = "0.8", optional = true }
 
 [dev-dependencies]
 envtestkit = "1.1.2"

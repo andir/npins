@@ -412,6 +412,9 @@ pub struct GitHubActionUpdateOpts {
         default_value = "npins_pr_message.txt"
     )]
     pr_message_output_file: PathBuf,
+
+    #[structopt(long, parse(from_os_str), env = "GITHUB_OUTPUT")]
+    github_actions_output_file: PathBuf,
 }
 
 #[derive(Debug, StructOpt)]
@@ -849,7 +852,7 @@ impl Opts {
     }
 
     #[cfg(feature = "github-actions")]
-    async fn github_actions_update(&self, _opts: &GitHubActionUpdateOpts) -> Result<()> {
+    async fn github_actions_update(&self, opts: &GitHubActionUpdateOpts) -> Result<()> {
         const COMMIT_MSG_TEMPLATE: &'static str = r#"npins: Update dependencies
 {{#each pins as |pin|}}
   * {{pin.name}}
@@ -879,21 +882,50 @@ impl Opts {
             }
         }
 
+        if diffs.is_empty() {
+            return Ok(());
+        }
+
         self.write_pins(&pins)?;
+
+        let mut fh = if opts.github_actions_output_file.exists() {
+            std::fs::File::open(&opts.github_actions_output_file).with_context(move || {
+                format!(
+                    "Fialed to open {} for writing.",
+                    opts.github_actions_output_file.display()
+                )
+            })?
+        } else {
+            std::fs::File::create_new(&opts.github_actions_output_file).with_context(move || {
+                format!(
+                    "Fialed to open {} for writing.",
+                    opts.github_actions_output_file.display()
+                )
+            })?
+        };
 
         let mut handlebars = handlebars::Handlebars::new();
 
         #[derive(Serialize)]
         struct Data {
             pins: Vec<Entry>,
-        };
+        }
+
         let data = Data { pins: diffs };
-        println!(
-            "{}",
-            handlebars
-                .render_template(COMMIT_MSG_TEMPLATE, &data)
-                .unwrap()
-        );
+        let commit_msg = handlebars
+            .render_template(COMMIT_MSG_TEMPLATE, &data)
+            .unwrap();
+
+        use rand::Rng;
+        let marker: String = rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(10)
+            .map(char::from)
+            .collect();
+
+        let context_string = format!("NPINS_COMMIT_MESSAGE<<{marker}\n{commit_msg}\n{marker}");
+        write!(fh, "{}", context_string)
+            .with_context(|| format!("Failed to write to GITHUB_OUTPUT file."))?;
 
         Ok(())
     }
