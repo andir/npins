@@ -416,6 +416,17 @@ pub enum Command {
     ImportFlake(ImportFlakeOpts),
 }
 
+fn print_diff(diff: &[diff::DiffEntry]) {
+    if diff.is_empty() {
+        println!("(no changes)");
+    } else {
+        println!("Changes:");
+        for d in diff {
+            print!("{}", d);
+        }
+    }
+}
+
 use structopt::clap::AppSettings;
 
 #[derive(Debug, StructOpt)]
@@ -544,7 +555,7 @@ impl Opts {
         &self,
         pin: &mut Pin,
         strategy: UpdateStrategy,
-        print_diff: bool,
+        should_print_diff: bool,
     ) -> Result<()> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
@@ -554,24 +565,15 @@ impl Opts {
         };
 
         /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
-        if !diff1.is_empty() || strategy.must_fetch() {
+        let diff = if !diff1.is_empty() || strategy.must_fetch() {
             let diff2 = pin.fetch().await?;
+            diff1.into_iter().chain(diff2.into_iter()).collect()
+        } else {
+            diff1
+        };
 
-            if print_diff {
-                if diff1.len() + diff2.len() > 0 {
-                    println!("Changes:");
-                    for d in diff1 {
-                        print!("{}", d);
-                    }
-                    for d in diff2 {
-                        print!("{}", d);
-                    }
-                } else {
-                    println!("(no changes)");
-                }
-            }
-        } else if print_diff {
-            println!("(no changes)");
+        if should_print_diff {
+            print_diff(&diff);
         }
 
         Ok(())
