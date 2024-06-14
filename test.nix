@@ -229,9 +229,9 @@ in
       nix-instantiate --eval npins -A foo.outPath
 
       # Check version and url
-      [[ "$(jq -r .pins.foo.version npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.foo.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
-      [[ "$(jq -r .pins.foo.url npins/sources.json)" = "null" ]]
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"} HEAD)"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
     '';
   };
 
@@ -247,7 +247,7 @@ in
     '';
   };
 
-  gitTag = mkGitTest {
+  gitTag = mkGitTest rec {
     name = "from-git-repo-tag";
     repositories."foo" = gitRepo;
     commands = ''
@@ -258,9 +258,9 @@ in
       nix-instantiate --eval npins -A foo.outPath
 
       # Check version and url
-      [[ "$(jq -r .pins.foo.version npins/sources.json)" = "v0.2" ]]
-      [[ "$(jq -r .pins.foo.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
-      [[ "$(jq -r .pins.foo.url npins/sources.json)" = "null" ]]
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "v0.2"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"} HEAD)"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
     '';
   };
 
@@ -274,9 +274,9 @@ in
       nix-instantiate --eval npins -A bar.outPath
 
       # Check version and url
-      [[ "$(jq -r .pins.bar.version npins/sources.json)" = "v0.2" ]]
-      [[ "$(jq -r .pins.bar.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
-      [[ "$(jq -r .pins.bar.url npins/sources.json)" = "http://localhost:8000/api/repos/foo/bar/tarball/v0.2" ]]
+      eq "$(jq -r .pins.bar.version npins/sources.json)" "v0.2"
+      eq "$(jq -r .pins.bar.revision npins/sources.json)" "$(resolveGitCommit ${gitRepo} v0.2)"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/api/repos/foo/bar/tarball/v0.2"
     '';
   };
 
@@ -291,9 +291,9 @@ in
 
       # Check version and url
       set -x
-      [[ "$(jq -r .pins.bar.version npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.bar.revision npins/sources.json)" = "4a9f34428ed83d50b2d398f0bfaf79ae5716c905" ]]
-      [[ "$(jq -r .pins.bar.url npins/sources.json)" = "http://localhost:8000/foo/bar/archive/4a9f34428ed83d50b2d398f0bfaf79ae5716c905.tar.gz" ]]
+      eq "$(jq -r .pins.bar.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.bar.revision npins/sources.json)" "4a9f34428ed83d50b2d398f0bfaf79ae5716c905"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/archive/4a9f34428ed83d50b2d398f0bfaf79ae5716c905.tar.gz"
     '';
   };
 
@@ -322,12 +322,12 @@ in
       npins add --name foo2 git http://localhost:8000/foo --branch main --submodules
 
       # Both have the same revision and no URL
-      [[ "$(jq -r .pins.foo.version npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.foo2.version npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.foo.revision npins/sources.json)" = "cbbbea814edccc7bf23af61bd620647ed7c0a436" ]]
-      [[ "$(jq -r .pins.foo2.revision npins/sources.json)" = "cbbbea814edccc7bf23af61bd620647ed7c0a436" ]]
-      [[ "$(jq -r .pins.foo.url npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.foo2.url npins/sources.json)" = "null" ]]
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"})"
+      eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"})"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
 
       nix-instantiate --eval npins -A foo.outPath
       nix-instantiate --eval npins -A foo2.outPath
@@ -356,18 +356,17 @@ in
     };
 
     commands = ''
-      set -x
       npins init --bare
       npins add github owner foo --branch main
       npins add --name foo2 github owner foo --branch main --submodules
 
       # Both have the same revision, but only foo has an URL
-      [[ "$(jq -r .pins.foo.version npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.foo2.version npins/sources.json)" = "null" ]]
-      [[ "$(jq -r .pins.foo.revision npins/sources.json)" = "cbbbea814edccc7bf23af61bd620647ed7c0a436" ]]
-      [[ "$(jq -r .pins.foo2.revision npins/sources.json)" = "cbbbea814edccc7bf23af61bd620647ed7c0a436" ]]
-      [[ "$(jq -r .pins.foo.url npins/sources.json)" = "http://localhost:8000/owner/foo/archive/cbbbea814edccc7bf23af61bd620647ed7c0a436.tar.gz" ]]
-      [[ "$(jq -r .pins.foo2.url npins/sources.json)" = "null" ]]
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/owner/foo/archive/$(resolveGitCommit ${repositories."owner/foo"}).tar.gz"
+      eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
     '';
   };
 
