@@ -118,6 +118,11 @@ let
           ))
           (lib.concatStringsSep "\n")
         ]}
+        # Mark repos as safe for usage with Git cli
+        ${lib.pipe repositories [
+          (lib.mapAttrsToList (_: gitRepo: "git config --global --add safe.directory ${gitRepo}"))
+          (lib.concatStringsSep "\n")
+        ]}
 
         python -m http.server 8000 &
         timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
