@@ -386,6 +386,7 @@ pub struct ImportFlakeOpts {
     pub name: Option<String>,
 }
 
+#[cfg(feature = "github-actions")]
 #[derive(Debug, StructOpt)]
 pub struct GitHubActionUpdateOpts {
     /// Path to the template for the commit message
@@ -426,6 +427,7 @@ pub enum Command {
     /// Try to import entries from flake.lock
     ImportFlake(ImportFlakeOpts),
 
+    #[cfg(feature = "github-actions")]
     /// Run the GitHub Action update.
     /// This produces a commit message and a PR message file according
     /// to the provided arguments.
@@ -829,6 +831,7 @@ impl Opts {
         Ok(())
     }
 
+    #[cfg(feature = "github-actions")]
     async fn github_actions_update(&self, _opts: &GitHubActionUpdateOpts) -> Result<()> {
         Ok(())
     }
@@ -843,6 +846,7 @@ impl Opts {
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,
             Command::ImportFlake(o) => self.import_flake(o).await?,
+            #[cfg(feature = "github-actions")]
             Command::GitHubActionsUpdate(o) => self.github_actions_update(o).await?,
         };
 
