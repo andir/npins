@@ -218,8 +218,8 @@ in
     '';
   };
 
-  gitDependency = mkGitTest {
-    name = "from-git-repo";
+  gitDependency = mkGitTest rec {
+    name = "git-dependency";
     repositories."foo" = gitRepo;
     commands = ''
       npins init --bare
