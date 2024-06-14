@@ -7,7 +7,7 @@ let
     inherit system;
     overlays = [
       (self: super: {
-        nixfmt = super.nixfmt.overrideAttrs (old: {
+        nixfmt = super.nixfmt-classic.overrideAttrs (old: {
           src = pins.nixfmt;
         });
       })
@@ -18,9 +18,11 @@ let
   pre-commit = (import pins."pre-commit-hooks.nix").run {
     src = ./.;
     tools.nixfmt = pkgs.nixfmt; # Why don't they just take it from our pkgs?
-    settings.nixfmt.width = 100;
     hooks = {
-      nixfmt.enable = true;
+      nixfmt = {
+        enable = true;
+        settings.width = 100;
+      };
       rustfmt.enable = true;
       update-readme = {
         enable = true;
