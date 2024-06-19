@@ -612,7 +612,7 @@ impl Opts {
         Ok(())
     }
 
-    fn upgrade(&self) -> Result<()> {
+    async fn upgrade(&self) -> Result<()> {
         anyhow::ensure!(
             self.folder.exists(),
             "Could not find npins folder at {}",
@@ -640,7 +640,9 @@ impl Opts {
         let pins_raw: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(fh)
             .context("sources.json must be a valid JSON file with an object as top level")?;
 
-        let pins_raw_new = versions::upgrade(pins_raw.clone()).context("Upgrading failed")?;
+        let pins_raw_new = versions::upgrade(pins_raw.clone())
+            .await
+            .context("Upgrading failed")?;
         let pins: NixPins = serde_json::from_value(pins_raw_new.clone())?;
         if pins_raw_new != serde_json::Value::Object(pins_raw) {
             log::info!("Done. It is recommended to at least run `update --partial` afterwards.");
@@ -825,7 +827,7 @@ impl Opts {
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
             Command::Update(o) => self.update(o).await?,
-            Command::Upgrade => self.upgrade()?,
+            Command::Upgrade => self.upgrade().await?,
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,
             Command::ImportFlake(o) => self.import_flake(o).await?,

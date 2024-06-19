@@ -47,7 +47,7 @@ pkgs.mkShell {
       rust-analyzer
       rustfmt
       nixfmt
-      nix_2_3
+      nix
       nix-prefetch-git
       git
     ]

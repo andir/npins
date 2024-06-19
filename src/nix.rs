@@ -6,6 +6,25 @@ pub struct PrefetchInfo {
     hash: String,
 }
 
+pub async fn hash_to_sri(hash_type: &str, hash: String) -> Result<String> {
+    let output = tokio::process::Command::new("nix")
+        .arg("hash")
+        .arg("to-sri")
+        .arg(format!("{hash_type}:{hash}"))
+        .output()
+        .await
+        .with_context(|| format!("Failed to spawn `nix hash to-sri {hash_type}:{hash}`"))?;
+
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(format!(
+            "Failed to derive the SRI format of {hash_type}:{hash}"
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(String::from(stdout.trim()))
+}
+
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     let url = url.as_ref();
     let output = tokio::process::Command::new("nix-prefetch-url")
@@ -73,5 +92,5 @@ pub async fn nix_prefetch_git(url: impl AsRef<str>, git_ref: impl AsRef<str>) ->
     let info: NixPrefetchGitResponse = serde_json::from_slice(&output.stdout)
         .context("Failed to deserialize nix-pfetch-git JSON response.")?;
 
-    Ok(info.sha256)
+    hash_to_sri("sha256", info.sha256).await
 }
