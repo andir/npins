@@ -416,6 +416,18 @@ pub enum Command {
     ImportFlake(ImportFlakeOpts),
 }
 
+fn print_diff(diff: impl AsRef<[diff::DiffEntry]>) {
+    let diff = diff.as_ref();
+    if diff.is_empty() {
+        println!("(no changes)");
+    } else {
+        println!("Changes:");
+        for d in diff {
+            print!("{}", d);
+        }
+    }
+}
+
 use structopt::clap::AppSettings;
 
 #[derive(Debug, StructOpt)]
@@ -491,13 +503,9 @@ impl Opts {
         } else {
             log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
             let mut pin = NixPins::new_with_nixpkgs();
-            self.update_one(
-                pin.pins.get_mut("nixpkgs").unwrap(),
-                UpdateStrategy::Full,
-                false,
-            )
-            .await
-            .context("Failed to fetch initial nixpkgs entry")?;
+            self.update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
+                .await
+                .context("Failed to fetch initial nixpkgs entry")?;
             pin
         };
         self.write_pins(&initial_pins)?;
@@ -528,7 +536,7 @@ impl Opts {
         } else {
             UpdateStrategy::Full
         };
-        self.update_one(&mut pin, strategy, false)
+        self.update_one(&mut pin, strategy)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name.clone(), pin.clone());
@@ -544,8 +552,7 @@ impl Opts {
         &self,
         pin: &mut Pin,
         strategy: UpdateStrategy,
-        print_diff: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<diff::DiffEntry>> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
             pin.update().await?
@@ -554,27 +561,14 @@ impl Opts {
         };
 
         /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
-        if !diff1.is_empty() || strategy.must_fetch() {
+        let diff = if !diff1.is_empty() || strategy.must_fetch() {
             let diff2 = pin.fetch().await?;
+            diff1.into_iter().chain(diff2.into_iter()).collect()
+        } else {
+            diff1
+        };
 
-            if print_diff {
-                if diff1.len() + diff2.len() > 0 {
-                    println!("Changes:");
-                    for d in diff1 {
-                        print!("{}", d);
-                    }
-                    for d in diff2 {
-                        print!("{}", d);
-                    }
-                } else {
-                    println!("(no changes)");
-                }
-            }
-        } else if print_diff {
-            println!("(no changes)");
-        }
-
-        Ok(())
+        Ok(diff)
     }
 
     async fn update(&self, opts: &UpdateOpts) -> Result<()> {
@@ -590,7 +584,7 @@ impl Opts {
         if opts.names.is_empty() {
             for (name, pin) in pins.pins.iter_mut() {
                 log::info!("Updating '{}' …", name);
-                self.update_one(pin, strategy, true).await?;
+                print_diff(self.update_one(pin, strategy).await?);
             }
         } else {
             for name in &opts.names {
@@ -598,7 +592,7 @@ impl Opts {
                     None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
                     Some(pin) => {
                         log::info!("Updating '{}' …", name);
-                        self.update_one(pin, strategy, true).await?;
+                        print_diff(self.update_one(pin, strategy).await?);
                     },
                 }
             }
