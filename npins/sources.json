@@ -10,7 +10,7 @@
       "branch": "rfc101-style",
       "revision": "8d13b593fa8d8d6e5075f541f3231222a08e84df",
       "url": "https://github.com/piegamesde/nixfmt/archive/8d13b593fa8d8d6e5075f541f3231222a08e84df.tar.gz",
-      "hash": "1blpqs2ifw10xvfpfk77p1bq35gzgssng2m8wqw0kqydcz7fzm8y"
+      "hash": "sha256-HtXvzmfN4wk45qiKZ7V+/5WBV7jnTHfd7iBwF4XGl64="
     },
     "nixpkgs": {
       "type": "Git",
@@ -22,7 +22,7 @@
       "branch": "nixpkgs-unstable",
       "revision": "a9858885e197f984d92d7fe64e9fff6b2e488d40",
       "url": "https://github.com/nixos/nixpkgs/archive/a9858885e197f984d92d7fe64e9fff6b2e488d40.tar.gz",
-      "hash": "0a55lp827bfx102czy0bp5d6pbp5lh6l0ysp3zs0m1gyniy2jck9"
+      "hash": "sha256-aTIpfLT+hQr0H1d7QA2k5a5rWrkL+M8ECN2tI9ClpSg="
     },
     "pre-commit-hooks.nix": {
       "type": "Git",
@@ -34,8 +34,8 @@
       "branch": "master",
       "revision": "cc4d466cb1254af050ff7bdf47f6d404a7c646d1",
       "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/cc4d466cb1254af050ff7bdf47f6d404a7c646d1.tar.gz",
-      "hash": "1gl1bdnv533jyvj12dfyg8q5haprapswnn7hbpikb2qbnnwc2xzd"
+      "hash": "sha256-7XfBuLULizXjXfBYy/VV+SpYMHreNRHk9nKMsm1bgb4="
     }
   },
-  "version": 3
+  "version": 4
 }

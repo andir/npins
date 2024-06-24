@@ -36,7 +36,7 @@ let
     if url != null then
       (builtins.fetchTarball {
         inherit url;
-        sha256 = hash; # FIXME: check nix version & use SRI hashes
+        sha256 = hash;
       })
     else
       assert repository.type == "Git";
@@ -57,7 +57,7 @@ let
         url = repository.url;
         rev = revision;
         inherit name;
-        # hash = hash;
+        narHash = hash;
       };
 
   mkPyPiSource =
@@ -74,7 +74,7 @@ let
       sha256 = hash;
     };
 in
-if version == 3 then
+if version == 4 then
   builtins.mapAttrs (_: mkSource) data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"

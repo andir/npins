@@ -1,11 +1,13 @@
 //! Versioning support for the save format
 
+use crate::nix::hash_to_sri;
+
 use super::*;
 use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
 /// The current format version
-pub const LATEST: u64 = 3;
+pub const LATEST: u64 = 4;
 
 /// Custom manual deserialize wrapper that checks the version
 pub fn from_value_versioned(value: Value) -> Result<NixPins> {
@@ -44,7 +46,7 @@ pub fn to_value_versioned(pins: &NixPins) -> serde_json::Value {
 /// Patch the sources.json file to the latest version
 ///
 /// This operates on a JSON value level
-pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
+pub async fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
     let version = pins_raw
         .get("version")
         .and_then(Value::as_u64)
@@ -80,6 +82,29 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
             log::info!("There is nothing to do");
         },
         3 => {
+            let pins = pins_raw
+                .get_mut("pins")
+                .and_then(Value::as_object_mut)
+                .ok_or_else(|| anyhow::format_err!("sources.json must contain a `pins` object"))?;
+
+            for (name, pin) in pins.iter_mut() {
+                let raw_pin = pin
+                    .as_object_mut()
+                    .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?;
+                let pin: Pin = serde_json::from_value(serde_json::Value::Object(raw_pin.clone()))?;
+
+                if let Pin::Git { hashes, .. } = pin {
+                    if let Some(url_hashes) = hashes {
+                        log::debug!("Migrating Git hash of '{}' to SRI format", name);
+                        let sri_hash = hash_to_sri("sha256", url_hashes.hash).await?;
+
+                        raw_pin.remove("hash");
+                        raw_pin.insert("hash".into(), sri_hash.into());
+                    }
+                }
+            }
+        },
+        4 => {
             log::info!("sources.json is already up to date");
         },
         unknown => {
