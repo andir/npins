@@ -123,6 +123,8 @@ macro_rules! mkPin {
                     version: Option<<$input_name as Updatable>::Version>,
                     #[serde(flatten)]
                     hashes: Option<<$input_name as Updatable>::Hashes>,
+		    #[serde(default)]
+		    frozen: Frozen,
                 }
             ),*
         }
@@ -130,7 +132,7 @@ macro_rules! mkPin {
         impl Pin {
             /* Constructors */
             $(fn $lower_name(input: $input_name, version: Option<<$input_name as Updatable>::Version>) -> Self {
-                Self::$name { input, version, hashes: None }
+                Self::$name { input, version, hashes: None, frozen: Frozen::default() }
             })*
 
             /* If an error is returned, `self` remains unchanged */
@@ -149,7 +151,7 @@ macro_rules! mkPin {
              */
             async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
-                    $(Self::$name { input, version, hashes } => {
+                    $(Self::$name { input, version, hashes, .. } => {
                         let version = version.as_ref()
                             .ok_or_else(|| anyhow::format_err!("No version information available, call `update` first or manually set one"))?;
                         /* Use very explicit syntax to force the correct types and get good compile errors */
@@ -177,16 +179,39 @@ macro_rules! mkPin {
                     $(Self::$name { ..} => $human_name ),*
                 }
             }
+
+
+	    /// Thaw a pin
+	    pub fn thaw(&mut self) {
+		match self {
+		    $(Self::$name { ref mut frozen, .. } => frozen.thaw()),*
+		}
+	    }
+
+	    /// Freeze a pin
+	    pub fn freeze(&mut self) {
+		match self {
+		    $(Self::$name { ref mut frozen, .. } => frozen.freeze()),*
+		}
+	    }
+
+	    /// Is frozen
+	    pub fn is_frozen(&self) -> bool {
+		match self {
+		    $(Self::$name { frozen, .. } => frozen.is_frozen()),*
+		}
+	    }
         }
 
         impl std::fmt::Display for Pin {
             fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match self {
-                    $(Self::$name { input, version, hashes } => {
+                    $(Self::$name { input, version, hashes, frozen } => {
                         /* Concat all properties and then print them */
                         let properties = input.properties().into_iter()
                             .chain(version.iter().flat_map(Diff::properties))
-                            .chain(hashes.iter().flat_map(Diff::properties));
+                            .chain(hashes.iter().flat_map(Diff::properties))
+			    .chain(frozen.properties());
                         for (key, value) in properties {
                             writeln!(fmt, "    {}: {}", key, value)?;
                         }
@@ -259,6 +284,40 @@ impl diff::Diff for GenericVersion {
     }
 }
 
+/// The Frozen field in a Pin
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct Frozen(bool);
+
+impl Frozen {
+    fn new(value: bool) -> Self {
+        Frozen(value)
+    }
+
+    fn freeze(&mut self) {
+        self.0 = true;
+    }
+
+    fn thaw(&mut self) {
+        self.0 = false;
+    }
+
+    fn is_frozen(&self) -> bool {
+        self.0
+    }
+}
+
+impl diff::Diff for Frozen {
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![("frozen".into(), self.0.to_string())]
+    }
+}
+
+impl std::default::Default for Frozen {
+    fn default() -> Self {
+        Frozen(false)
+    }
+}
+
 /// An URL and its hash
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct GenericUrlHashes {
@@ -286,4 +345,39 @@ async fn main() -> Result<()> {
     let opts = cli::Opts::from_args();
     opts.run().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(test)]
+    fn test_frozen() {
+        assert!(!Frozen::default().is_frozen());
+        assert!(!{
+            let mut x = Frozen::default();
+            x.thaw();
+            x
+        }
+        .is_frozen());
+        assert!({
+            let mut x = Frozen::default();
+            x.freeze();
+            x
+        }
+        .is_frozen());
+        assert!(Frozen::new(true).is_frozen());
+        assert!({
+            let mut x = Frozen::new(true);
+            x.freeze();
+            x
+        }
+        .is_frozen());
+        assert!(!{
+            let mut x = Frozen::new(true);
+            x.thaw();
+            x
+        }
+        .is_frozen());
+    }
 }

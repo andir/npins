@@ -277,27 +277,31 @@ mod test {
             pins,
             NixPins {
                 pins: btreemap![
-                    "nixos-mailserver".into() => Pin::Git {
-                        input: git::GitPin::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap(), "nixos-21.11".into()),
-                        version: Some(git::GitRevision { revision: "6e3a7b2ea6f0d68b82027b988aa25d3423787303".into() }),
-                        hashes: Some(git::OptionalUrlHashes { url: None, hash: "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44".into() } ),
-                    },
-                    "nixpkgs".into() => Pin::Git {
-                        input: git::GitPin::github("nixos", "nixpkgs", "nixpkgs-unstable".into()),
-                        version: Some(git::GitRevision { revision: "5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2".into() }),
-                        hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb".into() }),
-                    },
-                    "streamlit".into() => Pin::PyPi {
-                        input: pypi::Pin { name: "streamlit".into(), version_upper_bound: None },
-                        version: Some(GenericVersion { version: "1.3.1".into() }),
-                        hashes: Some(GenericUrlHashes { url: "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz".parse().unwrap(), hash: "adec7935c9cf774b9115b2456cf2f48c4f49b9f67159a97db0fe228357c1afdf".into() } )
-                    },
-                    "youtube-dl".into() => Pin::GitRelease {
-                        input: git::GitReleasePin::github("ytdl-org", "youtube-dl", false, None, None),
-                        version: Some(GenericVersion { version: "youtube-dl 2021.12.17".into() }),
-                        hashes: None,
-                    }
-                ],
+                        "nixos-mailserver".into() => Pin::Git {
+                            input: git::GitPin::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap(), "nixos-21.11".into()),
+                            version: Some(git::GitRevision { revision: "6e3a7b2ea6f0d68b82027b988aa25d3423787303".into() }),
+                            hashes: Some(git::OptionalUrlHashes { url: None, hash: "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44".into() } ),
+                frozen: Frozen::default(),
+                        },
+                        "nixpkgs".into() => Pin::Git {
+                            input: git::GitPin::github("nixos", "nixpkgs", "nixpkgs-unstable".into()),
+                            version: Some(git::GitRevision { revision: "5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2".into() }),
+                            hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb".into() }),
+                frozen: Frozen::default(),
+                        },
+                        "streamlit".into() => Pin::PyPi {
+                            input: pypi::Pin { name: "streamlit".into(), version_upper_bound: None },
+                            version: Some(GenericVersion { version: "1.3.1".into() }),
+                            hashes: Some(GenericUrlHashes { url: "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz".parse().unwrap(), hash: "adec7935c9cf774b9115b2456cf2f48c4f49b9f67159a97db0fe228357c1afdf".into() } ),
+                frozen: Frozen::default(),
+                        },
+                        "youtube-dl".into() => Pin::GitRelease {
+                            input: git::GitReleasePin::github("ytdl-org", "youtube-dl", false, None, None),
+                            version: Some(GenericVersion { version: "youtube-dl 2021.12.17".into() }),
+                            hashes: None,
+                frozen: Frozen::default(),
+                        }
+                    ],
             }
         );
     }

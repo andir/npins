@@ -387,6 +387,13 @@ pub struct ImportFlakeOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct FreezeOpts {
+    /// Names of the pin(s)
+    #[structopt(required = true)]
+    pub names: Vec<String>,
+}
+
+#[derive(Debug, StructOpt)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your sources.json.
@@ -414,6 +421,12 @@ pub enum Command {
 
     /// Try to import entries from flake.lock
     ImportFlake(ImportFlakeOpts),
+
+    /// Freeze a pin entry
+    Freeze(FreezeOpts),
+
+    /// Thaw a pin entry
+    Thaw(FreezeOpts),
 }
 
 fn print_diff(diff: impl AsRef<[diff::DiffEntry]>) {
@@ -583,6 +596,11 @@ impl Opts {
 
         if opts.names.is_empty() {
             for (name, pin) in pins.pins.iter_mut() {
+                if pin.is_frozen() {
+                    log::info!("Skipping pin {} as it is frozen.", name);
+                    continue;
+                }
+
                 log::info!("Updating '{}' …", name);
                 print_diff(self.update_one(pin, strategy).await?);
             }
@@ -591,6 +609,11 @@ impl Opts {
                 match pins.pins.get_mut(name) {
                     None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
                     Some(pin) => {
+                        if pin.is_frozen() {
+                            log::info!("Skipping {} as it is frozen.", name);
+                            continue;
+                        }
+
                         log::info!("Updating '{}' …", name);
                         print_diff(self.update_one(pin, strategy).await?);
                     },
@@ -654,6 +677,43 @@ impl Opts {
 
         self.write_pins(&new_pins)?;
         log::info!("Successfully removed pin '{}'.", r.name);
+        Ok(())
+    }
+
+    async fn freeze(&self, o: &FreezeOpts) -> Result<()> {
+        let mut pins = self.read_pins()?;
+
+        for name in o.names.iter() {
+            let pin = match pins.pins.get_mut(name) {
+                None => return Err(anyhow::anyhow!("Couldn't find the pin {} to freeze.", name)),
+                Some(pin) => pin,
+            };
+
+            pin.freeze();
+            log::info!("Froze pin {}", name);
+        }
+
+        self.write_pins(&pins)?;
+
+        Ok(())
+    }
+
+    async fn thaw(&self, o: &FreezeOpts) -> Result<()> {
+        let mut pins = self.read_pins()?;
+
+        for name in o.names.iter() {
+            let pin = match pins.pins.get_mut(name) {
+                None => return Err(anyhow::anyhow!("Couldn't find the pin {} to thaw.", name)),
+                Some(pin) => pin,
+            };
+
+            pin.thaw();
+
+            log::info!("Thawed pin {}", name);
+        }
+
+        self.write_pins(&pins)?;
+
         Ok(())
     }
 
@@ -823,6 +883,8 @@ impl Opts {
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,
             Command::ImportFlake(o) => self.import_flake(o).await?,
+            Command::Freeze(o) => self.freeze(o).await?,
+            Command::Thaw(o) => self.thaw(o).await?,
         };
 
         Ok(())
