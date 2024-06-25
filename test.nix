@@ -65,8 +65,8 @@ let
     {
       name,
       commands,
-      gitRepo,
-      repoPath ? "foo",
+      # Repositories to host. key = repo path, value = repo derivation
+      repositories,
     }:
     pkgs.runCommand name
       {
@@ -87,10 +87,23 @@ let
         export NIX_DATA_DIR=$TMPDIR
         export NIX_STORE_DIR=$TMPDIR
         export NIX_LOG_DIR=$TMPDIR
+
+        echo -e "\n\nRunning test ${name}\n"
         cd $(mktemp -d)
-        ln -s ${gitRepo} $(basename ${repoPath})
+
+        # Mock the repositories
+        ${lib.pipe repositories [
+          (lib.mapAttrsToList (
+            repoPath: gitRepo: ''
+              mkdir -p $(dirname ${repoPath})
+              ln -s ${gitRepo} "${repoPath}"
+            ''
+          ))
+          (lib.concatStringsSep "\n")
+        ]}
+
         python -m http.server 8000 &
-        timeout 30 sh -c 'until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
 
@@ -101,8 +114,10 @@ let
     {
       name,
       commands,
-      gitRepo,
-      repoPath ? "foo/bar",
+      # Repositories to host. key = repo path, value = repo derivation
+      repositories,
+      # For simplicity, all fake releases will be added to all repositories,
+      # and both as "archive" (for refs) and as "tarball" (for releases)
       apiTarballs ? [ ],
     }:
     pkgs.runCommand name
@@ -126,19 +141,32 @@ let
         export NPINS_GITHUB_HOST=http://localhost:8000
         export NPINS_GITHUB_API_HOST=http://localhost:8000/api
 
+        echo "Running test ${name}"
         cd $(mktemp -d)
 
-        # Mock the repository
-        mkdir -p $(dirname ${repoPath})
-        ln -s ${gitRepo} ${repoPath}.git
+        # Mock the repositories
+        ${lib.pipe repositories [
+          (lib.mapAttrsToList (
+            repoPath: gitRepo: ''
+              mkdir -p $(dirname ${repoPath})
+              ln -s ${gitRepo} "${repoPath}.git"
 
-        # Mock the releases
-        tarballPath="api/repos/foo/bar/tarball"
-        mkdir -p $tarballPath
-        ${lib.concatMapStringsSep "\n" (path: "ln -s ${testTarball} $tarballPath/${path}") apiTarballs}
+              # Mock the releases
+              tarballPath="api/repos/${repoPath}/tarball"
+              mkdir -p $tarballPath
+              archivePath="${repoPath}/archive"
+              mkdir -p $archivePath
+              ${lib.concatMapStringsSep "\n" (path: ''
+                ln -s ${testTarball} $tarballPath/${path}
+                ln -s ${testTarball} $archivePath/${path}.tar.gz
+              '') apiTarballs}
+            ''
+          ))
+          (lib.concatStringsSep "\n")
+        ]}
 
         python -m http.server 8000 &
-        timeout 30 sh -c 'until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
 
@@ -148,7 +176,7 @@ in
 {
   addDryRun = mkGitTest {
     name = "add-dry-run";
-    inherit gitRepo;
+    repositories."foo" = gitRepo;
     commands = ''
       npins init --bare
       npins add -n git http://localhost:8000/foo -b test-branch
@@ -160,19 +188,24 @@ in
 
   gitDependency = mkGitTest {
     name = "from-git-repo";
-    inherit gitRepo;
+    repositories."foo" = gitRepo;
     commands = ''
       npins init --bare
       npins add git http://localhost:8000/foo -b test-branch
       npins show
 
       nix-instantiate --eval npins -A foo.outPath
+
+      # Check version and url
+      [[ "$(jq -r .pins.foo.version npins/sources.json)" = "null" ]]
+      [[ "$(jq -r .pins.foo.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
+      [[ "$(jq -r .pins.foo.url npins/sources.json)" = "null" ]]
     '';
   };
 
   gitRepoEmptyFails = mkGitTest {
     name = "from-empty-git-repo";
-    gitRepo = mkGitRepo {
+    repositories."foo" = mkGitRepo {
       tags = [ ];
       branchName = "foo";
     };
@@ -184,31 +217,34 @@ in
 
   gitTag = mkGitTest {
     name = "from-git-repo-tag";
-    inherit gitRepo;
+    repositories."foo" = gitRepo;
     commands = ''
       npins init --bare
       npins add git http://localhost:8000/foo
-      cat npins/sources.json
 
       git ls-remote http://localhost:8000/foo
       nix-instantiate --eval npins -A foo.outPath
 
-      V=$(jq -r .pins.foo.version npins/sources.json)
-      [[ "$V" = "v0.2" ]]
+      # Check version and url
+      [[ "$(jq -r .pins.foo.version npins/sources.json)" = "v0.2" ]]
+      [[ "$(jq -r .pins.foo.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
+      [[ "$(jq -r .pins.foo.url npins/sources.json)" = "null" ]]
     '';
   };
 
   githubRelease = mkGithubTest {
     name = "github-release";
-    inherit gitRepo;
+    repositories."foo/bar" = gitRepo;
     apiTarballs = [ "v0.2" ];
     commands = ''
       npins init --bare
       npins add github foo bar
       nix-instantiate --eval npins -A bar.outPath
 
-      V=$(jq -r .pins.bar.version npins/sources.json)
-      [[ "$V" = "v0.2" ]]
+      # Check version and url
+      [[ "$(jq -r .pins.bar.version npins/sources.json)" = "v0.2" ]]
+      [[ "$(jq -r .pins.bar.revision npins/sources.json)" = "b606f4ab240e230dd5916969b31a44d46e74eea1" ]]
+      [[ "$(jq -r .pins.bar.url npins/sources.json)" = "http://localhost:8000/api/repos/foo/bar/tarball/v0.2" ]]
     '';
   };
 
