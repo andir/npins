@@ -9,6 +9,8 @@ use structopt::StructOpt;
 
 use url::Url;
 
+const DEFAULT_NIX: &'static str = include_str!("default.nix");
+
 /// How to handle updates
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum UpdateStrategy {
@@ -479,7 +481,7 @@ impl Opts {
 
     async fn init(&self, o: &InitOpts) -> Result<()> {
         log::info!("Welcome to npins!");
-        let default_nix = include_bytes!("../npins/default.nix");
+        let default_nix = DEFAULT_NIX;
         if !self.folder.exists() {
             log::info!("Creating `{}` directory", self.folder.display());
             std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
@@ -487,7 +489,7 @@ impl Opts {
         log::info!("Writing default.nix");
         let p = self.folder.join("default.nix");
         let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
-        fh.write_all(default_nix)?;
+        fh.write_all(default_nix.as_bytes())?;
 
         // Only create the pins if the file isn't there yet
         if self.folder.join("sources.json").exists() {
@@ -615,7 +617,7 @@ impl Opts {
         );
 
         let nix_path = self.folder.join("default.nix");
-        let nix_file = include_str!("../npins/default.nix");
+        let nix_file = DEFAULT_NIX;
         if std::fs::read_to_string(&nix_path)? == nix_file {
             log::info!("default.nix is already up to date");
         } else {
