@@ -16,9 +16,7 @@
 let
   paths = [
     "^/src$"
-    "^/src/.+.rs$"
-    "^/npins$"
-    "^/npins/default.nix$"
+    "^/src/.+$"
     "^/Cargo.lock$"
     "^/Cargo.toml$"
   ];

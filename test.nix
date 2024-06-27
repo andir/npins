@@ -5,6 +5,22 @@
   npins ? pkgs.callPackage ./npins.nix { },
 }:
 let
+  # utility bash functions used throught the tests
+  prelude = pkgs.writeShellScript "prelude" ''
+    function eq() {
+      local a=$1
+      local b=$2
+      printf '[[ "%s" = "%s" ]]' "$a" "$b"
+      if [[ "$a" = "$b" ]]; then echo " OK"; else echo " FAIL"; exit 1; fi
+    }
+
+    function resolveGitCommit() {
+      local repo=$1
+      local commitish=''${2:-main}
+      git  -C $repo rev-list  -n1 $commitish
+    }
+  '';
+
   inherit (pkgs) lib;
   # Generate a git repository hat can be served via HTTP.
   #
@@ -65,8 +81,8 @@ let
     {
       name,
       commands,
-      gitRepo,
-      repoPath ? "foo",
+      # Repositories to host. key = repo path, value = repo derivation
+      repositories,
     }:
     pkgs.runCommand name
       {
@@ -87,10 +103,29 @@ let
         export NIX_DATA_DIR=$TMPDIR
         export NIX_STORE_DIR=$TMPDIR
         export NIX_LOG_DIR=$TMPDIR
+        source ${prelude}
+
+        echo -e "\n\nRunning test ${name}\n"
         cd $(mktemp -d)
-        ln -s ${gitRepo} $(basename ${repoPath})
+
+        # Mock the repositories
+        ${lib.pipe repositories [
+          (lib.mapAttrsToList (
+            repoPath: gitRepo: ''
+              mkdir -p $(dirname ${repoPath})
+              ln -s ${gitRepo} "${repoPath}"
+            ''
+          ))
+          (lib.concatStringsSep "\n")
+        ]}
+        # Mark repos as safe for usage with Git cli
+        ${lib.pipe repositories [
+          (lib.mapAttrsToList (_: gitRepo: "git config --global --add safe.directory ${gitRepo}"))
+          (lib.concatStringsSep "\n")
+        ]}
+
         python -m http.server 8000 &
-        timeout 30 sh -c 'until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
 
@@ -101,8 +136,10 @@ let
     {
       name,
       commands,
-      gitRepo,
-      repoPath ? "foo/bar",
+      # Repositories to host. key = repo path, value = repo derivation
+      repositories,
+      # For simplicity, all fake releases will be added to all repositories,
+      # and both as "archive" (for refs) and as "tarball" (for releases)
       apiTarballs ? [ ],
     }:
     pkgs.runCommand name
@@ -125,20 +162,43 @@ let
         export NIX_LOG_DIR=$TMPDIR
         export NPINS_GITHUB_HOST=http://localhost:8000
         export NPINS_GITHUB_API_HOST=http://localhost:8000/api
+        source ${prelude}
 
+        echo "Running test ${name}"
         cd $(mktemp -d)
 
-        # Mock the repository
-        mkdir -p $(dirname ${repoPath})
-        ln -s ${gitRepo} ${repoPath}.git
+        # Mock the repositories
+        ${lib.pipe repositories [
+          (lib.mapAttrsToList (
+            repoPath: gitRepo: ''
+              mkdir -p $(dirname ${repoPath})
+              ln -s ${gitRepo} "${repoPath}.git"
 
-        # Mock the releases
-        tarballPath="api/repos/foo/bar/tarball"
-        mkdir -p $tarballPath
-        ${lib.concatMapStringsSep "\n" (path: "ln -s ${testTarball} $tarballPath/${path}") apiTarballs}
+              # Mock the releases
+              tarballPath="api/repos/${repoPath}/tarball"
+              mkdir -p $tarballPath
+              archivePath="${repoPath}/archive"
+              mkdir -p $archivePath
+              ${lib.concatMapStringsSep "\n" (path: ''
+                ln -s ${testTarball} $tarballPath/${path}
+                ln -s ${testTarball} $archivePath/${path}.tar.gz
+              '') apiTarballs}
+
+              chmod -R +rw $archivePath
+              chmod -R +rw $tarballPath
+              pwd
+              ls -la $tarballPath
+              # For each of the commits in the repo create the tarballs
+              git config --global --add safe.directory ${gitRepo}
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX XX
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
+            ''
+          ))
+          (lib.concatStringsSep "\n")
+        ]}
 
         python -m http.server 8000 &
-        timeout 30 sh -c 'until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
 
@@ -148,7 +208,7 @@ in
 {
   addDryRun = mkGitTest {
     name = "add-dry-run";
-    inherit gitRepo;
+    repositories."foo" = gitRepo;
     commands = ''
       npins init --bare
       npins add -n git http://localhost:8000/foo -b test-branch
@@ -158,21 +218,26 @@ in
     '';
   };
 
-  gitDependency = mkGitTest {
-    name = "from-git-repo";
-    inherit gitRepo;
+  gitDependency = mkGitTest rec {
+    name = "git-dependency";
+    repositories."foo" = gitRepo;
     commands = ''
       npins init --bare
       npins add git http://localhost:8000/foo -b test-branch
       npins show
 
       nix-instantiate --eval npins -A foo.outPath
+
+      # Check version and url
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"} HEAD)"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
     '';
   };
 
   gitRepoEmptyFails = mkGitTest {
     name = "from-empty-git-repo";
-    gitRepo = mkGitRepo {
+    repositories."foo" = mkGitRepo {
       tags = [ ];
       branchName = "foo";
     };
@@ -182,33 +247,125 @@ in
     '';
   };
 
-  gitTag = mkGitTest {
+  gitTag = mkGitTest rec {
     name = "from-git-repo-tag";
-    inherit gitRepo;
+    repositories."foo" = gitRepo;
     commands = ''
       npins init --bare
       npins add git http://localhost:8000/foo
-      cat npins/sources.json
 
       git ls-remote http://localhost:8000/foo
       nix-instantiate --eval npins -A foo.outPath
 
-      V=$(jq -r .pins.foo.version npins/sources.json)
-      [[ "$V" = "v0.2" ]]
+      # Check version and url
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "v0.2"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"} HEAD)"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
     '';
   };
 
   githubRelease = mkGithubTest {
     name = "github-release";
-    inherit gitRepo;
+    repositories."foo/bar" = gitRepo;
     apiTarballs = [ "v0.2" ];
     commands = ''
       npins init --bare
       npins add github foo bar
       nix-instantiate --eval npins -A bar.outPath
 
-      V=$(jq -r .pins.bar.version npins/sources.json)
-      [[ "$V" = "v0.2" ]]
+      # Check version and url
+      eq "$(jq -r .pins.bar.version npins/sources.json)" "v0.2"
+      eq "$(jq -r .pins.bar.revision npins/sources.json)" "$(resolveGitCommit ${gitRepo} v0.2)"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/api/repos/foo/bar/tarball/v0.2"
+    '';
+  };
+
+  githubBranch = mkGithubTest {
+    name = "github-branch";
+    repositories."foo/bar" = gitRepo;
+    apiTarballs = [ "v0.2" ];
+    commands = ''
+      npins init --bare
+      npins add github foo bar --branch test-branch
+      nix-instantiate --eval npins -A bar.outPath
+
+      # Check version and url
+      eq "$(jq -r .pins.bar.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.bar.revision npins/sources.json)" "$(resolveGitCommit ${gitRepo} test-branch)"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/archive/$(resolveGitCommit ${gitRepo} test-branch).tar.gz"
+    '';
+  };
+
+  gitSubmodule = mkGitTest rec {
+    name = "git-submodule";
+    repositories."bar" = gitRepo;
+    repositories."foo" = mkGitRepo {
+      name = "repo-with-submodules";
+      extraCommands = ''
+        git submodule init
+
+        # In order to be able to add the submodule, we need to fake host it
+        cd ..
+        ${pkgs.python3}/bin/python -m http.server 8000 &
+        timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        ln -s ${repositories.bar} "bar"
+        cd tmp
+
+        git submodule add "http://localhost:8000/bar"
+      '';
+    };
+
+    commands = ''
+      npins init --bare
+      npins add git http://localhost:8000/foo --branch main
+      npins add --name foo2 git http://localhost:8000/foo --branch main --submodules
+
+      # Both have the same revision and no URL
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"})"
+      eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"})"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
+
+      nix-instantiate --eval npins -A foo.outPath
+      nix-instantiate --eval npins -A foo2.outPath
+    '';
+  };
+
+  githubSubmodule = mkGithubTest rec {
+    name = "github-submodule";
+    apiTarballs = [ "cbbbea814edccc7bf23af61bd620647ed7c0a436" ];
+    repositories."owner/bar" = gitRepo;
+    repositories."owner/foo" = mkGitRepo {
+      name = "repo-with-submodules";
+      extraCommands = ''
+        git submodule init
+
+        # In order to be able to add the submodule, we need to fake host it
+        cd ..
+        ${pkgs.python3}/bin/python -m http.server 8000 &
+        timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        mkdir owner
+        ln -s ${repositories."owner/bar"} "owner/bar.git"
+        cd tmp
+
+        git submodule add "http://localhost:8000/owner/bar.git"
+      '';
+    };
+
+    commands = ''
+      npins init --bare
+      npins add github owner foo --branch main
+      npins add --name foo2 github owner foo --branch main --submodules
+
+      # Both have the same revision, but only foo has an URL
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/owner/foo/archive/$(resolveGitCommit ${repositories."owner/foo"}).tar.gz"
+      eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
     '';
   };
 

@@ -58,6 +58,7 @@ impl diff::Diff for OptionalUrlHashes {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct ReleasePinHashes {
     pub revision: String,
+    // This is the URL for the tarball to fetch, if absent use fetchgit instead
     pub url: Option<Url>,
     pub hash: String,
 }
@@ -218,6 +219,9 @@ impl Repository {
 pub struct GitPin {
     pub repository: Repository,
     pub branch: String,
+    /// Also fetch submodules
+    #[serde(default)]
+    pub submodules: bool,
 }
 
 impl diff::Diff for GitPin {
@@ -228,25 +232,33 @@ impl diff::Diff for GitPin {
                 self.repository.git_url().unwrap().to_string(),
             ),
             ("branch".into(), self.branch.clone()),
+            ("submodules".into(), self.submodules.to_string()),
         ]
     }
 }
 
 impl GitPin {
-    pub fn git(url: Url, branch: String) -> Self {
+    pub fn git(url: Url, branch: String, submodules: bool) -> Self {
         Self {
             repository: Repository::Git { url },
             branch,
+            submodules,
         }
     }
 
-    pub fn github(owner: impl Into<String>, repo: impl Into<String>, branch: String) -> Self {
+    pub fn github(
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        branch: String,
+        submodules: bool,
+    ) -> Self {
         Self {
             repository: Repository::GitHub {
                 owner: owner.into(),
                 repo: repo.into(),
             },
             branch,
+            submodules,
         }
     }
 
@@ -255,6 +267,7 @@ impl GitPin {
         branch: String,
         server: Option<Url>,
         private_token: Option<String>,
+        submodules: bool,
     ) -> Self {
         Self {
             repository: Repository::GitLab {
@@ -263,6 +276,7 @@ impl GitPin {
                 private_token,
             },
             branch,
+            submodules,
         }
     }
 }
@@ -283,13 +297,25 @@ impl Updatable for GitPin {
     }
 
     async fn fetch(&self, version: &GitRevision) -> Result<OptionalUrlHashes> {
-        let url = self.repository.url(&version.revision)?;
-        let hash = match url.as_ref() {
-            Some(url) => nix::nix_prefetch_tarball(url).await?,
-            None => nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision).await?,
-        };
+        if self.submodules {
+            Ok(OptionalUrlHashes {
+                url: None,
+                hash: nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision, true)
+                    .await?,
+            })
+        } else {
+            // Try to find an URL for fetchtarball first, as it is faster than fetchgit
+            let url = self.repository.url(&version.revision)?;
+            let hash = match url.as_ref() {
+                Some(url) => nix::nix_prefetch_tarball(url).await?,
+                None => {
+                    nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision, false)
+                        .await?
+                },
+            };
 
-        Ok(OptionalUrlHashes { url, hash })
+            Ok(OptionalUrlHashes { url, hash })
+        }
     }
 }
 
@@ -313,7 +339,6 @@ pub struct GitReleasePin {
     ///
     /// Versions will be parsed the in the same rather lenient way as the tags themselves.
     pub version_upper_bound: Option<String>,
-
     /// Optionally filter the considered release names / tags by a prefix
     ///
     /// Some projects have a more elaborate tag structure that
@@ -322,6 +347,9 @@ pub struct GitReleasePin {
     /// those tags that contain the specified prefix and have the
     /// prefix stripped before any version comparison happens.
     pub release_prefix: Option<String>,
+    /// Also fetch submodules
+    #[serde(default)]
+    pub submodules: bool,
 }
 
 impl diff::Diff for GitReleasePin {
@@ -340,6 +368,7 @@ impl diff::Diff for GitReleasePin {
             self.release_prefix
                 .as_ref()
                 .map(|release_prefix| ("release_prefix".into(), release_prefix.clone())),
+            Some(("submodules".into(), self.submodules.to_string())),
         ]
         .into_iter()
         .flat_map(Option::into_iter)
@@ -353,12 +382,14 @@ impl GitReleasePin {
         pre_releases: bool,
         version_upper_bound: Option<String>,
         release_prefix: Option<String>,
+        submodules: bool,
     ) -> Self {
         Self {
             repository: Repository::Git { url },
             pre_releases,
             version_upper_bound,
             release_prefix,
+            submodules,
         }
     }
 
@@ -368,6 +399,7 @@ impl GitReleasePin {
         pre_releases: bool,
         version_upper_bound: Option<String>,
         release_prefix: Option<String>,
+        submodules: bool,
     ) -> Self {
         Self {
             repository: Repository::GitHub {
@@ -377,6 +409,7 @@ impl GitReleasePin {
             pre_releases,
             version_upper_bound,
             release_prefix,
+            submodules,
         }
     }
 
@@ -387,6 +420,7 @@ impl GitReleasePin {
         version_upper_bound: Option<String>,
         private_token: Option<String>,
         release_prefix: Option<String>,
+        submodules: bool,
     ) -> Self {
         Self {
             repository: Repository::GitLab {
@@ -397,6 +431,7 @@ impl GitReleasePin {
             pre_releases,
             version_upper_bound,
             release_prefix,
+            submodules,
         }
     }
 }
@@ -475,22 +510,29 @@ impl Updatable for GitReleasePin {
     async fn fetch(&self, version: &GenericVersion) -> Result<ReleasePinHashes> {
         let repo_url = self.repository.git_url()?;
 
-        let url = self.repository.release_url(&version.version)?;
-
         let revision = fetch_ref(&repo_url, format!("refs/tags/{}", version.version))
             .await?
             .revision;
 
-        let hash = match url.as_ref() {
-            Some(url) => nix::nix_prefetch_tarball(url).await?,
-            None => nix::nix_prefetch_git(&repo_url, &revision).await?,
-        };
-
-        Ok(ReleasePinHashes {
-            url,
-            hash,
-            revision,
-        })
+        if self.submodules {
+            Ok(ReleasePinHashes {
+                url: None,
+                hash: nix::nix_prefetch_git(&repo_url, &revision, true).await?,
+                revision,
+            })
+        } else {
+            // Try to find an URL for fetchtarball first, as it is faster than fetchgit
+            let url = self.repository.release_url(&version.version)?;
+            let hash = match url.as_ref() {
+                Some(url) => nix::nix_prefetch_tarball(url).await?,
+                None => nix::nix_prefetch_git(&repo_url, &revision, false).await?,
+            };
+            Ok(ReleasePinHashes {
+                url,
+                hash,
+                revision,
+            })
+        }
     }
 }
 
@@ -792,6 +834,7 @@ mod test {
                     .unwrap(),
             },
             branch: "master".into(),
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -819,6 +862,7 @@ mod test {
             pre_releases: false,
             version_upper_bound: None,
             release_prefix: None,
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -846,6 +890,7 @@ mod test {
                 repo: "swing_library".into(),
             },
             branch: "master".into(),
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -874,6 +919,7 @@ mod test {
             pre_releases: false,
             version_upper_bound: None,
             release_prefix: None,
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -906,6 +952,7 @@ mod test {
                 private_token: None,
             },
             branch: "master".into(),
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -935,6 +982,7 @@ mod test {
             pre_releases: false,
             version_upper_bound: None,
             release_prefix: None,
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -965,6 +1013,7 @@ mod test {
                 private_token: None,
             },
             branch: "master".into(),
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -994,6 +1043,7 @@ mod test {
             pre_releases: false,
             version_upper_bound: None,
             release_prefix: None,
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1024,6 +1074,7 @@ mod test {
                 private_token: Some("glpat-MSsRZG1SNdJU1MzBNosV".into()),
             },
             branch: "main".into(),
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1055,6 +1106,7 @@ mod test {
             pre_releases: false,
             version_upper_bound: Some("1.0.1".into()),
             release_prefix: None,
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1095,6 +1147,7 @@ mod test {
                 private_token: Some("xqgHNxVNdzvMy6cDvreJ".into()),
             },
             branch: "main".into(),
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1126,6 +1179,7 @@ mod test {
             pre_releases: false,
             version_upper_bound: Some("1.0.1".into()),
             release_prefix: None,
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1166,6 +1220,7 @@ mod test {
                 private_token: None,
             },
             branch: "main".into(),
+            submodules: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(

@@ -9,6 +9,8 @@ use structopt::StructOpt;
 
 use url::Url;
 
+const DEFAULT_NIX: &'static str = include_str!("default.nix");
+
 /// How to handle updates
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum UpdateStrategy {
@@ -87,6 +89,10 @@ pub struct GenericGitAddOpts {
     /// that start with that string.
     #[structopt(long = "release-prefix")]
     pub release_prefix: Option<String>,
+
+    /// Also fetch submodules
+    #[structopt(long)]
+    pub submodules: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -104,7 +110,12 @@ impl GitHubAddOpts {
             self.repository.clone(),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::github(&self.owner, &self.repository, branch.clone());
+                    let pin = git::GitPin::github(
+                        &self.owner,
+                        &self.repository,
+                        branch.clone(),
+                        self.more.submodules,
+                    );
                     let version = self.more.at.as_ref().map(|at| git::GitRevision {
                         revision: at.clone(),
                     });
@@ -117,6 +128,7 @@ impl GitHubAddOpts {
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.more.release_prefix.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref().map(|at| GenericVersion {
                         version: at.clone(),
@@ -144,7 +156,7 @@ pub struct GitLabAddOpts {
 
     #[structopt(
         long,
-        help = "Use a private token to access the repository",
+        help = "Use a private token to access the repository.",
         value_name = "token"
     )]
     pub private_token: Option<String>,
@@ -167,6 +179,7 @@ impl GitLabAddOpts {
                         branch.clone(),
                         Some(self.server.clone()),
                         self.private_token.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref()
                     .map(|at| git::GitRevision {
@@ -180,7 +193,8 @@ impl GitLabAddOpts {
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.private_token.clone(),
-			self.more.release_prefix.clone(),
+                        self.more.release_prefix.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref()
                         .map(|at| GenericVersion {
@@ -232,7 +246,7 @@ impl GitAddOpts {
             name.to_owned(),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::git(url, branch.clone());
+                    let pin = git::GitPin::git(url, branch.clone(), self.more.submodules);
                     let version = self.more.at.as_ref().map(|at| git::GitRevision {
                         revision: at.clone(),
                     });
@@ -244,6 +258,7 @@ impl GitAddOpts {
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.more.release_prefix.clone(),
+                        self.more.submodules,
                     );
                     let version = self.more.at.as_ref().map(|at| GenericVersion {
                         version: at.clone(),
@@ -306,7 +321,8 @@ pub enum AddCommands {
 
 #[derive(Debug, StructOpt)]
 pub struct AddOpts {
-    /// Custom name for the pin entry
+    /// Add the pin with a custom name.
+    /// If a pin with that name already exists, it willl be overwritten
     #[structopt(long)]
     pub name: Option<String>,
     /// Don't actually apply the changes
@@ -478,7 +494,7 @@ impl Opts {
 
     async fn init(&self, o: &InitOpts) -> Result<()> {
         log::info!("Welcome to npins!");
-        let default_nix = include_bytes!("../npins/default.nix");
+        let default_nix = DEFAULT_NIX;
         if !self.folder.exists() {
             log::info!("Creating `{}` directory", self.folder.display());
             std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
@@ -486,7 +502,7 @@ impl Opts {
         log::info!("Writing default.nix");
         let p = self.folder.join("default.nix");
         let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
-        fh.write_all(default_nix)?;
+        fh.write_all(default_nix.as_bytes())?;
 
         // Only create the pins if the file isn't there yet
         if self.folder.join("sources.json").exists() {
@@ -614,7 +630,7 @@ impl Opts {
         );
 
         let nix_path = self.folder.join("default.nix");
-        let nix_file = include_str!("../npins/default.nix");
+        let nix_file = DEFAULT_NIX;
         if std::fs::read_to_string(&nix_path)? == nix_file {
             log::info!("default.nix is already up to date");
         } else {

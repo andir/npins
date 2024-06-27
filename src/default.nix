@@ -28,6 +28,7 @@ let
       url ? null,
       submodules,
       hash,
+      branch ? null,
       ...
     }:
     assert repository ? type;
@@ -48,10 +49,22 @@ let
           else if repository.type == "GitLab" then
             "${repository.server}/${repository.repo_path}.git"
           else
-            throw "Invalid JSON file";
+            throw "Unrecognized repository type ${repository.type}";
+        urlToName =
+          url: rev:
+          let
+            matched = builtins.match "^.*/([^/]*)(\\.git)?$" repository.url;
+
+            short = builtins.substring 0 7 rev;
+
+            appendShort = if (builtins.match "[a-f0-9]*" rev) != null then "-${short}" else "";
+          in
+          "${if matched == null then "source" else builtins.head matched}${appendShort}";
+        name = urlToName url revision;
       in
       builtins.fetchGit {
         rev = revision;
+        inherit name;
         # hash = hash;
         inherit url submodules;
       };

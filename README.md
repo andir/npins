@@ -223,7 +223,8 @@ FLAGS:
 OPTIONS:
     -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
                                 [default: npins]
-        --name <name>           Custom name for the pin entry
+        --name <name>           Add the pin with a custom name. If a pin with that name already exists, it willl be
+                                overwritten
 
 SUBCOMMANDS:
     channel    Track a Nix channel
@@ -247,6 +248,7 @@ USAGE:
 FLAGS:
     -h, --help            Prints help information
         --pre-releases    Also track pre-releases. Conflicts with the --branch option
+        --submodules      Also fetch submodules
 
 OPTIONS:
         --at <tag or rev>                    Use a specific commit/release instead of the latest. This may be a tag
