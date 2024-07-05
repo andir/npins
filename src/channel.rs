@@ -2,7 +2,9 @@
 //!
 //! This should be preferred over pinning the equivaleng `nixpkgs` git branch.
 
-use crate::*;
+use crate::{build_client, diff, nix, Updatable};
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Pin {
