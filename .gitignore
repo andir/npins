@@ -1,5 +1,6 @@
-/target
-.pre-commit-config.yaml
 .direnv
+.pre-commit-config.yaml
+readme
 /result
+/target
 /test
