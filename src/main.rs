@@ -56,7 +56,7 @@ pub trait Updatable:
 {
     /// Version information, produced by the [`update`](Self::update) method.
     ///
-    /// It should contain information that charactarizes a version, e.g. the release version.
+    /// It should contain information that characterizes a version, e.g. the release version.
     /// A user should be able to manually specify it, if they want to pin a specific version.
     /// Each version should map to the same set of hashes over time, and violations of this
     /// should only be caused by upstream errors.
@@ -78,25 +78,26 @@ pub trait Updatable:
 
 /// Create the `Pin` type
 ///
-/// We need a type to unify over all possible way to pin a dependency. Normally, this would be done with a trait
-/// and trait objects. However, designing such a trait to be object-safe turns out to be highly non-trivial.
-/// (We'd need the `serde_erase` crate for `Deserialize` alone). Since writing this as an enum is extremely repetitive,
-/// this macro does the work for you.
+/// We need a type to unify over all possible way to pin a dependency. Normally, this would be done
+/// with a trait and trait objects. However, designing such a trait to be object-safe turns out to
+/// be highly non-trivial.  (We'd need the `serde_erase` crate for `Deserialize` alone).
+/// Since writing this as an enum is extremely repetitive, this macro does the work for you.
 ///
-/// For each pin type, call it with `(Name, lower_name, human readable name, Type)`. `Name` will be the name of the enum variant,
-/// `lower_name` will be used for the constructor.
+/// For each pin type, call it with `(Name, lower_name, human readable name, Type)`.
+/// `Name` will be the name of the enum variant and `lower_name` will be used for the constructor.
 macro_rules! mkPin {
     ( $(( $name:ident, $lower_name:ident, $human_name:expr, $input_name:path )),* $(,)? ) => {
         /* The type declaration */
         /// Enum over all possible pin types
         ///
-        /// Every pin type has two parts, an `input` and an `output`. The input implements [`Updatable`], which
-        /// will generate output in its most up-to-date form.
+        /// Every pin type has two parts, an `input` and an `output`. The input implements
+        /// [`Updatable`], which will generate output in its most up-to-date form.
         #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
         #[serde(tag = "type")]
         pub enum Pin {
             $(
-                /* One variant per type. input and output are serialized to a common JSON dict using `flatten`. Output is optional. */
+                /* One variant per type. input and output are serialized to a common JSON dict
+                 * using `flatten`. Output is optional. */
                 $name {
                     #[serde(flatten)]
                     input: $input_name,
@@ -118,7 +119,8 @@ macro_rules! mkPin {
             async fn update(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, .. } => {
-                        /* Use very explicit syntax to force the correct types and get good compile errors */
+                        /* Use very explicit syntax to force the correct types and get good compile
+                         * errors */
                         let new_version = <$input_name as Updatable>::update(input, version.as_ref()).await?;
                         version.insert_diffed(new_version)
                     }),*
@@ -133,7 +135,8 @@ macro_rules! mkPin {
                     $(Self::$name { input, version, hashes } => {
                         let version = version.as_ref()
                             .ok_or_else(|| anyhow::format_err!("No version information available, call `update` first or manually set one"))?;
-                        /* Use very explicit syntax to force the correct types and get good compile errors */
+                        /* Use very explicit syntax to force the correct types and get good compile
+                        * errors */
                         let new_hashes = <$input_name as Updatable>::fetch(input, &version).await?;
                         hashes.insert_diffed(new_hashes)
                     }),*
@@ -177,7 +180,8 @@ macro_rules! mkPin {
             }
         }
 
-        // Each variant holds exactly one distinct type, so we can easily create convenient type wrappers that simply call the constructor
+        // Each variant holds exactly one distinct type, so we can easily create convenient type
+        // wrappers that simply call the constructor.
         $(
             impl From<$input_name> for Pin {
                 fn from(input: $input_name) -> Self {
@@ -207,9 +211,7 @@ mkPin! {
     (Channel, channel, "Nix channel", channel::Pin),
 }
 
-/// The main struct the CLI operates on
-///
-/// For serialization purposes, use the `NixPinsVersioned` wrapper instead.
+/// The main struct the CLI operates on. See `versions::from_value_versioned` for versioning.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct NixPins {
     pins: BTreeMap<String, Pin>,
