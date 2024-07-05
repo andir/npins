@@ -1,6 +1,6 @@
 //! Pin a PyPi package
 
-use crate::*;
+use crate::{diff, get_and_deserialize, GenericUrlHashes, GenericVersion, Updatable};
 use anyhow::{Context, Result};
 use lenient_version::Version;
 use serde::{Deserialize, Serialize};
