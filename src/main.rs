@@ -52,7 +52,7 @@ where
 /// - **The serialized dictionaries of all are disjoint** (unchecked invariant at the moment)
 #[async_trait::async_trait]
 pub trait Updatable:
-    Serialize + Deserialize<'static> + std::fmt::Debug + Clone + PartialEq + Eq + diff::Diff
+    Serialize + Deserialize<'static> + Clone + PartialEq + Eq + diff::Diff
 {
     /// Version information, produced by the [`update`](Self::update) method.
     ///
@@ -60,24 +60,12 @@ pub trait Updatable:
     /// A user should be able to manually specify it, if they want to pin a specific version.
     /// Each version should map to the same set of hashes over time, and violations of this
     /// should only be caused by upstream errors.
-    type Version: diff::Diff
-        + Serialize
-        + Deserialize<'static>
-        + std::fmt::Debug
-        + Clone
-        + PartialEq
-        + Eq;
+    type Version: diff::Diff + Serialize + Deserialize<'static> + Clone + PartialEq + Eq;
 
     /// The pinned hashes for a given version, produced by the [`fetch`](Self::fetch) method.
     ///
     /// It may contain multiple different hashes, or download URLs that go with them.
-    type Hashes: diff::Diff
-        + Serialize
-        + Deserialize<'static>
-        + std::fmt::Debug
-        + Clone
-        + PartialEq
-        + Eq;
+    type Hashes: diff::Diff + Serialize + Deserialize<'static> + Clone + PartialEq + Eq;
 
     /// Fetch the latest applicable commit data
     ///
