@@ -52,14 +52,7 @@ where
 /// - **The serialized dictionaries of all are disjoint** (unchecked invariant at the moment)
 #[async_trait::async_trait]
 pub trait Updatable:
-    Serialize
-    + Deserialize<'static>
-    + std::fmt::Debug
-    + Clone
-    + PartialEq
-    + Eq
-    + std::hash::Hash
-    + diff::Diff
+    Serialize + Deserialize<'static> + std::fmt::Debug + Clone + PartialEq + Eq + diff::Diff
 {
     /// Version information, produced by the [`update`](Self::update) method.
     ///
