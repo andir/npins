@@ -16,6 +16,10 @@ jobs:
         run: nix-build
       - name: Run pre-commit hooks
         run: nix-shell --run "pre-commit run --all"
+      - name: Test dev shell
+        # Simple check that the pins in the current repository are still working.
+        # Importantly, this will fail on any version mismatch, indicating that versions need to be upgraded.
+        run: nix-shell --run "npins show"
       - name: Run smoke test
         run: nix-shell --run "bash ./.github/workflows/smoke-test.sh"
       - name: Run integration tests
