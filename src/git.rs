@@ -7,7 +7,7 @@
 //! instance. This should be preferred over the generic Git API if possible. See [`Repository`]
 //! for more on this.
 
-use crate::*;
+use crate::{diff, git, nix, GenericVersion, Updatable};
 use anyhow::{Context, Result};
 use lenient_version::Version;
 use serde::{Deserialize, Serialize};

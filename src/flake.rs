@@ -1,6 +1,6 @@
 //! Convert+Import Nix flake lock files
 
-use crate::*;
+use crate::{git, Pin};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
