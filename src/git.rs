@@ -84,6 +84,11 @@ pub enum Repository {
         /// URL to the Git repository
         url: Url,
     },
+    Forgejo {
+        server: Url,
+        owner: String,
+        repo: String,
+    },
     GitHub {
         /// "owner/repo"
         owner: String,
@@ -111,6 +116,11 @@ impl Repository {
             Repository::GitHub { owner, repo } => {
                 format!("{}/{}/{}.git", get_github_url(), owner, repo).parse()?
             },
+            Repository::Forgejo {
+                server,
+                owner,
+                repo,
+            } => format!("{}/{}/{}.git", server, owner, repo).parse()?,
             Repository::GitLab {
                 repo_path,
                 server,
@@ -137,6 +147,20 @@ impl Repository {
                 format!(
                     "{github}/{owner}/{repo}/archive/{revision}.tar.gz",
                     github = get_github_url(),
+                    owner = owner,
+                    repo = repo,
+                    revision = revision,
+                )
+                .parse()?,
+            ),
+            Repository::Forgejo {
+                server,
+                owner,
+                repo,
+            } => Some(
+                format!(
+                    "{server}/{owner}/{repo}/archive/{revision}.tar.gz",
+                    server = server,
                     owner = owner,
                     repo = repo,
                     revision = revision,
@@ -179,6 +203,20 @@ impl Repository {
                 format!(
                     "{github_api}/repos/{owner}/{repo}/tarball/{tag}",
                     github_api = get_github_api_url(),
+                    owner = owner,
+                    repo = repo,
+                    tag = tag,
+                )
+                .parse()?,
+            ),
+            Repository::Forgejo {
+                server,
+                owner,
+                repo,
+            } => Some(
+                format!(
+                    "{server}/api/v1/repos/{owner}/{repo}/archive/{tag}.tar.gz",
+                    server = server,
                     owner = owner,
                     repo = repo,
                     tag = tag,
@@ -254,6 +292,24 @@ impl GitPin {
     ) -> Self {
         Self {
             repository: Repository::GitHub {
+                owner: owner.into(),
+                repo: repo.into(),
+            },
+            branch,
+            submodules,
+        }
+    }
+
+    pub fn forgejo(
+        server: Url,
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        branch: String,
+        submodules: bool,
+    ) -> Self {
+        Self {
+            repository: Repository::Forgejo {
+                server,
                 owner: owner.into(),
                 repo: repo.into(),
             },
@@ -403,6 +459,28 @@ impl GitReleasePin {
     ) -> Self {
         Self {
             repository: Repository::GitHub {
+                owner: owner.into(),
+                repo: repo.into(),
+            },
+            pre_releases,
+            version_upper_bound,
+            release_prefix,
+            submodules,
+        }
+    }
+
+    pub fn forgejo(
+        server: Url,
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        pre_releases: bool,
+        version_upper_bound: Option<String>,
+        release_prefix: Option<String>,
+        submodules: bool,
+    ) -> Self {
+        Self {
+            repository: Repository::Forgejo {
+                server,
                 owner: owner.into(),
                 repo: repo.into(),
             },

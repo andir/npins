@@ -141,6 +141,61 @@ impl GitHubAddOpts {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct ForgejoAddOpts {
+    pub server: String,
+    pub owner: String,
+    pub repository: String,
+
+    #[structopt(flatten)]
+    pub more: GenericGitAddOpts,
+}
+impl ForgejoAddOpts {
+    pub fn add(&self) -> Result<(String, Pin)> {
+        let server_url = match Url::parse(&self.server) {
+            Ok(url) => url,
+            Err(firsterror) => match Url::parse(&("https://".to_string() + self.server.as_str())) {
+                Ok(url) => url,
+                Err(_seconderror) => return Err(firsterror.into()),
+            },
+        };
+
+        Ok((
+            self.repository.clone(),
+            match &self.more.branch {
+                Some(branch) => {
+                    let pin = git::GitPin::forgejo(
+                        server_url,
+                        &self.owner,
+                        &self.repository,
+                        branch.clone(),
+                        self.more.submodules,
+                    );
+                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
+                        revision: at.clone(),
+                    });
+                    (pin, version).into()
+                },
+                None => {
+                    let pin = git::GitReleasePin::forgejo(
+                        server_url,
+                        &self.owner,
+                        &self.repository,
+                        self.more.pre_releases,
+                        self.more.version_upper_bound.clone(),
+                        self.more.release_prefix.clone(),
+                        self.more.submodules,
+                    );
+                    let version = self.more.at.as_ref().map(|at| GenericVersion {
+                        version: at.clone(),
+                    });
+                    (pin, version).into()
+                },
+            },
+        ))
+    }
+}
+
+#[derive(Debug, StructOpt)]
 pub struct GitLabAddOpts {
     /// Usually just `"owner" "repository"`, but GitLab allows arbitrary folder-like structures.
     #[structopt(required = true, min_values = 2)]
@@ -308,6 +363,9 @@ pub enum AddCommands {
     /// Track a GitHub repository
     #[structopt(name = "github")]
     GitHub(GitHubAddOpts),
+    /// Track a Forgejo repository
+    #[structopt(name = "forgejo")]
+    Forgejo(ForgejoAddOpts),
     /// Track a GitLab repository
     #[structopt(name = "gitlab")]
     GitLab(GitLabAddOpts),
@@ -338,6 +396,7 @@ impl AddOpts {
             AddCommands::Channel(c) => c.add()?,
             AddCommands::Git(g) => g.add()?,
             AddCommands::GitHub(gh) => gh.add()?,
+            AddCommands::Forgejo(fg) => fg.add()?,
             AddCommands::GitLab(gl) => gl.add()?,
             AddCommands::PyPi(p) => p.add()?,
         };
