@@ -159,7 +159,7 @@ impl Repository {
                 repo,
             } => Some(
                 format!(
-                    "{server}/{owner}/{repo}/archive/{revision}.tar.gz",
+                    "{server}{owner}/{repo}/archive/{revision}.tar.gz",
                     server = server,
                     owner = owner,
                     repo = repo,
@@ -215,7 +215,7 @@ impl Repository {
                 repo,
             } => Some(
                 format!(
-                    "{server}/api/v1/repos/{owner}/{repo}/archive/{tag}.tar.gz",
+                    "{server}api/v1/repos/{owner}/{repo}/archive/{tag}.tar.gz",
                     server = server,
                     owner = owner,
                     repo = repo,
