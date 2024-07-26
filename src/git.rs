@@ -1022,6 +1022,69 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_forgejo_update() -> Result<()> {
+        let pin = GitPin {
+            repository: Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".into(),
+                repo: "lix".into(),
+            },
+            branch: "release-2.90".into(),
+            submodules: false,
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            GitRevision {
+                revision: "4bbdb2f5564b9b42bcaf0e1eec28325300f31c72".into(),
+            }
+        );
+        assert_eq!(
+            pin.fetch(&version).await?,
+            OptionalUrlHashes {
+                url: Some("https://git.lix.systems/lix-project/lix/archive/4bbdb2f5564b9b42bcaf0e1eec28325300f31c72.tar.gz".parse().unwrap()),
+                hash: "03rygh7i9wzl6mhha6cv5q26iyzwy8l59d5cq4r6j5kpss9l1hn3".into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_forgejo_release_update() -> Result<()> {
+        let pin = GitReleasePin {
+            repository: Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".into(),
+                repo: "lix".into(),
+            },
+            pre_releases: false,
+            version_upper_bound: None,
+            release_prefix: None,
+            submodules: false,
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            GenericVersion {
+                version: "2.90.0".into(),
+            }
+        );
+        assert_eq!(
+            pin.fetch(&version).await?,
+            ReleasePinHashes {
+                revision: "2a4376be20d70feaa2b0e640c5041fb66ddc67ed".into(),
+                url: Some(
+                    "https://git.lix.systems/api/v1/repos/lix-project/lix/archive/2.90.0.tar.gz"
+                        .parse()
+                        .unwrap()
+                ),
+                hash: "1iyylsiv1n6mf6rbi4k4fm5nv24a940cwfz92gk9fx6axh2kxjbz".into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_gitlab_update() -> Result<()> {
         let pin = GitPin {
             repository: Repository::GitLab {
