@@ -228,6 +228,7 @@ OPTIONS:
 
 SUBCOMMANDS:
     channel    Track a Nix channel
+    forgejo    Track a Forgejo repository
     git        Track a git repository
     github     Track a GitHub repository
     gitlab     Track a GitLab repository
