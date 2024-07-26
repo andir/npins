@@ -132,6 +132,78 @@ let
         touch $out
       '';
 
+  mkForgejoTest =
+    {
+      name,
+      commands,
+      # Repositories to host. key = repo path, value = repo derivation
+      repositories,
+      # For simplicity, all fake releases will be added to all repositories,
+      # and both as "archive" (for refs) and as "tarball" (for releases)
+      apiTarballs ? [ ],
+    }:
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = with pkgs; [
+          npins
+          python3
+          netcat
+          nix
+          gitMinimal
+          jq
+        ];
+      }
+      ''
+        set -euo pipefail
+        export HOME=$TMPDIR
+        export NIX_STATE_DIR=$TMPDIR
+        export NIX_DATA_DIR=$TMPDIR
+        export NIX_STORE_DIR=$TMPDIR
+        export NIX_LOG_DIR=$TMPDIR
+        source ${prelude}
+
+        echo "Running test ${name}"
+        cd $(mktemp -d)
+
+        # Mock the repositories
+        ${lib.pipe repositories [
+          (lib.mapAttrsToList (
+            repoPath: gitRepo: ''
+              mkdir -p $(dirname ${repoPath})
+              ln -s ${gitRepo} "${repoPath}.git"
+
+              # Mock the releases
+              tarballPath="api/v1/repos/${repoPath}/archive"
+              mkdir -p $tarballPath
+              archivePath="${repoPath}/archive"
+              mkdir -p $archivePath
+              ${lib.concatMapStringsSep "\n" (path: ''
+                ln -s ${testTarball} $tarballPath/${path}.tar.gz
+                ln -s ${testTarball} $archivePath/${path}
+              '') apiTarballs}
+
+              chmod -R +rw $archivePath
+              chmod -R +rw $tarballPath
+              pwd
+              ls -la $tarballPath
+              # For each of the commits in the repo create the tarballs
+              git config --global --add safe.directory ${gitRepo}
+              echo $(git -C ${gitRepo} log --oneline --format="format:%H")
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX.tar.gz XX
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
+            ''
+          ))
+          (lib.concatStringsSep "\n")
+        ]}
+
+        python -m http.server 8000 &
+        timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+
+        ${commands}
+
+        touch $out
+      '';
+
   mkGithubTest =
     {
       name,
@@ -261,6 +333,75 @@ in
       eq "$(jq -r .pins.foo.version npins/sources.json)" "v0.2"
       eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."foo"} HEAD)"
       eq "$(jq -r .pins.foo.url npins/sources.json)" "null"
+    '';
+  };
+
+  # maybe test using forgejo? https://github.com/NixOS/nixpkgs/blob/master/nixos/tests/forgejo.nix
+  forgejoRelease = mkForgejoTest {
+    name = "forgejo-release";
+    repositories."foo/bar" = gitRepo;
+    apiTarballs = [ "v0.2" ];
+    commands = ''
+      npins init --bare
+      npins add forgejo http://localhost:8000 foo bar
+      nix-instantiate --eval npins -A bar.outPath
+
+      # Check version and url
+      eq "$(jq -r .pins.bar.version npins/sources.json)" "v0.2"
+      eq "$(jq -r .pins.bar.revision npins/sources.json)" "$(resolveGitCommit ${gitRepo} v0.2)"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/api/v1/repos/foo/bar/archive/v0.2.tar.gz"
+    '';
+  };
+
+  forgejoBranch = mkForgejoTest {
+    name = "forgejo-branch";
+    repositories."foo/bar" = gitRepo;
+    apiTarballs = [ "v0.2" ];
+    commands = ''
+      npins init --bare
+      npins add forgejo http://localhost:8000 foo bar --branch test-branch
+      nix-instantiate --eval npins -A bar.outPath
+
+      # Check version and url
+      eq "$(jq -r .pins.bar.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.bar.revision npins/sources.json)" "$(resolveGitCommit ${gitRepo} test-branch)"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/archive/$(resolveGitCommit ${gitRepo} test-branch).tar.gz"
+    '';
+  };
+
+  forgejoSubmodule = mkForgejoTest rec {
+    name = "forgejo-submodule";
+    apiTarballs = [ "cbbbea814edccc7bf23af61bd620647ed7c0a436" ];
+    repositories."owner/bar" = gitRepo;
+    repositories."owner/foo" = mkGitRepo {
+      name = "repo-with-submodules";
+      extraCommands = ''
+        git submodule init
+
+        # In order to be able to add the submodule, we need to fake host it
+        cd ..
+        ${pkgs.python3}/bin/python -m http.server 8000 &
+        timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        mkdir owner
+        ln -s ${repositories."owner/bar"} "owner/bar.git"
+        cd tmp
+
+        git submodule add "http://localhost:8000/owner/bar.git"
+      '';
+    };
+
+    commands = ''
+      npins init --bare
+      npins add forgejo http://localhost:8000 owner foo --branch main
+      npins add --name foo2 forgejo http://localhost:8000 owner foo --branch main --submodules
+
+      # Both have the same revision, but only foo has an URL
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo2.version npins/sources.json)" "null"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/owner/foo/archive/$(resolveGitCommit ${repositories."owner/foo"}).tar.gz"
+      eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
     '';
   };
 
