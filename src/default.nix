@@ -3,8 +3,39 @@ let
   data = builtins.fromJSON (builtins.readFile ./sources.json);
   version = data.version;
 
+  # https://github.com/NixOS/nixpkgs/blob/0258808f5744ca980b9a1f24fe0b1e6f0fecee9c/lib/lists.nix#L295
+  range =
+    first: last: if first > last then [ ] else builtins.genList (n: first + n) (last - first + 1);
+
+  # https://github.com/NixOS/nixpkgs/blob/0258808f5744ca980b9a1f24fe0b1e6f0fecee9c/lib/strings.nix#L257
+  stringToCharacters = s: map (p: builtins.substring p 1 s) (range 0 (builtins.stringLength s - 1));
+
+  # https://github.com/NixOS/nixpkgs/blob/0258808f5744ca980b9a1f24fe0b1e6f0fecee9c/lib/strings.nix#L269
+  stringAsChars = f: s: concatStrings (map f (stringToCharacters s));
+  concatMapStrings = f: list: concatStrings (map f list);
+  concatStrings = builtins.concatStringsSep "";
+
+  # If the environment variable NPINS_OVERRIDE_${name} is set, then use
+  # the path directly as opposed to the fetched source.
+  # (Taken from Niv for compatibility)
+  mayOverride =
+    name: path:
+    let
+      saneName = stringAsChars (c: if (builtins.match "[a-zA-Z0-9]" c) == null then "_" else c) name;
+      ersatz = builtins.getEnv "NPINS_OVERRIDE_${saneName}";
+    in
+    if ersatz == "" then
+      path
+    else
+    # this turns the string into an actual Nix path (for both absolute and
+    # relative paths)
+    if builtins.substring 0 1 ersatz == "/" then
+      /. + ersatz
+    else
+      /. + builtins.getEnv "PWD" + "/${ersatz}";
+
   mkSource =
-    spec:
+    name: spec:
     assert spec ? type;
     let
       path =
@@ -19,7 +50,7 @@ let
         else
           builtins.throw "Unknown source type ${spec.type}";
     in
-    spec // { outPath = path; };
+    spec // { outPath = mayOverride name path; };
 
   mkGitSource =
     {
@@ -84,6 +115,6 @@ let
     };
 in
 if version == 4 then
-  builtins.mapAttrs (_: mkSource) data.pins
+  builtins.mapAttrs mkSource data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"
