@@ -160,10 +160,6 @@ impl Repository {
             } => Some(
                 format!(
                     "{server}{owner}/{repo}/archive/{revision}.tar.gz",
-                    server = server,
-                    owner = owner,
-                    repo = repo,
-                    revision = revision,
                 )
                 .parse()?,
             ),
@@ -216,10 +212,6 @@ impl Repository {
             } => Some(
                 format!(
                     "{server}api/v1/repos/{owner}/{repo}/archive/{tag}.tar.gz",
-                    server = server,
-                    owner = owner,
-                    repo = repo,
-                    tag = tag,
                 )
                 .parse()?,
             ),
