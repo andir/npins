@@ -376,6 +376,15 @@ Parameter example:
 $ npins add gitlab my-org my-private-repo --token H_BRqzV3NcaPvXcYs2Xf
 ```
 
+### Using local sources during development
+
+While npins allows you to pin dependencies in reproducible fashion, it is often desirable to allow fast impure iterations during development.
+Npins supports local overrides for this.
+If your `sources.json` contains a source named `abc`, you can e.g. develop from `/abc` by exposing the environment variable `NPINS_OVERRIDE_abc=/abc`.
+Please note, that only alphanumerical characters and _ are allow characters in overriden sources.
+All other characters are converted to _.
+Also check, that you are building impure, if you are wondering, why these overrides are maybe not becoming active.
+
 ## Contributing
 
 Contributions to this project are welcome in the form of GitHub Issues or PRs. Please consider the following before creating PRs:
