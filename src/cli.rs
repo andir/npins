@@ -7,7 +7,7 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use structopt::StructOpt;
 
-use url::Url;
+use url::{ParseError, Url};
 
 const DEFAULT_NIX: &'static str = include_str!("default.nix");
 
@@ -151,11 +151,12 @@ pub struct ForgejoAddOpts {
 }
 impl ForgejoAddOpts {
     pub fn add(&self) -> Result<(String, Pin)> {
-        let server_url = Url::parse(&self.server)
-            .or_else(|err|
-                Url::parse(&("https://".to_string() + self.server.as_str())
-                    .map_err(|_| err)
-            )
+        let server_url = Url::parse(&self.server).or_else(|err| match err {
+            ParseError::RelativeUrlWithoutBase => {
+                Url::parse(&("https://".to_string() + self.server.as_str()))
+            },
+            _ => Err(err),
+        })?;
 
         Ok((
             self.repository.clone(),

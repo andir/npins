@@ -7,6 +7,12 @@
 let
   # utility bash functions used throught the tests
   prelude = pkgs.writeShellScript "prelude" ''
+    export HOME=$TMPDIR
+    export NIX_STATE_DIR=$TMPDIR
+    export NIX_DATA_DIR=$TMPDIR
+    export NIX_STORE_DIR=$TMPDIR
+    export NIX_LOG_DIR=$TMPDIR
+
     function eq() {
       local a=$1
       local b=$2
@@ -98,11 +104,6 @@ let
       }
       ''
         set -euo pipefail
-        export HOME=$TMPDIR
-        export NIX_STATE_DIR=$TMPDIR
-        export NIX_DATA_DIR=$TMPDIR
-        export NIX_STORE_DIR=$TMPDIR
-        export NIX_LOG_DIR=$TMPDIR
         source ${prelude}
 
         echo -e "\n\nRunning test ${name}\n"
@@ -155,11 +156,6 @@ let
       }
       ''
         set -euo pipefail
-        export HOME=$TMPDIR
-        export NIX_STATE_DIR=$TMPDIR
-        export NIX_DATA_DIR=$TMPDIR
-        export NIX_STORE_DIR=$TMPDIR
-        export NIX_LOG_DIR=$TMPDIR
         source ${prelude}
 
         echo "Running test ${name}"
@@ -227,11 +223,6 @@ let
       }
       ''
         set -euo pipefail
-        export HOME=$TMPDIR
-        export NIX_STATE_DIR=$TMPDIR
-        export NIX_DATA_DIR=$TMPDIR
-        export NIX_STORE_DIR=$TMPDIR
-        export NIX_LOG_DIR=$TMPDIR
         export NPINS_GITHUB_HOST=http://localhost:8000
         export NPINS_GITHUB_API_HOST=http://localhost:8000/api
         source ${prelude}
