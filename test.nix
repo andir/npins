@@ -20,6 +20,13 @@ let
       if [[ "$a" = "$b" ]]; then echo " OK"; else echo " FAIL"; exit 1; fi
     }
 
+    function neq() {
+      local a=$1
+      local b=$2
+      printf '[[ "%s" != "%s" ]]' "$a" "$b"
+      if [[ "$a" != "$b" ]]; then echo " OK"; else echo " FAIL"; exit 1; fi
+    }
+
     function resolveGitCommit() {
       local repo=$1
       local commitish=''${2:-main}
@@ -28,7 +35,8 @@ let
   '';
 
   inherit (pkgs) lib;
-  # Generate a git repository hat can be served via HTTP.
+
+  # Generate a git repository that can be served via HTTP.
   #
   # By default the repository will contain an empty `test.txt`
   # file. For all defined tags the name of the tag is written to that
@@ -555,4 +563,20 @@ in
           '';
         };
     };
+
+  gitDependencyOverride = mkGitTest rec {
+    name = "git-dependency-override";
+    repositories."foo" = gitRepo;
+    commands = ''
+      npins init --bare
+      npins add git http://localhost:8000/foo -b test-branch
+      npins show
+
+      OUTPATH=$(NPINS_OVERRIDE_foo=/foo_overriden nix-instantiate --eval npins -A foo.outPath --impure)
+      eq "$OUTPATH" "/foo_overriden"
+
+      OUTPATH=$(nix-instantiate --eval npins -A foo.outPath)
+      neq "$OUTPATH" "/foo_overriden"
+    '';
+  };
 }
