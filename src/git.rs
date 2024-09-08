@@ -1042,7 +1042,7 @@ mod test {
                 repo: "lix".into(),
             },
             pre_releases: false,
-            version_upper_bound: None,
+            version_upper_bound: Some("2.90.1".to_string()),
             release_prefix: None,
             submodules: false,
         };
