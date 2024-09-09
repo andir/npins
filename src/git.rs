@@ -84,6 +84,11 @@ pub enum Repository {
         /// URL to the Git repository
         url: Url,
     },
+    Forgejo {
+        server: Url,
+        owner: String,
+        repo: String,
+    },
     GitHub {
         /// "owner/repo"
         owner: String,
@@ -111,6 +116,11 @@ impl Repository {
             Repository::GitHub { owner, repo } => {
                 format!("{}/{}/{}.git", get_github_url(), owner, repo).parse()?
             },
+            Repository::Forgejo {
+                server,
+                owner,
+                repo,
+            } => format!("{}/{}/{}.git", server, owner, repo).parse()?,
             Repository::GitLab {
                 repo_path,
                 server,
@@ -143,6 +153,11 @@ impl Repository {
                 )
                 .parse()?,
             ),
+            Repository::Forgejo {
+                server,
+                owner,
+                repo,
+            } => Some(format!("{server}{owner}/{repo}/archive/{revision}.tar.gz",).parse()?),
             Repository::GitLab {
                 repo_path,
                 server,
@@ -185,6 +200,13 @@ impl Repository {
                 )
                 .parse()?,
             ),
+            Repository::Forgejo {
+                server,
+                owner,
+                repo,
+            } => {
+                Some(format!("{server}api/v1/repos/{owner}/{repo}/archive/{tag}.tar.gz",).parse()?)
+            },
             Repository::GitLab {
                 repo_path,
                 server,
@@ -254,6 +276,24 @@ impl GitPin {
     ) -> Self {
         Self {
             repository: Repository::GitHub {
+                owner: owner.into(),
+                repo: repo.into(),
+            },
+            branch,
+            submodules,
+        }
+    }
+
+    pub fn forgejo(
+        server: Url,
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        branch: String,
+        submodules: bool,
+    ) -> Self {
+        Self {
+            repository: Repository::Forgejo {
+                server,
                 owner: owner.into(),
                 repo: repo.into(),
             },
@@ -403,6 +443,28 @@ impl GitReleasePin {
     ) -> Self {
         Self {
             repository: Repository::GitHub {
+                owner: owner.into(),
+                repo: repo.into(),
+            },
+            pre_releases,
+            version_upper_bound,
+            release_prefix,
+            submodules,
+        }
+    }
+
+    pub fn forgejo(
+        server: Url,
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        pre_releases: bool,
+        version_upper_bound: Option<String>,
+        release_prefix: Option<String>,
+        submodules: bool,
+    ) -> Self {
+        Self {
+            repository: Repository::Forgejo {
+                server,
                 owner: owner.into(),
                 repo: repo.into(),
             },
@@ -938,6 +1000,69 @@ mod test {
                         .unwrap()
                 ),
                 hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_forgejo_update() -> Result<()> {
+        let pin = GitPin {
+            repository: Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".into(),
+                repo: "lix".into(),
+            },
+            branch: "release-2.90".into(),
+            submodules: false,
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            GitRevision {
+                revision: "4bbdb2f5564b9b42bcaf0e1eec28325300f31c72".into(),
+            }
+        );
+        assert_eq!(
+            pin.fetch(&version).await?,
+            OptionalUrlHashes {
+                url: Some("https://git.lix.systems/lix-project/lix/archive/4bbdb2f5564b9b42bcaf0e1eec28325300f31c72.tar.gz".parse().unwrap()),
+                hash: "03rygh7i9wzl6mhha6cv5q26iyzwy8l59d5cq4r6j5kpss9l1hn3".into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_forgejo_release_update() -> Result<()> {
+        let pin = GitReleasePin {
+            repository: Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".into(),
+                repo: "lix".into(),
+            },
+            pre_releases: false,
+            version_upper_bound: Some("2.90.1".to_string()),
+            release_prefix: None,
+            submodules: false,
+        };
+        let version = pin.update(None).await?;
+        assert_eq!(
+            version,
+            GenericVersion {
+                version: "2.90.0".into(),
+            }
+        );
+        assert_eq!(
+            pin.fetch(&version).await?,
+            ReleasePinHashes {
+                revision: "2a4376be20d70feaa2b0e640c5041fb66ddc67ed".into(),
+                url: Some(
+                    "https://git.lix.systems/api/v1/repos/lix-project/lix/archive/2.90.0.tar.gz"
+                        .parse()
+                        .unwrap()
+                ),
+                hash: "1iyylsiv1n6mf6rbi4k4fm5nv24a940cwfz92gk9fx6axh2kxjbz".into(),
             }
         );
         Ok(())
