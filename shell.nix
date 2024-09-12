@@ -42,6 +42,7 @@ pkgs.mkShell {
     with pkgs;
     [
       cargo
+      cargo-expand
       clippy
       rustc
       rust-analyzer
