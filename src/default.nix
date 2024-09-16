@@ -21,18 +21,21 @@ let
   mayOverride =
     name: path:
     let
+      envVarName = "NPINS_OVERRIDE_${saneName}";
       saneName = stringAsChars (c: if (builtins.match "[a-zA-Z0-9]" c) == null then "_" else c) name;
-      ersatz = builtins.getEnv "NPINS_OVERRIDE_${saneName}";
+      ersatz = builtins.getEnv envVarName;
     in
     if ersatz == "" then
       path
     else
-    # this turns the string into an actual Nix path (for both absolute and
-    # relative paths)
-    if builtins.substring 0 1 ersatz == "/" then
-      /. + ersatz
-    else
-      /. + builtins.getEnv "PWD" + "/${ersatz}";
+      # this turns the string into an actual Nix path (for both absolute and
+      # relative paths)
+      builtins.trace "Overriding path of \"${name}\" with \"${ersatz}\" due to set \"${envVarName}\"" (
+        if builtins.substring 0 1 ersatz == "/" then
+          /. + ersatz
+        else
+          /. + builtins.getEnv "PWD" + "/${ersatz}"
+      );
 
   mkSource =
     name: spec:
