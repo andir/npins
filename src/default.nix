@@ -87,7 +87,7 @@ let
         urlToName =
           url: rev:
           let
-            matched = builtins.match "^.*/([^/]*)(\\.git)?$" repository.url;
+            matched = builtins.match "^.*/([^/]*)(\\.git)?$" url;
 
             short = builtins.substring 0 7 rev;
 

@@ -473,6 +473,46 @@ in
     '';
   };
 
+  githubSubmoduleFromRelease = mkGithubTest rec {
+    name = "github-submodule-from-release";
+    apiTarballs = [ "v0.5" ];
+    repositories."owner/bar" = gitRepo;
+    repositories."owner/foo" = mkGitRepo {
+      name = "repo-with-submodules";
+      tags = [ "v0.5" ];
+      extraCommands = ''
+        git submodule init
+
+        # In order to be able to add the submodule, we need to fake host it
+        cd ..
+        ${pkgs.python3}/bin/python -m http.server 8000 &
+        timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+        mkdir owner
+        ln -s ${repositories."owner/bar"} "owner/bar.git"
+        cd tmp
+
+        git submodule add "http://localhost:8000/owner/bar.git"
+      '';
+    };
+
+    commands = ''
+      npins init --bare
+      npins add github owner foo
+      npins add --name foo2 github owner foo --submodules
+
+      cat npins/sources.json
+
+      # Both have the same revision, but only foo has an URL
+      eq "$(jq -r .pins.foo.version npins/sources.json)" "v0.5"
+      eq "$(jq -r .pins.foo2.version npins/sources.json)" "v0.5"
+      eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/api/repos/owner/foo/tarball/v0.5"
+      # release pins with submodules don't have a URL
+      eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
+    '';
+  };
+
   githubSubmodule = mkGithubTest rec {
     name = "github-submodule";
     apiTarballs = [ "cbbbea814edccc7bf23af61bd620647ed7c0a436" ];
