@@ -547,6 +547,7 @@ impl Opts {
         let fh = std::fs::File::create(&path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
         serde_json::to_writer_pretty(fh, &versions::to_value_versioned(pins))?;
+        fh.write_all(b"\n")?;
         Ok(())
     }
 
