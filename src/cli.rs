@@ -2,11 +2,15 @@
 
 use super::*;
 
-use std::io::Write;
+use std::{
+    io::{stdout, Write},
+    mem,
+};
 
 use anyhow::{Context, Result};
 use structopt::StructOpt;
 
+use tokio::task::JoinSet;
 use url::{ParseError, Url};
 
 const DEFAULT_NIX: &'static str = include_str!("default.nix");
@@ -490,14 +494,15 @@ pub enum Command {
     ImportFlake(ImportFlakeOpts),
 }
 
-fn print_diff(diff: impl AsRef<[diff::DiffEntry]>) {
+fn print_diff(name: &str, diff: impl AsRef<[diff::DiffEntry]>) {
     let diff = diff.as_ref();
     if diff.is_empty() {
-        println!("(no changes)");
+        println!("`{name}` No Changes");
     } else {
-        println!("Changes:");
+        let mut stdout_lock = stdout().lock();
+        writeln!(stdout_lock, "`{name}` Changes:").unwrap();
         for d in diff {
-            print!("{}", d);
+            write!(stdout_lock, "{}", d).unwrap();
         }
     }
 }
@@ -578,7 +583,7 @@ impl Opts {
         } else {
             log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
             let mut pin = NixPins::new_with_nixpkgs();
-            self.update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
+            Self::update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
                 .await
                 .context("Failed to fetch initial nixpkgs entry")?;
             pin
@@ -611,7 +616,7 @@ impl Opts {
         } else {
             UpdateStrategy::Full
         };
-        self.update_one(&mut pin, strategy)
+        Self::update_one(&mut pin, strategy)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name.clone(), pin.clone());
@@ -623,11 +628,7 @@ impl Opts {
         Ok(())
     }
 
-    async fn update_one(
-        &self,
-        pin: &mut Pin,
-        strategy: UpdateStrategy,
-    ) -> Result<Vec<diff::DiffEntry>> {
+    async fn update_one(pin: &mut Pin, strategy: UpdateStrategy) -> Result<Vec<diff::DiffEntry>> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
             pin.update().await?
@@ -656,21 +657,35 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
+        let mut processing_pins: JoinSet<Result<(String, Pin)>> = JoinSet::new();
+
         if opts.names.is_empty() {
-            for (name, pin) in pins.pins.iter_mut() {
-                log::info!("Updating '{}' …", name);
-                print_diff(self.update_one(pin, strategy).await?);
+            log::info!("Updating all pins");
+
+            for (name, mut pin) in mem::take(&mut pins.pins).into_iter() {
+                processing_pins.spawn(async move {
+                    print_diff(&name, Self::update_one(&mut pin, strategy).await?);
+                    Ok((name, pin))
+                });
             }
         } else {
+            log::info!("Updating {:?}", opts.names);
+
             for name in &opts.names {
-                match pins.pins.get_mut(name) {
+                match pins.pins.remove_entry(name) {
                     None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
-                    Some(pin) => {
-                        log::info!("Updating '{}' …", name);
-                        print_diff(self.update_one(pin, strategy).await?);
+                    Some((name, mut pin)) => {
+                        processing_pins.spawn(async move {
+                            print_diff(&name, Self::update_one(&mut pin, strategy).await?);
+                            Ok((name, pin))
+                        });
                     },
                 }
             }
+        }
+
+        while let Some((name, pin)) = processing_pins.join_next().await.transpose()?.transpose()? {
+            pins.pins.insert(name, pin);
         }
 
         if !opts.dry_run {
