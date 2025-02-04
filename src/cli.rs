@@ -8,9 +8,13 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use futures::{
+    stream::{self, FuturesUnordered, StreamExt},
+    Stream,
+};
 use structopt::StructOpt;
 
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinHandle};
 use url::{ParseError, Url};
 
 const DEFAULT_NIX: &'static str = include_str!("default.nix");
@@ -437,6 +441,9 @@ pub struct UpdateOpts {
     /// Print the diff, but don't write back the changes
     #[structopt(short = "n", long, global = true)]
     pub dry_run: bool,
+    /// Amount of concurrent updates that will be done at once
+    #[structopt(long)]
+    pub conc_count: Option<usize>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -657,35 +664,52 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        let mut processing_pins: JoinSet<Result<(String, Pin)>> = JoinSet::new();
-
-        if opts.names.is_empty() {
+        let targets = if opts.names.is_empty() {
             log::info!("Updating all pins");
 
-            for (name, mut pin) in mem::take(&mut pins.pins).into_iter() {
-                processing_pins.spawn(async move {
-                    print_diff(&name, Self::update_one(&mut pin, strategy).await?);
-                    Ok((name, pin))
-                });
-            }
+            mem::take(&mut pins.pins)
         } else {
             log::info!("Updating {:?}", opts.names);
 
-            for name in &opts.names {
-                match pins.pins.remove_entry(name) {
-                    None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
-                    Some((name, mut pin)) => {
-                        processing_pins.spawn(async move {
-                            print_diff(&name, Self::update_one(&mut pin, strategy).await?);
-                            Ok((name, pin))
-                        });
-                    },
-                }
-            }
+            opts.names
+                .iter()
+                .map(|name| {
+                    pins.pins
+                        .remove_entry(name)
+                        .ok_or(anyhow::anyhow!("Could not find a pin for '{}'.", name))
+                })
+                .collect::<Result<_>>()?
+        };
+
+        let joinhandle_iter = targets.into_iter().map(|(name, mut pin)| {
+            tokio::spawn(async move {
+                print_diff(&name, Self::update_one(&mut pin, strategy).await?);
+                Ok((name, pin))
+            })
+        });
+
+        if let Some(count) = opts.conc_count {
+            collect_into_pins(
+                &mut pins,
+                stream::iter(joinhandle_iter).buffer_unordered(count),
+            )
+            .await?;
+        } else {
+            collect_into_pins(
+                &mut pins,
+                joinhandle_iter.collect::<FuturesUnordered<JoinHandle<Result<(String, Pin)>>>>(),
+            )
+            .await?;
         }
 
-        while let Some((name, pin)) = processing_pins.join_next().await.transpose()?.transpose()? {
-            pins.pins.insert(name, pin);
+        async fn collect_into_pins(
+            pins: &mut NixPins,
+            mut updated: impl Stream<Item = Result<Result<(String, Pin)>, JoinError>> + Unpin,
+        ) -> Result<(), anyhow::Error> {
+            while let Some((name, pin)) = updated.next().await.transpose()?.transpose()? {
+                pins.pins.insert(name, pin);
+            }
+            Ok(())
         }
 
         if !opts.dry_run {
