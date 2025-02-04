@@ -2,19 +2,15 @@
 
 use super::*;
 
-use std::{
-    io::{stdout, Write},
-    mem,
-};
+use std::io::{stdout, Write};
 
 use anyhow::{Context, Result};
 use futures::{
     stream::{self, FuturesUnordered, StreamExt},
-    Stream,
+    TryStreamExt,
 };
 use structopt::StructOpt;
 
-use tokio::task::{JoinError, JoinHandle};
 use url::{ParseError, Url};
 
 const DEFAULT_NIX: &'static str = include_str!("default.nix");
@@ -486,6 +482,7 @@ pub enum Command {
     Show,
 
     /// Updates all or the given pin to the latest version.
+    /// Duplicate or missing pins will be ignored.
     Update(UpdateOpts),
 
     /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
@@ -664,52 +661,25 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        let targets = if opts.names.is_empty() {
-            log::info!("Updating all pins");
-
-            mem::take(&mut pins.pins)
-        } else {
-            log::info!("Updating {:?}", opts.names);
-
-            opts.names
-                .iter()
-                .map(|name| {
-                    pins.pins
-                        .remove_entry(name)
-                        .ok_or(anyhow::anyhow!("Could not find a pin for '{}'.", name))
-                })
-                .collect::<Result<_>>()?
-        };
-
-        let joinhandle_iter = targets.into_iter().map(|(name, mut pin)| {
-            tokio::spawn(async move {
-                print_diff(&name, Self::update_one(&mut pin, strategy).await?);
-                Ok((name, pin))
-            })
-        });
+        let update_iter = pins
+            .pins
+            .iter_mut()
+            .filter(|(name, _)| opts.names.is_empty() || opts.names.contains(name))
+            .map(|(name, pin)| async move {
+                print_diff(name, Opts::update_one(pin, strategy).await?);
+                anyhow::Result::<_, anyhow::Error>::Ok(())
+            });
 
         if let Some(count) = opts.conc_count {
-            collect_into_pins(
-                &mut pins,
-                stream::iter(joinhandle_iter).buffer_unordered(count),
-            )
-            .await?;
+            stream::iter(update_iter)
+                .buffer_unordered(count)
+                .try_collect::<()>()
+                .await?;
         } else {
-            collect_into_pins(
-                &mut pins,
-                joinhandle_iter.collect::<FuturesUnordered<JoinHandle<Result<(String, Pin)>>>>(),
-            )
-            .await?;
-        }
-
-        async fn collect_into_pins(
-            pins: &mut NixPins,
-            mut updated: impl Stream<Item = Result<Result<(String, Pin)>, JoinError>> + Unpin,
-        ) -> Result<(), anyhow::Error> {
-            while let Some((name, pin)) = updated.next().await.transpose()?.transpose()? {
-                pins.pins.insert(name, pin);
-            }
-            Ok(())
+            update_iter
+                .collect::<FuturesUnordered<_>>()
+                .try_collect::<()>()
+                .await?;
         }
 
         if !opts.dry_run {

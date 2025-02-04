@@ -122,7 +122,7 @@ SUBCOMMANDS:
                     `default.nix` and never touch your sources.json
     remove          Removes one pin entry
     show            Lists the current pin entries
-    update          Updates all or the given pin to the latest version
+    update          Updates all or the given pin to the latest version. Duplicate or missing pins will be ignored
     upgrade         Upgrade the sources.json and default.nix to the latest format version. This may occasionally
                     break Nix evaluation!
 ```
@@ -314,7 +314,7 @@ You can decide to update only selected dependencies, or all at once. For some pi
 ```console
 $ npins help update
 npins-update 0.2.4
-Updates all or the given pin to the latest version
+Updates all or the given pin to the latest version. Duplicate or missing pins will be ignored
 
 USAGE:
     npins update [FLAGS] [OPTIONS] [names]...
