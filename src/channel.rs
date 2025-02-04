@@ -53,7 +53,7 @@ impl Updatable for Pin {
          * to https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f/nixexprs.tar.xz
          */
         let url = build_client()?
-            .get(&format!(
+            .head(&format!(
                 "https://channels.nixos.org/{}/nixexprs.tar.xz",
                 self.name
             ))
