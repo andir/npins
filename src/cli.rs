@@ -667,6 +667,7 @@ impl Opts {
             .iter_mut()
             .filter(|(name, _)| opts.names.is_empty() || opts.names.contains(name))
             .map(|(name, pin)| async move {
+                log::info!("Updating '{}' …", name);
                 print_diff(name, Self::update_one(pin, strategy).await?);
                 anyhow::Result::<_, anyhow::Error>::Ok(())
             });
