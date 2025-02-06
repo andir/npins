@@ -503,6 +503,7 @@ fn print_diff(name: &str, diff: impl AsRef<[diff::DiffEntry]>) {
     if diff.is_empty() {
         println!("`{name}` No Changes");
     } else {
+        // Lock the stream so that we can print the diff in multiple calls without interleaving prints from other threads
         let mut stdout_lock = stdout().lock();
         writeln!(stdout_lock, "`{name}` Changes:").unwrap();
         for d in diff {
