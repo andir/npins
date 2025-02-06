@@ -425,7 +425,8 @@ pub struct RemoveOpts {
 
 #[derive(Debug, StructOpt)]
 pub struct UpdateOpts {
-    /// Update only those pins
+    /// Update only these pins.
+    /// Duplicate or missing pins will be ignored.
     pub names: Vec<String>,
     /// Don't update versions, only re-fetch hashes
     #[structopt(short, long, conflicts_with = "full")]
@@ -482,7 +483,6 @@ pub enum Command {
     Show,
 
     /// Updates all or the given pin to the latest version.
-    /// Duplicate or missing pins will be ignored.
     Update(UpdateOpts),
 
     /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
