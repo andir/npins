@@ -6,7 +6,7 @@ use std::io::{stdout, Write};
 
 use anyhow::{Context, Result};
 use futures::{
-    stream::{self, FuturesUnordered, StreamExt},
+    stream::{self, StreamExt},
     TryStreamExt,
 };
 use structopt::StructOpt;
@@ -438,8 +438,8 @@ pub struct UpdateOpts {
     #[structopt(short = "n", long, global = true)]
     pub dry_run: bool,
     /// Amount of concurrent updates that will be done at once
-    #[structopt(long)]
-    pub conc_count: Option<usize>,
+    #[structopt(default_value = "5", long)]
+    pub conc_count: usize,
 }
 
 #[derive(Debug, StructOpt)]
@@ -666,21 +666,14 @@ impl Opts {
             .iter_mut()
             .filter(|(name, _)| opts.names.is_empty() || opts.names.contains(name))
             .map(|(name, pin)| async move {
-                print_diff(name, Opts::update_one(pin, strategy).await?);
+                print_diff(name, Self::update_one(pin, strategy).await?);
                 anyhow::Result::<_, anyhow::Error>::Ok(())
             });
 
-        if let Some(count) = opts.conc_count {
-            stream::iter(update_iter)
-                .buffer_unordered(count)
-                .try_collect::<()>()
-                .await?;
-        } else {
-            update_iter
-                .collect::<FuturesUnordered<_>>()
-                .try_collect::<()>()
-                .await?;
-        }
+        stream::iter(update_iter)
+            .buffer_unordered(opts.conc_count)
+            .try_collect::<()>()
+            .await?;
 
         if !opts.dry_run {
             self.write_pins(&pins)?;

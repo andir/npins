@@ -327,7 +327,7 @@ FLAGS:
     -p, --partial    Don't update versions, only re-fetch hashes
 
 OPTIONS:
-        --conc-count <conc-count>    Amount of concurrent updates that will be done at once
+        --conc-count <conc-count>    Amount of concurrent updates that will be done at once [default: 5]
     -d, --directory <folder>         Base folder for sources.json and the boilerplate default.nix [env:
                                      NPINS_DIRECTORY=]  [default: npins]
 
