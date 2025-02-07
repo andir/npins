@@ -691,6 +691,23 @@ pub async fn fetch_tags(repo: &Url) -> Result<Vec<RemoteInfo>> {
     Ok(remotes)
 }
 
+pub async fn fetch_default_branch(repo: &Url) -> Result<String> {
+    let remotes = fetch_remote(&["--symref", repo.as_str(), "HEAD"])
+        .await
+        .with_context(|| format!("Failed to resolve default branch for {}", repo))?;
+
+    let info = remotes
+        .iter()
+        .filter(|info| info.revision.starts_with("ref: refs/heads/") && info.ref_ == "HEAD")
+        .next()
+        .with_context(|| format!("Failed to resolve HEAD to a ref for {}", repo))?;
+
+    info.revision
+        .strip_prefix("ref: refs/heads/")
+        .map(|s| s.to_owned())
+        .with_context(|| format!("Failed to parse git ls-remote output for {}", repo))
+}
+
 #[cfg_attr(test, derive(PartialEq, Debug))]
 struct LatestRelease {
     /// The tag as used by git, e.g. release/2.0
