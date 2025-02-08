@@ -851,7 +851,8 @@ impl Opts {
             }
 
             let mut pin: Pin = pin
-                .try_into()
+                .try_to_pin()
+                .await
                 .context("Could not convert pin to npins format")?;
 
             pin.update().await?;

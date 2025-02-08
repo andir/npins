@@ -2,8 +2,8 @@
 
 use crate::*;
 use anyhow::{Context, Result};
+use git::fetch_default_branch;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use url::Url;
 
 /// Pin entry from a nix flake's lock file
@@ -60,60 +60,57 @@ impl FlakePin {
     }
 }
 
-impl TryFrom<FlakePin> for Pin {
-    type Error = anyhow::Error;
-
-    fn try_from(flake: FlakePin) -> Result<Self> {
+impl FlakePin {
+    pub async fn try_to_pin(self: FlakePin) -> Result<Pin, anyhow::Error> {
         use FlakeType::*;
 
         // "indirect" inputs (i.e. dependencies of flake dependencies) are
         // not supported for now
-        assert_ne!(flake.original.type_, "indirect");
+        assert_ne!(self.original.type_, "indirect");
 
-        Ok(match flake.locked.type_ {
-            Gitlab => git::GitPin::gitlab(
-                format!(
-                    "{}/{}",
-                    flake
-                        .locked
+        Ok(match self.locked.type_ {
+            Gitlab => {
+                // TODO: parsing the query string to retrieve servers other than
+                // gitlab.com is not supported for now, but could be added.
+                let branch = self.fetch_default_branch("https://gitlab.com").await?;
+                git::GitPin::gitlab(
+                    format!(
+                        "{}/{}",
+                        self.locked
+                            .owner
+                            .context("missing field owner in gitlab flake input")?,
+                        self.locked
+                            .repo
+                            .context("missing field repo in gitlab flake input")?
+                    ),
+                    branch,
+                    None,
+                    None,
+                    false,
+                )
+                .into()
+            },
+            Github => {
+                let branch = self.fetch_default_branch("https://github.com").await?;
+                git::GitPin::github(
+                    self.locked
                         .owner
-                        .context("missing field owner in gitlab flake input")?,
-                    flake
-                        .locked
+                        .context("missing owner field in github flake input")?,
+                    self.locked
                         .repo
-                        .context("missing field repo in gitlab flake input")?
-                ),
-                // I am not sure if there is any documentation on this format,
-                // but if no ref is present, it appears always `master` is meant
-                flake.original.ref_.unwrap_or_else(|| "master".to_owned()),
-                None,
-                None,
-                false,
-            )
-            .into(),
-            Github => git::GitPin::github(
-                flake
-                    .locked
-                    .owner
-                    .context("missing owner field in github flake input")?,
-                flake
-                    .locked
-                    .repo
-                    .context("missing field repo in github flake input")?,
-                flake.original.ref_.unwrap_or_else(|| "master".to_owned()),
-                false,
-            )
-            .into(),
+                        .context("missing field repo in github flake input")?,
+                    branch,
+                    false,
+                )
+                .into()
+            },
             Git => {
-                let mut ref_ = flake
-                    .locked
-                    .ref_
-                    .context("missing ref on git flake input")?;
+                let mut ref_ = self.locked.ref_.context("missing ref on git flake input")?;
                 if let Some(shortened) = ref_.strip_prefix("refs/heads/") {
                     ref_ = shortened.to_string();
                 }
                 git::GitPin::git(
-                    flake.locked.url.context("missing url on git flake input")?,
+                    self.locked.url.context("missing url on git flake input")?,
                     ref_,
                     false,
                 )
@@ -121,5 +118,20 @@ impl TryFrom<FlakePin> for Pin {
             },
             Path => anyhow::bail!("Path inputs are currently not supported by npins."),
         })
+    }
+
+    async fn fetch_default_branch(self: &FlakePin, prefix: &str) -> Result<String, anyhow::Error> {
+        match &self.original.ref_ {
+            Some(a) => Ok(a.to_owned()),
+            None => {
+                fetch_default_branch(&Url::parse(&format!(
+                    "{}/{}/{}",
+                    prefix,
+                    self.locked.owner.as_ref().unwrap(),
+                    self.locked.repo.as_ref().unwrap()
+                ))?)
+                .await
+            },
+        }
     }
 }
