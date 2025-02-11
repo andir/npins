@@ -327,11 +327,12 @@ FLAGS:
     -p, --partial    Don't update versions, only re-fetch hashes
 
 OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+        --conc-count <conc-count>    Amount of concurrent updates that will be done at once [default: 5]
+    -d, --directory <folder>         Base folder for sources.json and the boilerplate default.nix [env:
+                                     NPINS_DIRECTORY=]  [default: npins]
 
 ARGS:
-    <names>...    Update only those pins
+    <names>...    Update only these pins. Duplicate or missing pins will be ignored
 ```
 
 ### Upgrading the pins file
