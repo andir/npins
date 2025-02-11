@@ -2,10 +2,19 @@
 
 use super::*;
 
-use std::io::{stdout, Write};
+use std::{
+    io::{stdout, Write},
+    ops::Not,
+};
 
 use anyhow::{Context, Result};
+use crossterm::{
+    cursor,
+    style::{StyledContent, Stylize},
+    terminal,
+};
 use futures::{
+    future,
     stream::{self, StreamExt},
     TryStreamExt,
 };
@@ -654,6 +663,7 @@ impl Opts {
 
     async fn update(&self, opts: &UpdateOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
+        let length = pins.pins.len();
 
         let strategy = match (opts.partial, opts.full) {
             (false, false) => UpdateStrategy::Normal,
@@ -662,20 +672,57 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
+        for name in pins.pins.keys() {
+            if opts.names.is_empty() || opts.names.contains(name) {
+                println!("{}", name.as_str().grey());
+            } else {
+                println!("{}", name.as_str().dark_grey());
+            }
+        }
+
+        let pin_writer = |name: StyledContent<&str>, index: usize| {
+            let seek_distance = (length - index) as u16;
+            let mut lock = stdout().lock();
+            write!(
+                lock,
+                "{}{}{}{}",
+                cursor::MoveToPreviousLine(seek_distance),
+                terminal::Clear(terminal::ClearType::CurrentLine),
+                name,
+                cursor::MoveToNextLine(seek_distance)
+            )
+            .unwrap();
+            lock.flush().unwrap();
+        };
+
         let update_iter = pins
             .pins
             .iter_mut()
-            .filter(|(name, _)| opts.names.is_empty() || opts.names.contains(name))
-            .map(|(name, pin)| async move {
-                log::info!("Updating '{}' …", name);
-                print_diff(name, Self::update_one(pin, strategy).await?);
-                anyhow::Result::<_, anyhow::Error>::Ok(())
+            .enumerate()
+            .filter(|(_, (name, _))| opts.names.is_empty() || opts.names.contains(name))
+            .map(|(i, (name, pin))| async move {
+                pin_writer(name.as_str().yellow(), i);
+
+                let diff = Self::update_one(pin, strategy).await?;
+
+                let finished = if diff.is_empty() {
+                    name.as_str().dark_green()
+                } else {
+                    name.as_str().green().bold()
+                };
+
+                pin_writer(finished, i);
+
+                anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
         stream::iter(update_iter)
             .buffer_unordered(opts.conc_count)
-            .try_collect::<()>()
-            .await?;
+            .try_filter(|(_, diff)| future::ready(diff.is_empty().not()))
+            .try_collect::<Vec<_>>()
+            .await?
+            .into_iter()
+            .for_each(|(name, diff)| print_diff(name, diff));
 
         if !opts.dry_run {
             self.write_pins(&pins)?;
