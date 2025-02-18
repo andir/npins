@@ -9,8 +9,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use crossterm::{
-    cursor,
-    style::{StyledContent, Stylize},
+    cursor, execute,
+    style::{ContentStyle, Print, StyledContent, Stylize},
     terminal,
 };
 use futures::{
@@ -674,25 +674,21 @@ impl Opts {
 
         for name in pins.pins.keys() {
             if opts.names.is_empty() || opts.names.contains(name) {
-                println!("{}", name.as_str().grey());
+                println!("{} (queued)", name.as_str().grey());
             } else {
-                println!("{}", name.as_str().dark_grey());
+                println!("{} (ignored)", name.as_str().dark_grey());
             }
         }
 
-        let pin_writer = |name: StyledContent<&str>, index: usize| {
+        let pin_writer = |name: StyledContent<&str>, status: &str, index: usize| {
             let seek_distance = (length - index) as u16;
-            let mut lock = stdout().lock();
-            write!(
-                lock,
-                "{}{}{}{}",
+            execute!(
+                stdout(),
                 cursor::MoveToPreviousLine(seek_distance),
                 terminal::Clear(terminal::ClearType::CurrentLine),
-                name,
+                Print(format_args!("{name} ({status})")),
                 cursor::MoveToNextLine(seek_distance)
             )
-            .unwrap();
-            lock.flush().unwrap();
         };
 
         let update_iter = pins
@@ -701,17 +697,17 @@ impl Opts {
             .enumerate()
             .filter(|(_, (name, _))| opts.names.is_empty() || opts.names.contains(name))
             .map(|(i, (name, pin))| async move {
-                pin_writer(name.as_str().yellow(), i);
+                pin_writer(name.as_str().yellow(), "in progress", i)?;
 
                 let diff = Self::update_one(pin, strategy).await?;
 
-                let finished = if diff.is_empty() {
-                    name.as_str().dark_green()
+                let (style, status) = if diff.is_empty() {
+                    (ContentStyle::new().dark_green(), "unaltered")
                 } else {
-                    name.as_str().green().bold()
+                    (ContentStyle::new().green().bold(), "updated")
                 };
 
-                pin_writer(finished, i);
+                pin_writer(style.apply(name), status, i)?;
 
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
