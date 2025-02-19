@@ -3,7 +3,7 @@
 use super::*;
 
 use std::{
-    io::{stderr, stdout, Write},
+    io::{stderr, stdout, IsTerminal, Write},
     ops::Not,
 };
 
@@ -673,22 +673,35 @@ impl Opts {
         };
 
         for name in pins.pins.keys() {
-            if opts.names.is_empty() || opts.names.contains(name) {
-                eprintln!("{} (queued)", name.as_str().grey());
+            let (mut style, status) = if opts.names.is_empty() || opts.names.contains(name) {
+                (ContentStyle::new().grey(), "queued")
             } else {
-                eprintln!("{} (ignored)", name.as_str().dark_grey());
+                (ContentStyle::new().dark_grey(), "ignored")
+            };
+
+            if stderr().is_terminal().not() {
+                style = ContentStyle::new();
             }
+
+            eprintln!("{} ({status})", style.apply(name));
         }
 
-        let pin_writer = |name: StyledContent<&str>, status: &str, index: usize| {
-            let seek_distance = (length - index) as u16;
-            execute!(
-                stderr(),
-                cursor::MoveToPreviousLine(seek_distance),
-                terminal::Clear(terminal::ClearType::CurrentLine),
-                Print(format_args!("{name} ({status})")),
-                cursor::MoveToNextLine(seek_distance)
-            )
+        let pin_writer = |mut name: StyledContent<&str>, status: &str, index: usize| {
+            if stderr().is_terminal() {
+                let seek_distance = (length - index) as u16;
+
+                execute!(
+                    stderr(),
+                    cursor::MoveToPreviousLine(seek_distance),
+                    terminal::Clear(terminal::ClearType::CurrentLine),
+                    Print(format_args!("{name} ({status})")),
+                    cursor::MoveToNextLine(seek_distance)
+                )
+            } else {
+                *name.style_mut() = ContentStyle::new();
+                eprintln!("{name} ({status})");
+                Ok(())
+            }
         };
 
         let update_iter = pins
