@@ -3,7 +3,7 @@
 use super::*;
 
 use std::{
-    io::{stdout, Write},
+    io::{stderr, stdout, Write},
     ops::Not,
 };
 
@@ -674,16 +674,16 @@ impl Opts {
 
         for name in pins.pins.keys() {
             if opts.names.is_empty() || opts.names.contains(name) {
-                println!("{} (queued)", name.as_str().grey());
+                eprintln!("{} (queued)", name.as_str().grey());
             } else {
-                println!("{} (ignored)", name.as_str().dark_grey());
+                eprintln!("{} (ignored)", name.as_str().dark_grey());
             }
         }
 
         let pin_writer = |name: StyledContent<&str>, status: &str, index: usize| {
             let seek_distance = (length - index) as u16;
             execute!(
-                stdout(),
+                stderr(),
                 cursor::MoveToPreviousLine(seek_distance),
                 terminal::Clear(terminal::ClearType::CurrentLine),
                 Print(format_args!("{name} ({status})")),
