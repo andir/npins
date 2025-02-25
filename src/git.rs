@@ -617,6 +617,8 @@ impl RemoteInfo {
 /// Convenience wrapper around calling `git ls-remote`
 async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
     let process = Command::new("git")
+        // Disable any interactive login attempts, failing gracefully instead
+        .env("GIT_TERMINAL_PROMPT", "0")
         .arg("ls-remote")
         .args(args)
         .output()

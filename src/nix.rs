@@ -41,6 +41,8 @@ pub async fn nix_prefetch_git(
         output.arg("--fetch-submodules");
     }
     let output = output
+        // Disable any interactive login attempts, failing gracefully instead
+        .env("GIT_TERMINAL_PROMPT", "0")
         .arg(url)
         .arg(git_ref.as_ref())
         .output()
