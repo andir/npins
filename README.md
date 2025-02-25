@@ -206,7 +206,7 @@ Commands:
 
 Options:
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-      --name <NAME>         Add the pin with a custom name. If a pin with that name already exists, it willl be overwritten
+      --name <NAME>         Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
   -n, --dry-run             Don't actually apply the changes
   -h, --help                Print help
 ```
@@ -227,6 +227,8 @@ Options:
           Track a branch instead of a release
   -d, --directory <FOLDER>
           Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+      --name <NAME>
+          Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
       --at <tag or rev>
           Use a specific commit/release instead of the latest. This may be a tag name, or a git revision when --branch is set
       --pre-releases

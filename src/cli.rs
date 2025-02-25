@@ -393,8 +393,8 @@ pub enum AddCommands {
 #[derive(Debug, Parser)]
 pub struct AddOpts {
     /// Add the pin with a custom name.
-    /// If a pin with that name already exists, it willl be overwritten
-    #[arg(long)]
+    /// If a pin with that name already exists, it will be overwritten
+    #[arg(long, global = true)]
     pub name: Option<String>,
     /// Don't actually apply the changes
     #[arg(short = 'n', long)]
