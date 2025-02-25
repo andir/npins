@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use clap::Parser;
 use diff::{Diff, OptionExt};
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use structopt::StructOpt;
 
 pub mod channel;
 pub mod cli;
@@ -283,7 +283,7 @@ async fn main() -> Result<()> {
         .format_target(false)
         .init();
 
-    let opts = cli::Opts::from_args();
+    let opts = cli::Opts::parse();
     opts.run().await?;
     Ok(())
 }
