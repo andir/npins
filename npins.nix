@@ -66,6 +66,7 @@ let
     '';
 
     meta.tests = pkgs.callPackage ./test.nix { npins = self; };
+    meta.mainProgram = cargoToml.package.name;
   };
 in
 self
