@@ -327,9 +327,10 @@ FLAGS:
     -p, --partial    Don't update versions, only re-fetch hashes
 
 OPTIONS:
-        --conc-count <conc-count>    Amount of concurrent updates that will be done at once [default: 5]
-    -d, --directory <folder>         Base folder for sources.json and the boilerplate default.nix [env:
-                                     NPINS_DIRECTORY=]  [default: npins]
+    -d, --directory <folder>
+            Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]  [default: npins]
+
+        --max-concurrent-downloads <max-concurrent-downloads>    Maximum number of simultaneous downloads [default: 5]
 
 ARGS:
     <names>...    Update only these pins. Duplicate or missing pins will be ignored

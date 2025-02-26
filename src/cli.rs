@@ -447,9 +447,9 @@ pub struct UpdateOpts {
     /// Print the diff, but don't write back the changes
     #[structopt(short = "n", long, global = true)]
     pub dry_run: bool,
-    /// Amount of concurrent updates that will be done at once
+    /// Maximum number of simultaneous downloads
     #[structopt(default_value = "5", long)]
-    pub conc_count: usize,
+    pub max_concurrent_downloads: usize,
 }
 
 #[derive(Debug, StructOpt)]
@@ -726,7 +726,7 @@ impl Opts {
             });
 
         stream::iter(update_iter)
-            .buffer_unordered(opts.conc_count)
+            .buffer_unordered(opts.max_concurrent_downloads)
             .try_filter(|(_, diff)| future::ready(diff.is_empty().not()))
             .try_collect::<Vec<_>>()
             .await?
