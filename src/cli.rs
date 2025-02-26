@@ -3,6 +3,7 @@
 use super::*;
 
 use std::{
+    collections::BTreeSet,
     io::{stderr, stdout, IsTerminal, Write},
     ops::Not,
 };
@@ -434,8 +435,7 @@ pub struct RemoveOpts {
 
 #[derive(Debug, StructOpt)]
 pub struct UpdateOpts {
-    /// Update only these pins.
-    /// Duplicate or missing pins will be ignored.
+    /// Updates only the specified pins.
     pub names: Vec<String>,
     /// Don't update versions, only re-fetch hashes
     #[structopt(short, long, conflicts_with = "full")]
@@ -491,7 +491,7 @@ pub enum Command {
     /// Lists the current pin entries.
     Show,
 
-    /// Updates all or the given pin to the latest version.
+    /// Updates all or the given pins to the latest version.
     Update(UpdateOpts),
 
     /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
@@ -665,6 +665,20 @@ impl Opts {
         let mut pins = self.read_pins()?;
         let length = pins.pins.len();
 
+        let mut valid_names = BTreeSet::new();
+        for name in &opts.names {
+            if valid_names.insert(name).not() {
+                log::warn!("Duplicate pin provided: {name}")
+            }
+        }
+        valid_names.retain(|&name| {
+            let exists = pins.pins.contains_key(name);
+            if exists.not() {
+                log::warn!("Provided pin does not exist: {name}");
+            }
+            exists
+        });
+
         let strategy = match (opts.partial, opts.full) {
             (false, false) => UpdateStrategy::Normal,
             (false, true) => UpdateStrategy::Full,
@@ -673,7 +687,7 @@ impl Opts {
         };
 
         for name in pins.pins.keys() {
-            let (mut style, status) = if opts.names.is_empty() || opts.names.contains(name) {
+            let (mut style, status) = if opts.names.is_empty() || valid_names.contains(name) {
                 (ContentStyle::new().grey(), "queued")
             } else {
                 (ContentStyle::new().dark_grey(), "ignored")
@@ -708,7 +722,7 @@ impl Opts {
             .pins
             .iter_mut()
             .enumerate()
-            .filter(|(_, (name, _))| opts.names.is_empty() || opts.names.contains(name))
+            .filter(|(_, (name, _))| opts.names.is_empty() || valid_names.contains(name))
             .map(|(i, (name, pin))| async move {
                 pin_writer(name.as_str().yellow(), "in progress", i)?;
 
