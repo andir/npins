@@ -1,17 +1,5 @@
 {
   "pins": {
-    "nixfmt": {
-      "type": "Git",
-      "repository": {
-        "type": "GitHub",
-        "owner": "piegamesde",
-        "repo": "nixfmt"
-      },
-      "branch": "rfc101-style",
-      "revision": "8d13b593fa8d8d6e5075f541f3231222a08e84df",
-      "url": "https://github.com/piegamesde/nixfmt/archive/8d13b593fa8d8d6e5075f541f3231222a08e84df.tar.gz",
-      "hash": "1blpqs2ifw10xvfpfk77p1bq35gzgssng2m8wqw0kqydcz7fzm8y"
-    },
     "nixpkgs": {
       "type": "Git",
       "repository": {
