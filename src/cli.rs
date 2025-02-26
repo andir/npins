@@ -2,9 +2,23 @@
 
 use super::*;
 
-use std::io::Write;
+use std::{
+    collections::BTreeSet,
+    io::{stderr, stdout, IsTerminal, Write},
+    ops::Not,
+};
 
 use anyhow::{Context, Result};
+use crossterm::{
+    cursor, execute,
+    style::{ContentStyle, Print, StyledContent, Stylize},
+    terminal,
+};
+use futures::{
+    future,
+    stream::{self, StreamExt},
+    TryStreamExt,
+};
 use structopt::StructOpt;
 
 use url::{ParseError, Url};
@@ -421,7 +435,7 @@ pub struct RemoveOpts {
 
 #[derive(Debug, StructOpt)]
 pub struct UpdateOpts {
-    /// Update only those pins
+    /// Updates only the specified pins.
     pub names: Vec<String>,
     /// Don't update versions, only re-fetch hashes
     #[structopt(short, long, conflicts_with = "full")]
@@ -433,6 +447,9 @@ pub struct UpdateOpts {
     /// Print the diff, but don't write back the changes
     #[structopt(short = "n", long, global = true)]
     pub dry_run: bool,
+    /// Maximum number of simultaneous downloads
+    #[structopt(default_value = "5", long)]
+    pub max_concurrent_downloads: usize,
 }
 
 #[derive(Debug, StructOpt)]
@@ -474,7 +491,7 @@ pub enum Command {
     /// Lists the current pin entries.
     Show,
 
-    /// Updates all or the given pin to the latest version.
+    /// Updates all or the given pins to the latest version.
     Update(UpdateOpts),
 
     /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
@@ -490,14 +507,16 @@ pub enum Command {
     ImportFlake(ImportFlakeOpts),
 }
 
-fn print_diff(diff: impl AsRef<[diff::DiffEntry]>) {
+fn print_diff(name: &str, diff: impl AsRef<[diff::DiffEntry]>) {
     let diff = diff.as_ref();
     if diff.is_empty() {
-        println!("(no changes)");
+        println!("[{name}] No Changes");
     } else {
-        println!("Changes:");
+        // Lock the stream so that we can print the diff in multiple calls without interleaving prints from other threads
+        let mut stdout_lock = stdout().lock();
+        writeln!(stdout_lock, "[{name}] Changes:").unwrap();
         for d in diff {
-            print!("{}", d);
+            write!(stdout_lock, "{}", d).unwrap();
         }
     }
 }
@@ -578,7 +597,7 @@ impl Opts {
         } else {
             log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
             let mut pin = NixPins::new_with_nixpkgs();
-            self.update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
+            Self::update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
                 .await
                 .context("Failed to fetch initial nixpkgs entry")?;
             pin
@@ -611,7 +630,7 @@ impl Opts {
         } else {
             UpdateStrategy::Full
         };
-        self.update_one(&mut pin, strategy)
+        Self::update_one(&mut pin, strategy)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name.clone(), pin.clone());
@@ -623,11 +642,7 @@ impl Opts {
         Ok(())
     }
 
-    async fn update_one(
-        &self,
-        pin: &mut Pin,
-        strategy: UpdateStrategy,
-    ) -> Result<Vec<diff::DiffEntry>> {
+    async fn update_one(pin: &mut Pin, strategy: UpdateStrategy) -> Result<Vec<diff::DiffEntry>> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
             pin.update().await?
@@ -648,6 +663,21 @@ impl Opts {
 
     async fn update(&self, opts: &UpdateOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
+        let length = pins.pins.len();
+
+        let mut valid_names = BTreeSet::new();
+        for name in &opts.names {
+            if valid_names.insert(name).not() {
+                log::warn!("Duplicate pin provided: {name}")
+            }
+        }
+        valid_names.retain(|&name| {
+            let exists = pins.pins.contains_key(name);
+            if exists.not() {
+                log::warn!("Provided pin does not exist: {name}");
+            }
+            exists
+        });
 
         let strategy = match (opts.partial, opts.full) {
             (false, false) => UpdateStrategy::Normal,
@@ -656,22 +686,66 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        if opts.names.is_empty() {
-            for (name, pin) in pins.pins.iter_mut() {
-                log::info!("Updating '{}' …", name);
-                print_diff(self.update_one(pin, strategy).await?);
+        for name in pins.pins.keys() {
+            let (mut style, status) = if opts.names.is_empty() || valid_names.contains(name) {
+                (ContentStyle::new().grey(), "queued")
+            } else {
+                (ContentStyle::new().dark_grey(), "ignored")
+            };
+
+            if stderr().is_terminal().not() {
+                style = ContentStyle::new();
             }
-        } else {
-            for name in &opts.names {
-                match pins.pins.get_mut(name) {
-                    None => return Err(anyhow::anyhow!("Could not find a pin for '{}'.", name)),
-                    Some(pin) => {
-                        log::info!("Updating '{}' …", name);
-                        print_diff(self.update_one(pin, strategy).await?);
-                    },
-                }
-            }
+
+            eprintln!("{} ({status})", style.apply(name));
         }
+
+        let pin_writer = |mut name: StyledContent<&str>, status: &str, index: usize| {
+            if stderr().is_terminal() {
+                let seek_distance = (length - index) as u16;
+
+                execute!(
+                    stderr(),
+                    cursor::MoveToPreviousLine(seek_distance),
+                    terminal::Clear(terminal::ClearType::CurrentLine),
+                    Print(format_args!("{name} ({status})")),
+                    cursor::MoveToNextLine(seek_distance)
+                )
+            } else {
+                *name.style_mut() = ContentStyle::new();
+                eprintln!("{name} ({status})");
+                Ok(())
+            }
+        };
+
+        let update_iter = pins
+            .pins
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, (name, _))| opts.names.is_empty() || valid_names.contains(name))
+            .map(|(i, (name, pin))| async move {
+                pin_writer(name.as_str().yellow(), "in progress", i)?;
+
+                let diff = Self::update_one(pin, strategy).await?;
+
+                let (style, status) = if diff.is_empty() {
+                    (ContentStyle::new().dark_green(), "unaltered")
+                } else {
+                    (ContentStyle::new().green().bold(), "updated")
+                };
+
+                pin_writer(style.apply(name), status, i)?;
+
+                anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
+            });
+
+        stream::iter(update_iter)
+            .buffer_unordered(opts.max_concurrent_downloads)
+            .try_filter(|(_, diff)| future::ready(diff.is_empty().not()))
+            .try_collect::<Vec<_>>()
+            .await?
+            .into_iter()
+            .for_each(|(name, diff)| print_diff(name, diff));
 
         if !opts.dry_run {
             self.write_pins(&pins)?;
