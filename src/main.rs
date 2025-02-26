@@ -15,6 +15,7 @@ pub mod git;
 pub mod niv;
 pub mod nix;
 pub mod pypi;
+pub mod tarball;
 pub mod versions;
 
 /// Helper method to build you a client.
@@ -250,6 +251,7 @@ mkPin! {
     (GitRelease, git_release, "git release tag", git::GitReleasePin),
     (PyPi, pypi, "pypi package", pypi::Pin),
     (Channel, channel, "Nix channel", channel::Pin),
+    (Tarball, tarball, "tarball", tarball::TarballPin),
 }
 
 /// The main struct the CLI operates on
@@ -282,6 +284,17 @@ pub struct GenericVersion {
 impl diff::Diff for GenericVersion {
     fn properties(&self) -> Vec<(String, String)> {
         vec![("version".into(), self.version.clone())]
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct GenericHash {
+    pub hash: String,
+}
+
+impl diff::Diff for GenericHash {
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![("hash".into(), self.hash.clone())]
     }
 }
 

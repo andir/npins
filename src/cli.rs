@@ -62,9 +62,9 @@ pub struct ChannelAddOpts {
 }
 
 impl ChannelAddOpts {
-    pub fn add(&self) -> Result<(String, Pin)> {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
         Ok((
-            self.name.clone(),
+            Some(self.name.clone()),
             channel::Pin {
                 name: self.name.clone(),
             }
@@ -119,9 +119,9 @@ pub struct GitHubAddOpts {
 }
 
 impl GitHubAddOpts {
-    pub fn add(&self) -> Result<(String, Pin)> {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
         Ok((
-            self.repository.clone(),
+            Some(self.repository.clone()),
             match &self.more.branch {
                 Some(branch) => {
                     let pin = git::GitPin::github(
@@ -164,7 +164,7 @@ pub struct ForgejoAddOpts {
     pub more: GenericGitAddOpts,
 }
 impl ForgejoAddOpts {
-    pub fn add(&self) -> Result<(String, Pin)> {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
         let server_url = Url::parse(&self.server).or_else(|err| match err {
             ParseError::RelativeUrlWithoutBase => {
                 Url::parse(&("https://".to_string() + self.server.as_str()))
@@ -173,7 +173,7 @@ impl ForgejoAddOpts {
         })?;
 
         Ok((
-            self.repository.clone(),
+            Some(self.repository.clone()),
             match &self.more.branch {
                 Some(branch) => {
                     let pin = git::GitPin::forgejo(
@@ -234,14 +234,14 @@ pub struct GitLabAddOpts {
 }
 
 impl GitLabAddOpts {
-    pub fn add(&self) -> Result<(String, Pin)> {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
         Ok((
-            self.repo_path
+            Some(self.repo_path
                 .last()
                 .ok_or_else(|| anyhow::format_err!("GitLab repository path must at least have one element (usually two: owner, repo)"))?
-                .clone(),
+                .clone()),
             match &self.more.branch {
-                Some(branch) =>{
+                Some(branch) => {
                     let pin = git::GitPin::gitlab(
                         self.repo_path.join("/"),
                         branch.clone(),
@@ -249,11 +249,11 @@ impl GitLabAddOpts {
                         self.private_token.clone(),
                         self.more.submodules,
                     );
-                    let version = self.more.at.as_ref()
-                    .map(|at| git::GitRevision {
+                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
                         revision: at.clone(),
                     });
-                    (pin, version).into()},
+                    (pin, version).into()
+                },
                 None => {
                     let pin = git::GitReleasePin::gitlab(
                         self.repo_path.join("/"),
@@ -264,10 +264,9 @@ impl GitLabAddOpts {
                         self.more.release_prefix.clone(),
                         self.more.submodules,
                     );
-                    let version = self.more.at.as_ref()
-                        .map(|at| GenericVersion {
-                            version: at.clone(),
-                        });
+                    let version = self.more.at.as_ref().map(|at| GenericVersion {
+                        version: at.clone(),
+                    });
                     (pin, version).into()
                 },
             },
@@ -285,7 +284,7 @@ pub struct GitAddOpts {
 }
 
 impl GitAddOpts {
-    pub fn add(&self) -> Result<(String, Pin)> {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
         let url = Url::parse(&self.url)
             .map_err(|e| {
                 match e {
@@ -311,7 +310,7 @@ impl GitAddOpts {
         let name = name.strip_suffix(".git").unwrap_or(&name);
 
         Ok((
-            name.to_owned(),
+            Some(name.to_owned()),
             match &self.more.branch {
                 Some(branch) => {
                     let pin = git::GitPin::git(url, branch.clone(), self.more.submodules);
@@ -354,8 +353,8 @@ pub struct PyPiAddOpts {
 }
 
 impl PyPiAddOpts {
-    pub fn add(&self) -> Result<(String, Pin)> {
-        Ok((self.name.clone(), {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
+        Ok((Some(self.name.clone()), {
             let pin = pypi::Pin {
                 name: self.name.clone(),
                 version_upper_bound: self.version_upper_bound.clone(),
@@ -365,6 +364,19 @@ impl PyPiAddOpts {
             });
             (pin, version).into()
         }))
+    }
+}
+
+#[derive(Debug, Parser)]
+pub struct TarballAddOpts {
+    /// Tarball URL
+    pub url: Url,
+}
+
+impl TarballAddOpts {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
+        let url = self.url.clone();
+        Ok((None, tarball::TarballPin { url }.into()))
     }
 }
 
@@ -388,6 +400,12 @@ pub enum AddCommands {
     /// Track a package on PyPi
     #[command(name = "pypi")]
     PyPi(PyPiAddOpts),
+    /// Track a tarball
+    ///
+    /// This can be either a static URL that never changes its contents or a
+    /// URL which supports flakes "Lockable HTTP Tarball" API.
+    #[command(name = "tarball")]
+    Tarball(TarballAddOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -415,20 +433,21 @@ impl AddOpts {
             AddCommands::Forgejo(fg) => fg.add()?,
             AddCommands::GitLab(gl) => gl.add()?,
             AddCommands::PyPi(p) => p.add()?,
+            AddCommands::Tarball(p) => p.add()?,
         };
 
-        let name = if let Some(ref n) = self.name {
-            n.clone()
-        } else {
-            name
+        let name = match (&self.name, name) {
+            (Some(user_specified), _) => user_specified.clone(),
+            (None, Some(guess_from_pin)) => guess_from_pin,
+            (None, None) => {
+                anyhow::bail!(
+                    "Couldn't pick a Pin name automatically. Use --name to specify one manually"
+                )
+            },
         };
         if self.frozen {
             pin.freeze();
         }
-        anyhow::ensure!(
-            !name.is_empty(),
-            "Pin name cannot be empty. Use --name to specify one manually",
-        );
 
         Ok((name, pin))
     }

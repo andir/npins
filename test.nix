@@ -208,6 +208,69 @@ let
         touch $out
       '';
 
+  mkTarballTest =
+    {
+      name,
+      commands,
+      tarballs,
+      immutableLinks ? { },
+    }:
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = with pkgs; [
+          npins
+          python3
+          netcat
+          lix
+          jq
+        ];
+      }
+      ''
+        set -euo pipefail
+        source ${prelude}
+
+        echo -e "\n\nRunning test ${name}\n"
+        cd $(mktemp -d)
+
+        # Create tarballs
+        ${lib.pipe tarballs [
+          (builtins.map (path: ''
+            mkdir -p $(dirname ${path})
+            ln -s ${testTarball} ${path}.tar.gz
+          ''))
+          (lib.concatStringsSep "\n")
+        ]}
+
+        python ${pkgs.writeText "mock_server.py" ''
+          import http.server
+          import socketserver
+
+          PORT = 8000
+          LINK_MAP = {
+            ${
+              lib.pipe immutableLinks [
+                (lib.mapAttrsToList (path: flakeref: ''"${path}": "${flakeref}",''))
+                (lib.concatStringsSep "\n")
+              ]
+            }
+          }
+
+          class Handler(http.server.SimpleHTTPRequestHandler):
+              def end_headers(self):
+                  if self.path in LINK_MAP:
+                    self.send_header("Link", f'<{LINK_MAP[self.path]}>; rel="immutable"')
+                  super().end_headers()
+
+          with socketserver.TCPServer(("", PORT), Handler) as httpd:
+              httpd.serve_forever()
+        ''} &
+        timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+
+        ${commands}
+
+        touch $out
+      '';
+
   mkGithubTest =
     {
       name,
@@ -401,6 +464,52 @@ in
       eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
       eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/owner/foo/archive/$(resolveGitCommit ${repositories."owner/foo"}).tar.gz"
       eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
+    '';
+  };
+
+  tarballLockable = mkTarballTest {
+    name = "tarball-lockable";
+    tarballs = [
+      "foo/bar/baz"
+      "locked/baz"
+    ];
+    immutableLinks = {
+      "/foo/bar/baz.tar.gz" = "http://localhost:8000/locked/baz.tar.gz";
+    };
+    commands = ''
+      npins init --bare
+      npins add tarball --name bar http://localhost:8000/foo/bar/baz.tar.gz
+      nix-instantiate --eval npins -A bar.outPath
+
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
+      eq "$(jq -r .pins.bar.locked_url npins/sources.json)" "http://localhost:8000/locked/baz.tar.gz"
+
+      # make sure update is idempotent
+      npins update bar
+
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
+      eq "$(jq -r .pins.bar.locked_url npins/sources.json)" "http://localhost:8000/locked/baz.tar.gz"
+    '';
+  };
+
+  tarballNotLockable = mkTarballTest {
+    name = "tarball-not-lockable";
+    tarballs = [ "foo/bar/baz" ];
+    commands = ''
+      npins init --bare
+      npins add tarball --name bar http://localhost:8000/foo/bar/baz.tar.gz
+      nix-instantiate --eval npins -A bar.outPath
+      jq .pins.bar npins/sources.json
+
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
+      eq "$(jq -r .pins.bar.locked_url npins/sources.json)" "null"
+
+      # make sure update is idempotent
+      npins update bar
+      jq .pins.bar npins/sources.json
+
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
+      eq "$(jq -r .pins.bar.locked_url npins/sources.json)" "null"
     '';
   };
 
