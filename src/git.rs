@@ -616,6 +616,7 @@ impl RemoteInfo {
 
 /// Convenience wrapper around calling `git ls-remote`
 async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
+    log::debug!("Executing `git ls-remote {}`", args.join(" "));
     let process = Command::new("git")
         // Disable any interactive login attempts, failing gracefully instead
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -638,6 +639,10 @@ async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
                 .unwrap_or_else(|| "None".into())
         );
     }
+    log::debug!("git ls-remote stdout:");
+    String::from_utf8_lossy(&process.stdout)
+        .split('\n')
+        .for_each(|line| log::debug!("> {}", line));
 
     String::from_utf8_lossy(&process.stdout)
         .split('\n')
@@ -650,6 +655,7 @@ async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
                 !ref_.contains('\t'),
                 "Output line contains more than one '\\t'"
             );
+            log::debug!("Found remote: {}, {}", revision, ref_);
             Ok(RemoteInfo {
                 revision: revision.into(),
                 ref_: ref_.into(),

@@ -115,6 +115,7 @@ Commands:
 
 Options:
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
   -h, --help                Print help
   -V, --version             Print version
 ```
@@ -138,6 +139,7 @@ Usage: npins init [OPTIONS]
 Options:
       --bare                Don't add an initial `nixpkgs` entry
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
   -h, --help                Print help
 ```
 
@@ -166,6 +168,7 @@ Arguments:
 Options:
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
   -n, --name <NAME>         Only import one entry from Niv
+  -v, --verbose             Print debug messages
   -h, --help                Print help
 ```
 
@@ -208,6 +211,7 @@ Options:
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
       --name <NAME>         Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
   -n, --dry-run             Don't actually apply the changes
+  -v, --verbose             Print debug messages
   -h, --help                Print help
 ```
 
@@ -231,6 +235,8 @@ Options:
           Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
       --at <tag or rev>
           Use a specific commit/release instead of the latest. This may be a tag name, or a git revision when --branch is set
+  -v, --verbose
+          Print debug messages
       --pre-releases
           Also track pre-releases. Conflicts with the --branch option
       --upper-bound <version>
@@ -256,6 +262,7 @@ Arguments:
 
 Options:
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
   -h, --help                Print help
 ```
 
@@ -271,6 +278,7 @@ Usage: npins show [OPTIONS]
 
 Options:
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
   -h, --help                Print help
 ```
 
@@ -294,6 +302,8 @@ Options:
           Don't update versions, only re-fetch hashes
   -f, --full
           Re-fetch hashes even if the version hasn't changed. Useful to make sure the derivations are in the Nix store
+  -v, --verbose
+          Print debug messages
   -n, --dry-run
           Print the diff, but don't write back the changes
       --max-concurrent-downloads <MAX_CONCURRENT_DOWNLOADS>
@@ -314,6 +324,7 @@ Usage: npins upgrade [OPTIONS]
 
 Options:
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
   -h, --help                Print help
 ```
 

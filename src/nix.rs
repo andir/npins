@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use log::debug;
 
 #[allow(unused)]
 pub struct PrefetchInfo {
@@ -8,6 +9,10 @@ pub struct PrefetchInfo {
 
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     let url = url.as_ref();
+    log::debug!(
+        "Executing `nix-prefetch-url --unpack --type sha256 {}`",
+        url
+    );
     let output = tokio::process::Command::new("nix-prefetch-url")
         .arg("--unpack") // force calculation of the unpacked NAR hash
         .arg("--type")
@@ -27,6 +32,7 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    log::debug!("Got hash: {}", stdout);
     Ok(String::from(stdout.trim()))
 }
 
@@ -36,6 +42,16 @@ pub async fn nix_prefetch_git(
     submodules: bool,
 ) -> Result<String> {
     let url = url.as_ref();
+    log::debug!(
+        "Executing: `nix-prefetch-git {}{} {}`",
+        if submodules {
+            "--fetch-submodules "
+        } else {
+            ""
+        },
+        url,
+        git_ref.as_ref()
+    );
     let mut output = tokio::process::Command::new("nix-prefetch-git");
     if submodules {
         output.arg("--fetch-submodules");
@@ -80,6 +96,10 @@ pub async fn nix_prefetch_git(
         leave_dot_git: bool,
     }
 
+    debug!(
+        "nix-prefetch-git output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
     let info: NixPrefetchGitResponse = serde_json::from_slice(&output.stdout)
         .context("Failed to deserialize nix-pfetch-git JSON response.")?;
 

@@ -277,13 +277,18 @@ impl diff::Diff for GenericUrlHashes {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let opts = cli::Opts::parse();
+
     env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
+        .filter_level(if opts.verbose {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
         .format_timestamp(None)
         .format_target(false)
         .init();
 
-    let opts = cli::Opts::parse();
     opts.run().await?;
     Ok(())
 }

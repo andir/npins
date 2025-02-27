@@ -542,6 +542,10 @@ pub struct Opts {
     )]
     folder: std::path::PathBuf,
 
+    /// Print debug messages.
+    #[arg(global = true, short = 'v', long = "verbose")]
+    pub verbose: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -702,7 +706,7 @@ impl Opts {
         }
 
         let pin_writer = |mut name: StyledContent<&str>, status: &str, index: usize| {
-            if stderr().is_terminal() {
+            if stderr().is_terminal() && !self.verbose {
                 let seek_distance = (length - index) as u16;
 
                 execute!(
