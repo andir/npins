@@ -38,7 +38,7 @@ pkgs.mkShell {
       rust-analyzer
       rustfmt
       nixfmt-rfc-style
-      nix_2_3
+      lix
       nix-prefetch-git
       git
       npins
