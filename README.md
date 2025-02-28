@@ -100,31 +100,24 @@ You may also use attributes from the JSON file, they are exposed 1:1. For exampl
 
 ```console
 $ npins help
-npins 0.2.4
+Usage: npins [OPTIONS] <COMMAND>
 
-USAGE:
-    npins [OPTIONS] <SUBCOMMAND>
+Commands:
+  init          Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your sources.json
+  add           Adds a new pin entry
+  show          Lists the current pin entries
+  update        Updates all or the given pins to the latest version
+  upgrade       Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
+  remove        Removes one pin entry
+  import-niv    Try to import entries from Niv
+  import-flake  Try to import entries from flake.lock
+  help          Print this message or the help of the given subcommand(s)
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-
-SUBCOMMANDS:
-    add             Adds a new pin entry
-    help            Prints this message or the help of the given subcommand(s)
-    import-flake    Try to import entries from flake.lock
-    import-niv      Try to import entries from Niv
-    init            Intializes the npins directory. Running this multiple times will restore/upgrade the
-                    `default.nix` and never touch your sources.json
-    remove          Removes one pin entry
-    show            Lists the current pin entries
-    update          Updates all or the given pins to the latest version
-    upgrade         Upgrade the sources.json and default.nix to the latest format version. This may occasionally
-                    break Nix evaluation!
+Options:
+  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
+  -h, --help                Print help
+  -V, --version             Print version
 ```
 
 ### Initialization
@@ -139,20 +132,15 @@ This will create an `npins` folder with a `default.nix` and `sources.json` withi
 
 ```console
 $ npins help init
-npins-init 0.2.4
-Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your
-sources.json
+Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your sources.json
 
-USAGE:
-    npins init [FLAGS] [OPTIONS]
+Usage: npins init [OPTIONS]
 
-FLAGS:
-        --bare    Don't add an initial `nixpkgs` entry
-    -h, --help    Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+Options:
+      --bare                Don't add an initial `nixpkgs` entry
+  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
+  -h, --help                Print help
 ```
 
 ### Migrate from Niv
@@ -170,22 +158,18 @@ Note that the import functionality is minimal and only preserves the necessary i
 
 ```console
 $ npins help import-niv
-npins-import-niv 0.2.4
 Try to import entries from Niv
 
-USAGE:
-    npins import-niv [OPTIONS] [path]
+Usage: npins import-niv [OPTIONS] [PATH]
 
-FLAGS:
-    -h, --help    Prints help information
+Arguments:
+  [PATH]  [default: nix/sources.json]
 
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-    -n, --name <name>           Only import one entry from Niv
-
-ARGS:
-    <path>     [default: nix/sources.json]
+Options:
+  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -n, --name <NAME>         Only import one entry from Niv
+  -v, --verbose             Print debug messages
+  -h, --help                Print help
 ```
 
 ### Adding dependencies
@@ -210,81 +194,76 @@ Depending on what kind of dependency you are adding, different arguments must be
 
 ```console
 $ npins help add
-npins-add 0.2.4
 Adds a new pin entry
 
-USAGE:
-    npins add [FLAGS] [OPTIONS] <SUBCOMMAND>
+Usage: npins add [OPTIONS] <COMMAND>
 
-FLAGS:
-    -n, --dry-run    Don't actually apply the changes
-    -h, --help       Prints help information
+Commands:
+  channel  Track a Nix channel
+  github   Track a GitHub repository
+  forgejo  Track a Forgejo repository
+  gitlab   Track a GitLab repository
+  git      Track a git repository
+  pypi     Track a package on PyPi
+  help     Print this message or the help of the given subcommand(s)
 
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-        --name <name>           Add the pin with a custom name. If a pin with that name already exists, it willl be
-                                overwritten
-
-SUBCOMMANDS:
-    channel    Track a Nix channel
-    forgejo    Track a Forgejo repository
-    git        Track a git repository
-    github     Track a GitHub repository
-    gitlab     Track a GitLab repository
-    help       Prints this message or the help of the given subcommand(s)
-    pypi       Track a package on PyPi
+Options:
+  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+      --name <NAME>         Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
+  -n, --dry-run             Don't actually apply the changes
+  -v, --verbose             Print debug messages
+  -h, --help                Print help
 ```
 
 There are several options for tracking git branches, releases and tags:
 
 ```console
 $ npins help add git
-npins-add-git 0.2.4
 Track a git repository
 
-USAGE:
-    npins add git [FLAGS] [OPTIONS] <url>
+Usage: npins add git [OPTIONS] <URL>
 
-FLAGS:
-    -h, --help            Prints help information
-        --pre-releases    Also track pre-releases. Conflicts with the --branch option
-        --submodules      Also fetch submodules
+Arguments:
+  <URL>  The git remote URL. For example <https://github.com/andir/ate.git>
 
-OPTIONS:
-        --at <tag or rev>                    Use a specific commit/release instead of the latest. This may be a tag
-                                             name, or a git revision when --branch is set
-    -b, --branch <branch>                    Track a branch instead of a release
-    -d, --directory <folder>                 Base folder for sources.json and the boilerplate default.nix [env:
-                                             NPINS_DIRECTORY=]  [default: npins]
-        --release-prefix <release-prefix>    Optional prefix required for each release name / tag. For example, setting
-                                             this to "release/" will only consider those that start with that string
-        --upper-bound <version>              Bound the version resolution. For example, setting this to "2" will
-                                             restrict updates to 1.X versions. Conflicts with the --branch option
-
-ARGS:
-    <url>    The git remote URL. For example <https://github.com/andir/ate.git>
+Options:
+  -b, --branch <BRANCH>
+          Track a branch instead of a release
+  -d, --directory <FOLDER>
+          Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+      --name <NAME>
+          Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
+      --at <tag or rev>
+          Use a specific commit/release instead of the latest. This may be a tag name, or a git revision when --branch is set
+  -v, --verbose
+          Print debug messages
+      --pre-releases
+          Also track pre-releases. Conflicts with the --branch option
+      --upper-bound <version>
+          Bound the version resolution. For example, setting this to "2" will restrict updates to 1.X versions. Conflicts with the --branch option
+      --release-prefix <RELEASE_PREFIX>
+          Optional prefix required for each release name / tag. For example, setting this to "release/" will only consider those that start with that string
+      --submodules
+          Also fetch submodules
+  -h, --help
+          Print help
 ```
 
 ### Removing dependencies
 
 ```console
 $ npins help remove
-npins-remove 0.2.4
 Removes one pin entry
 
-USAGE:
-    npins remove [OPTIONS] <name>
+Usage: npins remove [OPTIONS] <NAME>
 
-FLAGS:
-    -h, --help    Prints help information
+Arguments:
+  <NAME>  
 
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
-
-ARGS:
-    <name>    
+Options:
+  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
+  -h, --help                Print help
 ```
 
 ### Show current entries
@@ -293,18 +272,14 @@ This will print the currently pinned dependencies in a human readable format. Th
 
 ```console
 $ npins help show
-npins-show 0.2.4
 Lists the current pin entries
 
-USAGE:
-    npins show [OPTIONS]
+Usage: npins show [OPTIONS]
 
-FLAGS:
-    -h, --help    Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+Options:
+  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
+  -h, --help                Print help
 ```
 
 ### Updating dependencies
@@ -313,27 +288,28 @@ You can decide to update only selected dependencies, or all at once. For some pi
 
 ```console
 $ npins help update
-npins-update 0.2.4
 Updates all or the given pins to the latest version
 
-USAGE:
-    npins update [FLAGS] [OPTIONS] [names]...
+Usage: npins update [OPTIONS] [NAMES]...
 
-FLAGS:
-    -n, --dry-run    Print the diff, but don't write back the changes
-    -f, --full       Re-fetch hashes even if the version hasn't changed. Useful to make sure the derivations are in the
-                     Nix store
-    -h, --help       Prints help information
-    -p, --partial    Don't update versions, only re-fetch hashes
+Arguments:
+  [NAMES]...  Updates only the specified pins
 
-OPTIONS:
-    -d, --directory <folder>
-            Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]  [default: npins]
-
-        --max-concurrent-downloads <max-concurrent-downloads>    Maximum number of simultaneous downloads [default: 5]
-
-ARGS:
-    <names>...    Updates only the specified pins
+Options:
+  -d, --directory <FOLDER>
+          Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -p, --partial
+          Don't update versions, only re-fetch hashes
+  -f, --full
+          Re-fetch hashes even if the version hasn't changed. Useful to make sure the derivations are in the Nix store
+  -v, --verbose
+          Print debug messages
+  -n, --dry-run
+          Print the diff, but don't write back the changes
+      --max-concurrent-downloads <MAX_CONCURRENT_DOWNLOADS>
+          Maximum number of simultaneous downloads [default: 5]
+  -h, --help
+          Print help
 ```
 
 ### Upgrading the pins file
@@ -342,18 +318,14 @@ To ensure compatibility across releases, the `npins/sources.json` and `npins/def
 
 ```console
 $ npins help upgrade
-npins-upgrade 0.2.4
 Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
 
-USAGE:
-    npins upgrade [OPTIONS]
+Usage: npins upgrade [OPTIONS]
 
-FLAGS:
-    -h, --help    Prints help information
-
-OPTIONS:
-    -d, --directory <folder>    Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=]
-                                [default: npins]
+Options:
+  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+  -v, --verbose             Print debug messages
+  -h, --help                Print help
 ```
 
 ### Using private GitLab repositories

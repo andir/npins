@@ -3,23 +3,13 @@
 }:
 let
   pins = import ./npins;
-  pkgs = import pins.nixpkgs {
-    inherit system;
-    overlays = [
-      (self: super: {
-        nixfmt = super.nixfmt-classic.overrideAttrs (old: {
-          src = pins.nixfmt;
-        });
-      })
-    ];
-  };
+  pkgs = import pins.nixpkgs { inherit system; };
   inherit (pkgs) stdenv lib;
 
   pre-commit = (import pins."pre-commit-hooks.nix").run {
     src = ./.;
-    tools.nixfmt = pkgs.nixfmt; # Why don't they just take it from our pkgs?
     hooks = {
-      nixfmt = {
+      nixfmt-rfc-style = {
         enable = true;
         settings.width = 100;
       };
@@ -47,8 +37,8 @@ pkgs.mkShell {
       rustc
       rust-analyzer
       rustfmt
-      nixfmt
-      nix_2_3
+      nixfmt-rfc-style
+      lix
       nix-prefetch-git
       git
       npins

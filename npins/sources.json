@@ -1,17 +1,5 @@
 {
   "pins": {
-    "nixfmt": {
-      "type": "Git",
-      "repository": {
-        "type": "GitHub",
-        "owner": "piegamesde",
-        "repo": "nixfmt"
-      },
-      "branch": "rfc101-style",
-      "revision": "8d13b593fa8d8d6e5075f541f3231222a08e84df",
-      "url": "https://github.com/piegamesde/nixfmt/archive/8d13b593fa8d8d6e5075f541f3231222a08e84df.tar.gz",
-      "hash": "1blpqs2ifw10xvfpfk77p1bq35gzgssng2m8wqw0kqydcz7fzm8y"
-    },
     "nixpkgs": {
       "type": "Git",
       "repository": {
@@ -20,9 +8,9 @@
         "repo": "nixpkgs"
       },
       "branch": "nixpkgs-unstable",
-      "revision": "a9858885e197f984d92d7fe64e9fff6b2e488d40",
-      "url": "https://github.com/nixos/nixpkgs/archive/a9858885e197f984d92d7fe64e9fff6b2e488d40.tar.gz",
-      "hash": "0a55lp827bfx102czy0bp5d6pbp5lh6l0ysp3zs0m1gyniy2jck9"
+      "revision": "d9b69c3ec2a2e2e971c534065bdd53374bd68b97",
+      "url": "https://github.com/nixos/nixpkgs/archive/d9b69c3ec2a2e2e971c534065bdd53374bd68b97.tar.gz",
+      "hash": "111spkgprzsqd32mwzsjksk1hdzv10gyf04lh956vc1pp0g0fcq1"
     },
     "pre-commit-hooks.nix": {
       "type": "Git",
@@ -32,9 +20,9 @@
         "repo": "pre-commit-hooks.nix"
       },
       "branch": "master",
-      "revision": "cc4d466cb1254af050ff7bdf47f6d404a7c646d1",
-      "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/cc4d466cb1254af050ff7bdf47f6d404a7c646d1.tar.gz",
-      "hash": "1gl1bdnv533jyvj12dfyg8q5haprapswnn7hbpikb2qbnnwc2xzd"
+      "revision": "9364dc02281ce2d37a1f55b6e51f7c0f65a75f17",
+      "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/9364dc02281ce2d37a1f55b6e51f7c0f65a75f17.tar.gz",
+      "hash": "1n2qlj5l8c4g7gm5v6rvc4hff3ka8ljv7y62inybli093bd2ypa7"
     }
   },
   "version": 3

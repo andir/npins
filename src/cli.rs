@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
 use crossterm::{
     cursor, execute,
     style::{ContentStyle, Print, StyledContent, Stylize},
@@ -19,7 +20,6 @@ use futures::{
     stream::{self, StreamExt},
     TryStreamExt,
 };
-use structopt::StructOpt;
 
 use url::{ParseError, Url};
 
@@ -56,7 +56,7 @@ impl UpdateStrategy {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct ChannelAddOpts {
     name: String,
 }
@@ -73,25 +73,25 @@ impl ChannelAddOpts {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct GenericGitAddOpts {
     /// Track a branch instead of a release
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub branch: Option<String>,
 
     /// Use a specific commit/release instead of the latest.
     /// This may be a tag name, or a git revision when --branch is set.
-    #[structopt(long, value_name = "tag or rev")]
+    #[arg(long, value_name = "tag or rev")]
     pub at: Option<String>,
 
     /// Also track pre-releases.
     /// Conflicts with the --branch option.
-    #[structopt(long, conflicts_with = "branch")]
+    #[arg(long, conflicts_with = "branch")]
     pub pre_releases: bool,
 
     /// Bound the version resolution. For example, setting this to "2" will
     /// restrict updates to 1.X versions. Conflicts with the --branch option.
-    #[structopt(
+    #[arg(
         long = "upper-bound",
         value_name = "version",
         conflicts_with_all = &["branch", "at"]
@@ -101,20 +101,20 @@ pub struct GenericGitAddOpts {
     /// Optional prefix required for each release name / tag. For
     /// example, setting this to "release/" will only consider those
     /// that start with that string.
-    #[structopt(long = "release-prefix")]
+    #[arg(long = "release-prefix")]
     pub release_prefix: Option<String>,
 
     /// Also fetch submodules
-    #[structopt(long)]
+    #[arg(long)]
     pub submodules: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct GitHubAddOpts {
     pub owner: String,
     pub repository: String,
 
-    #[structopt(flatten)]
+    #[command(flatten)]
     pub more: GenericGitAddOpts,
 }
 
@@ -154,13 +154,13 @@ impl GitHubAddOpts {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct ForgejoAddOpts {
     pub server: String,
     pub owner: String,
     pub repository: String,
 
-    #[structopt(flatten)]
+    #[command(flatten)]
     pub more: GenericGitAddOpts,
 }
 impl ForgejoAddOpts {
@@ -208,13 +208,13 @@ impl ForgejoAddOpts {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct GitLabAddOpts {
     /// Usually just `"owner" "repository"`, but GitLab allows arbitrary folder-like structures.
-    #[structopt(required = true, min_values = 2)]
+    #[arg(required = true)] // TODO set min number of values to 2 again
     pub repo_path: Vec<String>,
 
-    #[structopt(
+    #[arg(
         long,
         default_value = "https://gitlab.com/",
         help = "Use a self-hosted GitLab instance instead",
@@ -222,14 +222,14 @@ pub struct GitLabAddOpts {
     )]
     pub server: url::Url,
 
-    #[structopt(
+    #[arg(
         long,
         help = "Use a private token to access the repository.",
         value_name = "token"
     )]
     pub private_token: Option<String>,
 
-    #[structopt(flatten)]
+    #[command(flatten)]
     pub more: GenericGitAddOpts,
 }
 
@@ -275,12 +275,12 @@ impl GitLabAddOpts {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct GitAddOpts {
     /// The git remote URL. For example <https://github.com/andir/ate.git>
     pub url: String,
 
-    #[structopt(flatten)]
+    #[command(flatten)]
     pub more: GenericGitAddOpts,
 }
 
@@ -338,18 +338,18 @@ impl GitAddOpts {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct PyPiAddOpts {
     /// Name of the package at PyPi.org
     pub name: String,
 
     /// Use a specific release instead of the latest.
-    #[structopt(long, value_name = "version")]
+    #[arg(long, value_name = "version")]
     pub at: Option<String>,
 
     /// Bound the version resolution. For example, setting this to "2" will
     /// restrict updates to 1.X versions. Conflicts with the --branch option.
-    #[structopt(long = "upper-bound", value_name = "version", conflicts_with = "at")]
+    #[arg(long = "upper-bound", value_name = "version", conflicts_with = "at")]
     pub version_upper_bound: Option<String>,
 }
 
@@ -368,38 +368,38 @@ impl PyPiAddOpts {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum AddCommands {
     /// Track a Nix channel
-    #[structopt(name = "channel")]
+    #[command(name = "channel")]
     Channel(ChannelAddOpts),
     /// Track a GitHub repository
-    #[structopt(name = "github")]
+    #[command(name = "github")]
     GitHub(GitHubAddOpts),
     /// Track a Forgejo repository
-    #[structopt(name = "forgejo")]
+    #[command(name = "forgejo")]
     Forgejo(ForgejoAddOpts),
     /// Track a GitLab repository
-    #[structopt(name = "gitlab")]
+    #[command(name = "gitlab")]
     GitLab(GitLabAddOpts),
     /// Track a git repository
-    #[structopt(name = "git")]
+    #[command(name = "git")]
     Git(GitAddOpts),
     /// Track a package on PyPi
-    #[structopt(name = "pypi")]
+    #[command(name = "pypi")]
     PyPi(PyPiAddOpts),
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct AddOpts {
     /// Add the pin with a custom name.
-    /// If a pin with that name already exists, it willl be overwritten
-    #[structopt(long)]
+    /// If a pin with that name already exists, it will be overwritten
+    #[arg(long, global = true)]
     pub name: Option<String>,
     /// Don't actually apply the changes
-    #[structopt(short = "n", long)]
+    #[arg(short = 'n', long)]
     pub dry_run: bool,
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     command: AddCommands,
 }
 
@@ -428,56 +428,56 @@ impl AddOpts {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct RemoveOpts {
     pub name: String,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct UpdateOpts {
     /// Updates only the specified pins.
     pub names: Vec<String>,
     /// Don't update versions, only re-fetch hashes
-    #[structopt(short, long, conflicts_with = "full")]
+    #[arg(short, long, conflicts_with = "full")]
     pub partial: bool,
     /// Re-fetch hashes even if the version hasn't changed.
     /// Useful to make sure the derivations are in the Nix store.
-    #[structopt(short, long, conflicts_with = "partial")]
+    #[arg(short, long, conflicts_with = "partial")]
     pub full: bool,
     /// Print the diff, but don't write back the changes
-    #[structopt(short = "n", long, global = true)]
+    #[arg(short = 'n', long, global = true)]
     pub dry_run: bool,
     /// Maximum number of simultaneous downloads
     #[structopt(default_value = "5", long)]
     pub max_concurrent_downloads: usize,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct InitOpts {
     /// Don't add an initial `nixpkgs` entry
-    #[structopt(long)]
+    #[arg(long)]
     pub bare: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct ImportOpts {
-    #[structopt(default_value = "nix/sources.json", parse(from_os_str))]
+    #[arg(default_value = "nix/sources.json")]
     pub path: PathBuf,
     /// Only import one entry from Niv
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub name: Option<String>,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct ImportFlakeOpts {
-    #[structopt(default_value = "flake.lock", parse(from_os_str))]
+    #[arg(default_value = "flake.lock")]
     pub path: PathBuf,
     /// Only import one entry from the flake
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub name: Option<String>,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your sources.json.
@@ -521,27 +521,32 @@ fn print_diff(name: &str, diff: impl AsRef<[diff::DiffEntry]>) {
     }
 }
 
-use structopt::clap::AppSettings;
-
-#[derive(Debug, StructOpt)]
-#[structopt(
-    setting(AppSettings::ArgRequiredElseHelp),
-    global_setting(AppSettings::VersionlessSubcommands),
-    global_setting(AppSettings::ColoredHelp),
-    global_setting(AppSettings::ColorAuto)
+#[derive(Debug, Parser)]
+#[command(
+    version,
+    about,
+    arg_required_else_help = true,
+    // Confirm clap defaults
+    propagate_version = false,
+    disable_colored_help = false,
+    color = clap::ColorChoice::Auto
 )]
 pub struct Opts {
     /// Base folder for sources.json and the boilerplate default.nix
-    #[structopt(
+    #[arg(
         global = true,
-        short = "d",
+        short = 'd',
         long = "directory",
         default_value = "npins",
         env = "NPINS_DIRECTORY"
     )]
     folder: std::path::PathBuf,
 
-    #[structopt(subcommand)]
+    /// Print debug messages.
+    #[arg(global = true, short = 'v', long = "verbose")]
+    pub verbose: bool,
+
+    #[command(subcommand)]
     command: Command,
 }
 
@@ -701,7 +706,7 @@ impl Opts {
         }
 
         let pin_writer = |mut name: StyledContent<&str>, status: &str, index: usize| {
-            if stderr().is_terminal() {
+            if stderr().is_terminal() && !self.verbose {
                 let seek_distance = (length - index) as u16;
 
                 execute!(

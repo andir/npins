@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use clap::Parser;
 use diff::{Diff, OptionExt};
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use structopt::StructOpt;
 
 pub mod channel;
 pub mod cli;
@@ -277,13 +277,18 @@ impl diff::Diff for GenericUrlHashes {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let opts = cli::Opts::parse();
+
     env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
+        .filter_level(if opts.verbose {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
         .format_timestamp(None)
         .format_target(false)
         .init();
 
-    let opts = cli::Opts::from_args();
     opts.run().await?;
     Ok(())
 }

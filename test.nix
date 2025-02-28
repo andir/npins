@@ -104,7 +104,7 @@ let
           npins
           python3
           netcat
-          nix
+          lix
           gitMinimal
           jq
           nix-prefetch-git
@@ -157,7 +157,7 @@ let
           npins
           python3
           netcat
-          nix
+          lix
           gitMinimal
           jq
         ];
@@ -224,7 +224,7 @@ let
           npins
           python3
           netcat
-          nix
+          lix
           gitMinimal
           jq
         ];
