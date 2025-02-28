@@ -556,13 +556,17 @@ fn print_diff(name: &str, diff: impl AsRef<[diff::DiffEntry]>) {
 pub struct Opts {
     /// Base folder for sources.json and the boilerplate default.nix
     #[arg(
-        global = true,
         short = 'd',
         long = "directory",
         default_value = "npins",
         env = "NPINS_DIRECTORY"
     )]
     folder: std::path::PathBuf,
+
+    /// Specifies the path to the sources.json and activates lockfile mode.
+    /// In lockfile mode, no default.nix will be generated and --directory will be ignored.
+    #[arg(long)]
+    lock_file: Option<std::path::PathBuf>,
 
     /// Print debug messages.
     #[arg(global = true, short = 'v', long = "verbose")]
@@ -574,7 +578,11 @@ pub struct Opts {
 
 impl Opts {
     fn read_pins(&self) -> Result<NixPins> {
-        let path = self.folder.join("sources.json");
+        let path = if let Some(lock_file) = self.lock_file.as_ref() {
+            lock_file.to_owned()
+        } else {
+            self.folder.join("sources.json")
+        };
         let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
             format!(
                 "Failed to open {}. You must initialize npins before you can show current pins.",
@@ -586,10 +594,14 @@ impl Opts {
     }
 
     fn write_pins(&self, pins: &NixPins) -> Result<()> {
-        if !self.folder.exists() {
-            std::fs::create_dir(&self.folder)?;
-        }
-        let path = self.folder.join("sources.json");
+        let path = if let Some(lock_file) = &self.lock_file {
+            lock_file.to_owned()
+        } else {
+            if !self.folder.exists() {
+                std::fs::create_dir(&self.folder)?;
+            }
+            self.folder.join("sources.json")
+        };
         let mut fh = std::fs::File::create(&path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
         serde_json::to_writer_pretty(&mut fh, &versions::to_value_versioned(pins))?;
@@ -599,23 +611,27 @@ impl Opts {
 
     async fn init(&self, o: &InitOpts) -> Result<()> {
         log::info!("Welcome to npins!");
-        let default_nix = DEFAULT_NIX;
-        if !self.folder.exists() {
-            log::info!("Creating `{}` directory", self.folder.display());
-            std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
-        }
-        log::info!("Writing default.nix");
-        let p = self.folder.join("default.nix");
-        let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
-        fh.write_all(default_nix.as_bytes())?;
 
-        // Only create the pins if the file isn't there yet
-        if self.folder.join("sources.json").exists() {
-            log::info!(
-                "The file '{}' already exists; nothing to do.",
-                self.folder.join("pins.json").display()
-            );
-            return Ok(());
+        // Skip the entire default.nix and convenience creating folders bit in lockfile mode
+        if self.lock_file.is_none() {
+            let default_nix = DEFAULT_NIX;
+            if !self.folder.exists() {
+                log::info!("Creating `{}` directory", self.folder.display());
+                std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
+            }
+            log::info!("Writing default.nix");
+            let p = self.folder.join("default.nix");
+            let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
+            fh.write_all(default_nix.as_bytes())?;
+
+            // Only create the pins if the file isn't there yet
+            if self.folder.join("sources.json").exists() {
+                log::info!(
+                    "The file '{}' already exists; nothing to do.",
+                    self.folder.join("pins.json").display()
+                );
+                return Ok(());
+            }
         }
 
         let initial_pins = if o.bare {
@@ -632,7 +648,7 @@ impl Opts {
         self.write_pins(&initial_pins)?;
         log::info!(
             "Successfully written initial files to '{}'.",
-            self.folder.display()
+            self.lock_file.as_ref().unwrap_or(&self.folder).display()
         );
         Ok(())
     }
@@ -793,19 +809,22 @@ impl Opts {
     }
 
     fn upgrade(&self) -> Result<()> {
-        anyhow::ensure!(
-            self.folder.exists(),
-            "Could not find npins folder at {}",
-            self.folder.display(),
-        );
+        if self.lock_file.is_none() {
+            anyhow::ensure!(
+                self.folder.exists(),
+                "Could not find npins folder at {}",
+                self.folder.display(),
+            );
 
-        let nix_path = self.folder.join("default.nix");
-        let nix_file = DEFAULT_NIX;
-        if std::fs::read_to_string(&nix_path)? == nix_file {
-            log::info!("default.nix is already up to date");
-        } else {
-            log::info!("Replacing default.nix with an up to date version");
-            std::fs::write(&nix_path, nix_file).context("Failed to create npins default.nix")?;
+            let nix_path = self.folder.join("default.nix");
+            let nix_file = DEFAULT_NIX;
+            if std::fs::read_to_string(&nix_path)? == nix_file {
+                log::info!("default.nix is already up to date");
+            } else {
+                log::info!("Replacing default.nix with an up to date version");
+                std::fs::write(&nix_path, nix_file)
+                    .context("Failed to create npins default.nix")?;
+            }
         }
 
         log::info!("Upgrading sources.json to the newest format version");
@@ -823,7 +842,9 @@ impl Opts {
         let pins_raw_new = versions::upgrade(pins_raw.clone()).context("Upgrading failed")?;
         let pins: NixPins = serde_json::from_value(pins_raw_new.clone())?;
         if pins_raw_new != serde_json::Value::Object(pins_raw) {
-            log::info!("Done. It is recommended to at least run `update --partial` afterwards.");
+            log::info!(
+                "Done. It is recommended to at least run `npins update --partial` afterwards."
+            );
         }
         self.write_pins(&pins)
     }
@@ -1038,6 +1059,9 @@ impl Opts {
     }
 
     pub async fn run(&self) -> Result<()> {
+        if self.lock_file.is_some() && &*self.folder != std::path::Path::new("npins") {
+            anyhow::bail!("If --lock-file is set, --directory will be ignored and thus should not be set to a non-default value (which is \"npins\")");
+        }
         match &self.command {
             Command::Init(o) => self.init(o).await?,
             Command::Show => self.show()?,
