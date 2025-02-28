@@ -71,7 +71,7 @@ let
       url ? null,
       submodules,
       hash,
-      branch ? null,
+      branch ? "HEAD",
       ...
     }:
     assert repository ? type;
@@ -106,6 +106,7 @@ let
         name = urlToName url revision;
       in
       builtins.fetchGit {
+        ref = branch;
         rev = revision;
         inherit name;
         # hash = hash;
