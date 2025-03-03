@@ -13,6 +13,8 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@v10
       - name: Build
         run: nix-build
+      - name: Cargo Build
+        run: nix-shell --run "cargo build --all"
       - name: Run pre-commit hooks
         run: nix-shell --run "pre-commit run --all"
       - name: Cargo test

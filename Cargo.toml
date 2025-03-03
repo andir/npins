@@ -4,6 +4,14 @@ version = "0.2.4"
 edition = "2021"
 license = "EUPL-1.2"
 
+[lib]
+name = "npins"
+path = "src/lib.rs"
+
+[[bin]]
+name = "npins"
+path = "src/main.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
