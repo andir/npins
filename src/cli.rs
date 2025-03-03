@@ -610,7 +610,7 @@ impl Opts {
                 path.display()
             )
         })?);
-        versions::from_value_versioned(serde_json::from_reader(fh)?)
+        NixPins::from_json_versioned(serde_json::from_reader(fh)?)
             .context("Failed to deserialize sources.json")
     }
 
@@ -625,7 +625,7 @@ impl Opts {
         };
         let mut fh = std::fs::File::create(&path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
-        serde_json::to_writer_pretty(&mut fh, &versions::to_value_versioned(pins))?;
+        serde_json::to_writer_pretty(&mut fh, &pins.to_value_versioned())?;
         fh.write_all(b"\n")?;
         Ok(())
     }

@@ -1,3 +1,8 @@
+//! The npins library
+//!
+//! Currently, it pretty much exposes the internals of the CLI 1:1, but in the future
+//! this is supposed to evolve into a more standalone library.
+
 use anyhow::Result;
 use diff::{Diff, OptionExt};
 use reqwest::IntoUrl;
@@ -15,6 +20,7 @@ pub mod tarball;
 pub mod versions;
 
 /// Helper method to build you a client.
+// TODO make injectable via a configuration mechanism
 pub fn build_client() -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .user_agent(concat!(
@@ -259,6 +265,7 @@ pub struct NixPins {
 }
 
 impl NixPins {
+    /// Create a new `NixPins` with a pin `nixpkgs` pointing to the `nixpkgs-unstable` channel
     pub fn new_with_nixpkgs() -> Self {
         let mut pins = BTreeMap::new();
         pins.insert(
@@ -266,6 +273,16 @@ impl NixPins {
             channel::Pin::new("nixpkgs-unstable").into(),
         );
         Self { pins }
+    }
+
+    /// Custom manual deserialize wrapper that checks the version
+    pub fn from_json_versioned(value: serde_json::Value) -> Result<Self> {
+        versions::from_value_versioned(value)
+    }
+
+    /// Custom manual serialize wrapper that adds a version field
+    pub fn to_value_versioned(&self) -> serde_json::Value {
+        versions::to_value_versioned(self)
     }
 }
 
