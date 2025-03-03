@@ -139,7 +139,7 @@ macro_rules! mkPin {
             })*
 
             /* If an error is returned, `self` remains unchanged */
-            async fn update(&mut self) -> Result<Vec<diff::DiffEntry>> {
+            pub async fn update(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, .. } => {
                         /* Use very explicit syntax to force the correct types and get good compile errors */
@@ -152,7 +152,7 @@ macro_rules! mkPin {
             /* If an error is returned, `self` remains unchanged. This returns a double result: the outer one
              * indicates that `update` should be called first, the inner is from the actual operation.
              */
-            async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
+            pub async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, hashes, .. } => {
                         let version = version.as_ref()
@@ -259,7 +259,7 @@ mkPin! {
 /// For serialization purposes, use the `NixPinsVersioned` wrapper instead.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct NixPins {
-    pins: BTreeMap<String, Pin>,
+    pub pins: BTreeMap<String, Pin>,
 }
 
 impl NixPins {
