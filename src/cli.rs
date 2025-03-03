@@ -985,3 +985,21 @@ impl Opts {
         Ok(())
     }
 }
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let opts = Opts::parse();
+
+    env_logger::builder()
+        .filter_level(if opts.verbose {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
+
+    opts.run().await?;
+    Ok(())
+}
