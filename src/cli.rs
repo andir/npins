@@ -396,6 +396,9 @@ pub struct AddOpts {
     /// If a pin with that name already exists, it will be overwritten
     #[arg(long, global = true)]
     pub name: Option<String>,
+    /// Add the pin as frozen, meaning that it will be ignored by `npins update` by default.
+    #[arg(long, global = true)]
+    pub frozen: bool,
     /// Don't actually apply the changes
     #[arg(short = 'n', long)]
     pub dry_run: bool,
@@ -405,7 +408,7 @@ pub struct AddOpts {
 
 impl AddOpts {
     fn run(&self) -> Result<(String, Pin)> {
-        let (name, pin) = match &self.command {
+        let (name, mut pin) = match &self.command {
             AddCommands::Channel(c) => c.add()?,
             AddCommands::Git(g) => g.add()?,
             AddCommands::GitHub(gh) => gh.add()?,
@@ -419,6 +422,9 @@ impl AddOpts {
         } else {
             name
         };
+        if self.frozen {
+            pin.freeze();
+        }
         anyhow::ensure!(
             !name.is_empty(),
             "Pin name cannot be empty. Use --name to specify one manually",
@@ -447,6 +453,9 @@ pub struct UpdateOpts {
     /// Print the diff, but don't write back the changes
     #[arg(short = 'n', long, global = true)]
     pub dry_run: bool,
+    /// Allow updating frozen pins, which would otherwise be ignored
+    #[arg(long = "frozen")]
+    pub update_frozen: bool,
     /// Maximum number of simultaneous downloads
     #[structopt(default_value = "5", long)]
     pub max_concurrent_downloads: usize,
@@ -477,6 +486,13 @@ pub struct ImportFlakeOpts {
     pub name: Option<String>,
 }
 
+#[derive(Debug, Parser)]
+pub struct FreezeOpts {
+    /// Names of the pin(s)
+    #[structopt(required = true)]
+    pub names: Vec<String>,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
@@ -505,6 +521,12 @@ pub enum Command {
 
     /// Try to import entries from flake.lock
     ImportFlake(ImportFlakeOpts),
+
+    /// Freeze a pin entry
+    Freeze(FreezeOpts),
+
+    /// Thaw a pin entry
+    Unfreeze(FreezeOpts),
 }
 
 fn print_diff(name: &str, diff: impl AsRef<[diff::DiffEntry]>) {
@@ -628,7 +650,11 @@ impl Opts {
     async fn add(&self, opts: &AddOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
         let (name, mut pin) = opts.run()?;
-        log::info!("Adding '{}' …", name);
+        if opts.frozen {
+            log::info!("Adding '{}' (frozen) …", name);
+        } else {
+            log::info!("Adding '{}' …", name);
+        }
         /* Fetch the latest version unless the user specified some */
         let strategy = if pin.has_version() {
             UpdateStrategy::HashesOnly
@@ -691,11 +717,14 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        for name in pins.pins.keys() {
-            let (mut style, status) = if opts.names.is_empty() || valid_names.contains(name) {
-                (ContentStyle::new().grey(), "queued")
-            } else {
-                (ContentStyle::new().dark_grey(), "ignored")
+        for (name, pin) in &pins.pins {
+            let (mut style, status) = match (
+                opts.names.is_empty() || valid_names.contains(name),
+                pin.is_frozen() && !opts.update_frozen,
+            ) {
+                (true, false) => (ContentStyle::new().grey(), "queued"),
+                (true, true) => (ContentStyle::new().dark_grey(), "frozen"),
+                (false, _) => (ContentStyle::new().dark_grey(), "ignored"),
             };
 
             if stderr().is_terminal().not() {
@@ -727,9 +756,12 @@ impl Opts {
             .pins
             .iter_mut()
             .enumerate()
-            .filter(|(_, (name, _))| opts.names.is_empty() || valid_names.contains(name))
+            .filter(|(_, (name, pin))| {
+                (opts.names.is_empty() || valid_names.contains(name))
+                    && (opts.update_frozen || !pin.is_frozen())
+            })
             .map(|(i, (name, pin))| async move {
-                pin_writer(name.as_str().yellow(), "in progress", i)?;
+                pin_writer(name.as_str().dark_yellow(), "in progress", i)?;
 
                 let diff = Self::update_one(pin, strategy).await?;
 
@@ -808,6 +840,43 @@ impl Opts {
 
         self.write_pins(&new_pins)?;
         log::info!("Successfully removed pin '{}'.", r.name);
+        Ok(())
+    }
+
+    async fn freeze(&self, o: &FreezeOpts) -> Result<()> {
+        let mut pins = self.read_pins()?;
+
+        for name in o.names.iter() {
+            let pin = match pins.pins.get_mut(name) {
+                None => return Err(anyhow::anyhow!("Couldn't find the pin {} to freeze.", name)),
+                Some(pin) => pin,
+            };
+
+            pin.freeze();
+            log::info!("Froze pin {}", name);
+        }
+
+        self.write_pins(&pins)?;
+
+        Ok(())
+    }
+
+    async fn unfreeze(&self, o: &FreezeOpts) -> Result<()> {
+        let mut pins = self.read_pins()?;
+
+        for name in o.names.iter() {
+            let pin = match pins.pins.get_mut(name) {
+                None => return Err(anyhow::anyhow!("Couldn't find the pin {} to thaw.", name)),
+                Some(pin) => pin,
+            };
+
+            pin.unfreeze();
+
+            log::info!("Thawed pin {}", name);
+        }
+
+        self.write_pins(&pins)?;
+
         Ok(())
     }
 
@@ -978,6 +1047,8 @@ impl Opts {
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,
             Command::ImportFlake(o) => self.import_flake(o).await?,
+            Command::Freeze(o) => self.freeze(o).await?,
+            Command::Unfreeze(o) => self.unfreeze(o).await?,
         };
 
         Ok(())

@@ -111,6 +111,8 @@ Commands:
   remove        Removes one pin entry
   import-niv    Try to import entries from Niv
   import-flake  Try to import entries from flake.lock
+  freeze        Freeze a pin entry
+  unfreeze      Thaw a pin entry
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -210,8 +212,9 @@ Commands:
 Options:
   -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
       --name <NAME>         Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
-  -n, --dry-run             Don't actually apply the changes
+      --frozen              Add the pin as frozen, meaning that it will be ignored by `npins update` by default
   -v, --verbose             Print debug messages
+  -n, --dry-run             Don't actually apply the changes
   -h, --help                Print help
 ```
 
@@ -235,6 +238,8 @@ Options:
           Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
       --at <tag or rev>
           Use a specific commit/release instead of the latest. This may be a tag name, or a git revision when --branch is set
+      --frozen
+          Add the pin as frozen, meaning that it will be ignored by `npins update` by default
   -v, --verbose
           Print debug messages
       --pre-releases
@@ -306,6 +311,8 @@ Options:
           Print debug messages
   -n, --dry-run
           Print the diff, but don't write back the changes
+      --frozen
+          Allow updating frozen pins, which would otherwise be ignored
       --max-concurrent-downloads <MAX_CONCURRENT_DOWNLOADS>
           Maximum number of simultaneous downloads [default: 5]
   -h, --help
