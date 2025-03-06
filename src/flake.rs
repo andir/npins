@@ -1,6 +1,6 @@
 //! Convert+Import Nix flake lock files
 
-use crate::*;
+use crate::{git, Pin};
 use anyhow::{Context, Result};
 use git::fetch_default_branch;
 use serde::{Deserialize, Serialize};
