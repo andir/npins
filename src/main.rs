@@ -125,7 +125,7 @@ macro_rules! mkPin {
                     hashes: Option<<$input_name as Updatable>::Hashes>,
                     // TODO(piegames): This is the only field which is independent of the pin type and equal for all pins,
                     // eventually it should be factored out (especially once a second field of that kind is added)
-                    #[serde(default)]
+                    #[serde(default, skip_serializing_if="Frozen::is_default")]
                     frozen: Frozen,
                 }
             ),*
@@ -300,6 +300,10 @@ impl Frozen {
 
     fn is_frozen(&self) -> bool {
         self.0
+    }
+
+    fn is_default(&self) -> bool {
+        self == &Frozen::default()
     }
 }
 
