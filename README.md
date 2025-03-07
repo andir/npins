@@ -207,6 +207,7 @@ Commands:
   gitlab   Track a GitLab repository
   git      Track a git repository
   pypi     Track a package on PyPi
+  tarball  Track a tarball
   help     Print this message or the help of the given subcommand(s)
 
 Options:

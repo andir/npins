@@ -24,6 +24,7 @@ enum FlakeType {
     Github,
     Git,
     Path,
+    Tarball,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +53,8 @@ pub struct FlakeOriginal {
     ref_: Option<String>,
     #[serde(rename = "type")]
     type_: String,
+    /// the url of a lockable tarball
+    url: Option<Url>,
 }
 
 impl FlakePin {
@@ -115,6 +118,13 @@ impl FlakePin {
                     false,
                 )
                 .into()
+            },
+            Tarball => {
+                let url = self
+                    .original
+                    .url
+                    .context("missing url on a tarball flake input")?;
+                tarball::TarballPin { url }.into()
             },
             Path => anyhow::bail!("Path inputs are currently not supported by npins."),
         })

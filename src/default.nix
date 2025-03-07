@@ -59,6 +59,8 @@ let
           mkPyPiSource spec
         else if spec.type == "Channel" then
           mkChannelSource spec
+        else if spec.type == "Tarball" then
+          mkTarballSource spec
         else
           builtins.throw "Unknown source type ${spec.type}";
     in
@@ -125,8 +127,20 @@ let
       inherit url;
       sha256 = hash;
     };
+
+  mkTarballSource =
+    {
+      url,
+      locked_url ? url,
+      hash,
+      ...
+    }:
+    builtins.fetchTarball {
+      url = locked_url;
+      sha256 = hash;
+    };
 in
-if version == 4 then
+if version == 5 then
   builtins.mapAttrs mkSource data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"
