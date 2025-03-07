@@ -340,6 +340,38 @@ let
       '';
 in
 {
+  initNoDefaultNix = mkGitTest {
+    name = "init-no-default-nix";
+    repositories."foo" = gitRepo;
+    commands = ''
+      npins --lock-file sources.json init --bare
+      # Setting a custom directory should fail in lockfile mode
+      ! npins --lock-file sources.json -d npins2 show
+      npins --lock-file sources.json -d npins show
+      test -e npins/default.nix && exit 1
+      V=$(jq -r .pins sources.json)
+      [[ "$V" = "{}" ]]
+    '';
+  };
+
+  addInLockfileMode = mkGitTest rec {
+    name = "add-in-lockfile-mode";
+    repositories."foo" = gitRepo;
+    commands = ''
+      npins --lock-file sources2.json init --bare
+      npins --lock-file sources2.json add git http://localhost:8000/foo -b test-branch
+
+      # Check version and url
+      eq "$(jq -r .pins.foo.version sources2.json)" "null"
+      eq "$(jq -r .pins.foo.revision sources2.json)" "$(resolveGitCommit ${repositories."foo"} HEAD)"
+      eq "$(jq -r .pins.foo.url sources2.json)" "null"
+
+      # Check setting the directory in normal mode still works
+      npins -d testing init --bare
+      NPINS_DIRECTORY=testing npins show
+    '';
+  };
+
   addDryRun = mkGitTest {
     name = "add-dry-run";
     repositories."foo" = gitRepo;

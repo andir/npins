@@ -116,10 +116,11 @@ Commands:
   help          Print this message or the help of the given subcommand(s)
 
 Options:
-  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-  -v, --verbose             Print debug messages
-  -h, --help                Print help
-  -V, --version             Print version
+  -d, --directory <FOLDER>     Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
+      --lock-file <LOCK_FILE>  Specifies the path to the sources.json and activates lockfile mode. In lockfile mode, no default.nix will be generated and --directory will be ignored
+  -v, --verbose                Print debug messages
+  -h, --help                   Print help
+  -V, --version                Print version
 ```
 
 ### Initialization
@@ -139,10 +140,9 @@ Intializes the npins directory. Running this multiple times will restore/upgrade
 Usage: npins init [OPTIONS]
 
 Options:
-      --bare                Don't add an initial `nixpkgs` entry
-  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-  -v, --verbose             Print debug messages
-  -h, --help                Print help
+      --bare     Don't add an initial `nixpkgs` entry
+  -v, --verbose  Print debug messages
+  -h, --help     Print help
 ```
 
 ### Migrate from Niv
@@ -168,10 +168,9 @@ Arguments:
   [PATH]  [default: nix/sources.json]
 
 Options:
-  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-  -n, --name <NAME>         Only import one entry from Niv
-  -v, --verbose             Print debug messages
-  -h, --help                Print help
+  -n, --name <NAME>  Only import one entry from Niv
+  -v, --verbose      Print debug messages
+  -h, --help         Print help
 ```
 
 ### Adding dependencies
@@ -211,12 +210,11 @@ Commands:
   help     Print this message or the help of the given subcommand(s)
 
 Options:
-  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-      --name <NAME>         Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
-      --frozen              Add the pin as frozen, meaning that it will be ignored by `npins update` by default
-  -v, --verbose             Print debug messages
-  -n, --dry-run             Don't actually apply the changes
-  -h, --help                Print help
+      --name <NAME>  Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
+      --frozen       Add the pin as frozen, meaning that it will be ignored by `npins update` by default
+  -n, --dry-run      Don't actually apply the changes
+  -v, --verbose      Print debug messages
+  -h, --help         Print help
 ```
 
 There are several options for tracking git branches, releases and tags:
@@ -233,18 +231,16 @@ Arguments:
 Options:
   -b, --branch <BRANCH>
           Track a branch instead of a release
-  -d, --directory <FOLDER>
-          Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
       --name <NAME>
           Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
       --at <tag or rev>
           Use a specific commit/release instead of the latest. This may be a tag name, or a git revision when --branch is set
       --frozen
           Add the pin as frozen, meaning that it will be ignored by `npins update` by default
-  -v, --verbose
-          Print debug messages
       --pre-releases
           Also track pre-releases. Conflicts with the --branch option
+  -v, --verbose
+          Print debug messages
       --upper-bound <version>
           Bound the version resolution. For example, setting this to "2" will restrict updates to 1.X versions. Conflicts with the --branch option
       --release-prefix <RELEASE_PREFIX>
@@ -267,9 +263,8 @@ Arguments:
   <NAME>  
 
 Options:
-  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-  -v, --verbose             Print debug messages
-  -h, --help                Print help
+  -v, --verbose  Print debug messages
+  -h, --help     Print help
 ```
 
 ### Show current entries
@@ -283,9 +278,8 @@ Lists the current pin entries
 Usage: npins show [OPTIONS]
 
 Options:
-  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-  -v, --verbose             Print debug messages
-  -h, --help                Print help
+  -v, --verbose  Print debug messages
+  -h, --help     Print help
 ```
 
 ### Updating dependencies
@@ -302,16 +296,14 @@ Arguments:
   [NAMES]...  Updates only the specified pins
 
 Options:
-  -d, --directory <FOLDER>
-          Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
   -p, --partial
           Don't update versions, only re-fetch hashes
   -f, --full
           Re-fetch hashes even if the version hasn't changed. Useful to make sure the derivations are in the Nix store
-  -v, --verbose
-          Print debug messages
   -n, --dry-run
           Print the diff, but don't write back the changes
+  -v, --verbose
+          Print debug messages
       --frozen
           Allow updating frozen pins, which would otherwise be ignored
       --max-concurrent-downloads <MAX_CONCURRENT_DOWNLOADS>
@@ -331,9 +323,8 @@ Upgrade the sources.json and default.nix to the latest format version. This may 
 Usage: npins upgrade [OPTIONS]
 
 Options:
-  -d, --directory <FOLDER>  Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-  -v, --verbose             Print debug messages
-  -h, --help                Print help
+  -v, --verbose  Print debug messages
+  -h, --help     Print help
 ```
 
 ### Using private GitLab repositories
