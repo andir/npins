@@ -58,10 +58,16 @@ let
       git init tmp
       cd tmp
 
+      if [[ "${branchName}" != "main" ]]; then
+        echo -n 'main' > test.txt
+        git add test.txt
+        git commit -v -m "init commit for main"
+      fi
+
       git checkout -B '${branchName}'
-      touch test.txt
+      echo -n '${branchName}' > test.txt
       git add test.txt
-      git commit -v -m "init"
+      git commit -v -m "init ${branchName}"
 
       ${pkgs.lib.concatMapStringsSep "\n" (tag: ''
         echo '${tag}' > test.txt
@@ -70,7 +76,8 @@ let
         git tag '${tag}'
       '') tags}
 
-      git checkout -B '${branchName}' # TODO remove this and tests fail (:
+      git checkout main
+
       ${extraCommands}
 
       git update-server-info
@@ -193,8 +200,8 @@ let
               # For each of the commits in the repo create the tarballs
               git config --global --add safe.directory ${gitRepo}
               echo $(git -C ${gitRepo} log --oneline --format="format:%H")
-              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX.tar.gz XX
-              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
+              git -C ${gitRepo} log --reflog --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX.tar.gz XX
+              git -C ${gitRepo} log --reflog --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
             ''
           ))
           (lib.concatStringsSep "\n")
@@ -324,8 +331,8 @@ let
               ls -la $tarballPath
               # For each of the commits in the repo create the tarballs
               git config --global --add safe.directory ${gitRepo}
-              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX XX
-              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
+              git -C ${gitRepo} log --reflog --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX XX
+              git -C ${gitRepo} log --reflog --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
             ''
           ))
           (lib.concatStringsSep "\n")
@@ -681,7 +688,7 @@ in
     {
       branch = mkPrefetchGitTest "branch" "--branch test-branch";
       tag = mkPrefetchGitTest "tag" "--at v0.2";
-      hash = mkPrefetchGitTest "hash" "--branch test-branch --at 9ba40d123c3e6adb35c99ad04fd9de6bcdc1c9d5";
+      hash = mkPrefetchGitTest "hash" "--branch test-branch --at 680cde09436e85b1e6fe9f394724a0d845dfc505";
 
       importGitFromFlake =
         let
@@ -726,6 +733,21 @@ in
 
       OUTPATH=$(nix-instantiate --eval npins -A foo.outPath)
       neq "$OUTPATH" "/foo_overriden"
+    '';
+  };
+
+  gitBranch = mkGitTest rec {
+    name = "git-branch";
+    repositories."foo" = gitRepo;
+    commands = ''
+      npins init --bare
+      npins add git http://localhost:8000/foo -b test-branch
+      npins show
+
+      OUTPATH=$(nix-instantiate --eval npins -A foo.outPath.outPath)
+      pushd /build/*foo*
+      eq "$(cat test.txt)" "v0.2"
+      popd
     '';
   };
 }
