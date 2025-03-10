@@ -1,6 +1,6 @@
 //! Convert+Import Niv files
 
-use crate::*;
+use crate::{git, Pin};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
