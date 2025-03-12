@@ -1,6 +1,8 @@
 //! The main CLI application
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
-use super::*;
+use npins::*;
 
 use std::{
     collections::BTreeSet,
@@ -1096,4 +1098,22 @@ impl Opts {
 
         Ok(())
     }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let opts = Opts::parse();
+
+    env_logger::builder()
+        .filter_level(if opts.verbose {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
+
+    opts.run().await?;
+    Ok(())
 }
