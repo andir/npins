@@ -6,7 +6,7 @@ license = "EUPL-1.2"
 
 [lib]
 name = "npins"
-path = "src/main.rs"
+path = "src/lib.rs"
 
 [[bin]]
 name = "npins"
