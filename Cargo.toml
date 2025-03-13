@@ -4,20 +4,34 @@ version = "0.3.0"
 edition = "2021"
 license = "EUPL-1.2"
 
+[lib]
+name = "npins"
+path = "src/lib.rs"
+
+[[bin]]
+name = "npins"
+path = "src/cli.rs"
+required-features = [ "clap", "crossterm", "env_logger" ]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 serde = { version = "^1.0", features = [ "derive" ] }
 serde_json = { version = "^1.0", features = ["preserve_order"] }
 url = { version = "^2.2.2", features = [ "serde" ] }
-clap = { version = "4.5", features = [ "derive", "env" ] }
 anyhow = "^1.0"
 tokio = { version = "^1.0", features = ["macros", "rt-multi-thread", "process"] }
-env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false }
 log = "^0.4"
 reqwest = { version = "^0.12.0", features = [ "rustls-tls" ], default-features = false }
 async-trait = "0.1.52"
 lenient_semver_parser = { version = "0.4.2", default-features = false }
 lenient_version = { version = "0.4.2" }
 futures = "0.3.31"
-crossterm = { version = "0.28.1", default-features = false }
+
+# CLI dependencies
+clap = { version = "4.5", features = [ "derive", "env" ], optional = true }
+crossterm = { version = "0.28.1", default-features = false, optional = true }
+env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false, optional = true }
+
+[dev-dependencies]
+env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false }

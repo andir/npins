@@ -1,6 +1,8 @@
 //! The main CLI application
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
-use super::*;
+use npins::*;
 
 use std::{
     collections::BTreeSet,
@@ -608,7 +610,7 @@ impl Opts {
                 path.display()
             )
         })?);
-        versions::from_value_versioned(serde_json::from_reader(fh)?)
+        NixPins::from_json_versioned(serde_json::from_reader(fh)?)
             .context("Failed to deserialize sources.json")
     }
 
@@ -623,7 +625,7 @@ impl Opts {
         };
         let mut fh = std::fs::File::create(&path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
-        serde_json::to_writer_pretty(&mut fh, &versions::to_value_versioned(pins))?;
+        serde_json::to_writer_pretty(&mut fh, &pins.to_value_versioned())?;
         fh.write_all(b"\n")?;
         Ok(())
     }
@@ -1096,4 +1098,22 @@ impl Opts {
 
         Ok(())
     }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let opts = Opts::parse();
+
+    env_logger::builder()
+        .filter_level(if opts.verbose {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
+
+    opts.run().await?;
+    Ok(())
 }

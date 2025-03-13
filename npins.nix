@@ -58,6 +58,13 @@ let
     buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
     nativeBuildInputs = [ makeWrapper ];
 
+    cargoBuildFlags = [
+      "--bin"
+      "npins"
+      "--features"
+      "clap,crossterm,env_logger"
+    ];
+
     # (Almost) all tests require internet
     doCheck = false;
 

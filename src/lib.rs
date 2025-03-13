@@ -1,14 +1,15 @@
-use std::path::PathBuf;
+//! The npins library
+//!
+//! Currently, it pretty much exposes the internals of the CLI 1:1, but in the future
+//! this is supposed to evolve into a more standalone library.
 
 use anyhow::Result;
-use clap::Parser;
 use diff::{Diff, OptionExt};
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub mod channel;
-pub mod cli;
 pub mod diff;
 pub mod flake;
 pub mod git;
@@ -19,6 +20,7 @@ pub mod tarball;
 pub mod versions;
 
 /// Helper method to build you a client.
+// TODO make injectable via a configuration mechanism
 pub fn build_client() -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .user_agent(concat!(
@@ -139,7 +141,7 @@ macro_rules! mkPin {
             })*
 
             /* If an error is returned, `self` remains unchanged */
-            async fn update(&mut self) -> Result<Vec<diff::DiffEntry>> {
+            pub async fn update(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, .. } => {
                         /* Use very explicit syntax to force the correct types and get good compile errors */
@@ -152,7 +154,7 @@ macro_rules! mkPin {
             /* If an error is returned, `self` remains unchanged. This returns a double result: the outer one
              * indicates that `update` should be called first, the inner is from the actual operation.
              */
-            async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
+            pub async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, hashes, .. } => {
                         let version = version.as_ref()
@@ -259,10 +261,11 @@ mkPin! {
 /// For serialization purposes, use the `NixPinsVersioned` wrapper instead.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct NixPins {
-    pins: BTreeMap<String, Pin>,
+    pub pins: BTreeMap<String, Pin>,
 }
 
 impl NixPins {
+    /// Create a new `NixPins` with a pin `nixpkgs` pointing to the `nixpkgs-unstable` channel
     pub fn new_with_nixpkgs() -> Self {
         let mut pins = BTreeMap::new();
         pins.insert(
@@ -270,6 +273,16 @@ impl NixPins {
             channel::Pin::new("nixpkgs-unstable").into(),
         );
         Self { pins }
+    }
+
+    /// Custom manual deserialize wrapper that checks the version
+    pub fn from_json_versioned(value: serde_json::Value) -> Result<Self> {
+        versions::from_value_versioned(value)
+    }
+
+    /// Custom manual serialize wrapper that adds a version field
+    pub fn to_value_versioned(&self) -> serde_json::Value {
+        versions::to_value_versioned(self)
     }
 }
 
@@ -346,24 +359,6 @@ impl diff::Diff for GenericUrlHashes {
             ("hash".into(), self.hash.clone()),
         ]
     }
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    let opts = cli::Opts::parse();
-
-    env_logger::builder()
-        .filter_level(if opts.verbose {
-            log::LevelFilter::Debug
-        } else {
-            log::LevelFilter::Info
-        })
-        .format_timestamp(None)
-        .format_target(false)
-        .init();
-
-    opts.run().await?;
-    Ok(())
 }
 
 #[cfg(test)]
