@@ -60,15 +60,15 @@ impl UpdateStrategy {
 
 #[derive(Debug, Parser)]
 pub struct ChannelAddOpts {
-    name: String,
+    channel_name: String,
 }
 
 impl ChannelAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
         Ok((
-            Some(self.name.clone()),
+            Some(self.channel_name.clone()),
             channel::Pin {
-                name: self.name.clone(),
+                name: self.channel_name.clone(),
             }
             .into(),
         ))
