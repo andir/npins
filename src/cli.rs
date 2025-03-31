@@ -60,15 +60,15 @@ impl UpdateStrategy {
 
 #[derive(Debug, Parser)]
 pub struct ChannelAddOpts {
-    name: String,
+    channel_name: String,
 }
 
 impl ChannelAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
         Ok((
-            Some(self.name.clone()),
+            Some(self.channel_name.clone()),
             channel::Pin {
-                name: self.name.clone(),
+                name: self.channel_name.clone(),
             }
             .into(),
         ))
@@ -342,7 +342,7 @@ impl GitAddOpts {
 #[derive(Debug, Parser)]
 pub struct PyPiAddOpts {
     /// Name of the package at PyPi.org
-    pub name: String,
+    pub package_name: String,
 
     /// Use a specific release instead of the latest.
     #[arg(long, value_name = "version")]
@@ -356,9 +356,9 @@ pub struct PyPiAddOpts {
 
 impl PyPiAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
-        Ok((Some(self.name.clone()), {
+        Ok((Some(self.package_name.clone()), {
             let pin = pypi::Pin {
-                name: self.name.clone(),
+                name: self.package_name.clone(),
                 version_upper_bound: self.version_upper_bound.clone(),
             };
             let version = self.at.as_ref().map(|at| GenericVersion {
