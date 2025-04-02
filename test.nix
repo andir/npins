@@ -714,35 +714,35 @@ in
       branch = mkPrefetchGitTest "branch" "--branch test-branch";
       tag = mkPrefetchGitTest "tag" "--at v0.2";
       hash = mkPrefetchGitTest "hash" "--branch test-branch --at 9ba40d123c3e6adb35c99ad04fd9de6bcdc1c9d5";
+    };
 
-      importGitFromFlake =
-        let
-          flake = pkgs.writeText "flake.nix" ''
-            {
-              inputs.foo.url = "git+http://localhost:8000/foo?ref=test-branch";
-              inputs.foo.flake = false;
-              outputs = _: {};
-            }
-          '';
-        in
-        mkGitTest {
-          name = "from-flake-import-git";
-          inherit gitRepo;
-          commands = ''
-            cp ${flake} flake.nix
-            nix --extra-experimental-features flakes --extra-experimental-features nix-command flake update
+  importGitFromFlake =
+    let
+      flake = pkgs.writeText "flake.nix" ''
+        {
+          inputs.foo.url = "git+http://localhost:8000/foo?ref=test-branch";
+          inputs.foo.flake = false;
+          outputs = _: {};
+        }
+      '';
+    in
+    mkGitTest {
+      name = "from-flake-import-git";
+      repositories."foo" = gitRepo;
+      commands = ''
+        cp ${flake} flake.nix
+        nix --extra-experimental-features flakes --extra-experimental-features nix-command flake update
 
-            npins init --bare
-            npins import-flake
-            git ls-remote http://localhost:8000/foo
-            nix-instantiate --eval npins -A foo.outPath
+        npins init --bare
+        npins import-flake
+        git ls-remote http://localhost:8000/foo
+        nix-instantiate --eval npins -A foo.outPath
 
-            cat npins/sources.json
+        cat npins/sources.json
 
-            V=$(jq -r .pins.foo.branch npins/sources.json)
-            [[ "$V" = "test-branch" ]]
-          '';
-        };
+        V=$(jq -r .pins.foo.branch npins/sources.json)
+        [[ "$V" = "test-branch" ]]
+      '';
     };
 
   gitDependencyOverride = mkGitTest rec {
