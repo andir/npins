@@ -91,6 +91,33 @@ let
     tar -zcvf $out foo
   '';
 
+  # Use git-http-backend CGI to serve git repo via http:// for shallow clone capabilities
+  gitServe = pkgs.writers.writePython3Bin "git-serve" { } ''
+    import os
+    from http.server import CGIHTTPRequestHandler, test
+
+    os.environ["GIT_HTTP_EXPORT_ALL"] = "1"
+
+
+    class GitHandler(CGIHTTPRequestHandler):
+        have_fork = False
+
+        def is_cgi(self):
+            self.cgi_info = "${pkgs.gitMinimal}/libexec/git-core", "git-http-backend/" + self.path  # noqa: E501
+            if "/archive/" in self.path or "/api/" in self.path:
+                return False
+            return True
+
+        def translate_path(self, path):
+            if path.endswith("git-http-backend"):
+                return path
+            return CGIHTTPRequestHandler.translate_path(self, path)
+
+
+    if __name__ == "__main__":
+        test(GitHandler)
+  '';
+
   mkGitTest =
     {
       name,
@@ -133,7 +160,7 @@ let
           (lib.concatStringsSep "\n")
         ]}
 
-        python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
@@ -200,7 +227,7 @@ let
           (lib.concatStringsSep "\n")
         ]}
 
-        python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
@@ -331,7 +358,7 @@ let
           (lib.concatStringsSep "\n")
         ]}
 
-        python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
@@ -492,7 +519,7 @@ in
 
         # In order to be able to add the submodule, we need to fake host it
         cd ..
-        ${pkgs.python3}/bin/python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
         mkdir owner
         ln -s ${repositories."owner/bar"} "owner/bar.git"
@@ -605,7 +632,7 @@ in
 
         # In order to be able to add the submodule, we need to fake host it
         cd ..
-        ${pkgs.python3}/bin/python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
         ln -s ${repositories.bar} "bar"
         cd tmp
@@ -644,7 +671,7 @@ in
 
         # In order to be able to add the submodule, we need to fake host it
         cd ..
-        ${pkgs.python3}/bin/python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
         mkdir owner
         ln -s ${repositories."owner/bar"} "owner/bar.git"
@@ -683,7 +710,7 @@ in
 
         # In order to be able to add the submodule, we need to fake host it
         cd ..
-        ${pkgs.python3}/bin/python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
         mkdir owner
         ln -s ${repositories."owner/bar"} "owner/bar.git"
