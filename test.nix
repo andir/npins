@@ -50,6 +50,8 @@ let
     }:
     pkgs.runCommand "git-repo" { nativeBuildInputs = [ pkgs.gitMinimal ]; } ''
       export HOME=$TMP
+      export GIT_AUTHOR_DATE="1970-01-01 00:00:00 +0000"
+      export GIT_COMMITTER_DATE="1970-01-01 00:00:00 +0000"
       git config --global user.email "you@example.com"
       git config --global user.name "Your Name"
       git config --global init.defaultBranch main
