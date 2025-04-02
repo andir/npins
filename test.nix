@@ -739,7 +739,7 @@ in
 
   nixPrefetchBranch = mkPrefetchGitTest "branch" "--branch test-branch";
   nixPrefetchTag = mkPrefetchGitTest "tag" "--at v0.2";
-  nixPrefetchHash = mkPrefetchGitTest "hash" "--branch test-branch --at 9ba40d123c3e6adb35c99ad04fd9de6bcdc1c9d5";
+  nixPrefetchHash = mkPrefetchGitTest "hash" "--branch test-branch --at 81289a3c12d4f528d27794b9e47f4ff5cf534a88";
 
   importGitFromFlake =
     let
