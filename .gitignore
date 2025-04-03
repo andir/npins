@@ -1,5 +1,5 @@
 /target
 .pre-commit-config.yaml
 .direnv
-/result
+/result*
 /test

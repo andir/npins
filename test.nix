@@ -50,6 +50,8 @@ let
     }:
     pkgs.runCommand "git-repo" { nativeBuildInputs = [ pkgs.gitMinimal ]; } ''
       export HOME=$TMP
+      export GIT_AUTHOR_DATE="1970-01-01 00:00:00 +0000"
+      export GIT_COMMITTER_DATE="1970-01-01 00:00:00 +0000"
       git config --global user.email "you@example.com"
       git config --global user.name "Your Name"
       git config --global init.defaultBranch main
@@ -89,6 +91,33 @@ let
   testTarball = pkgs.runCommand "test.tar" { } ''
     echo "Hello world" > foo
     tar -zcvf $out foo
+  '';
+
+  # Use git-http-backend CGI to serve git repo via http:// for shallow clone capabilities
+  gitServe = pkgs.writers.writePython3Bin "git-serve" { } ''
+    import os
+    from http.server import CGIHTTPRequestHandler, test
+
+    os.environ["GIT_HTTP_EXPORT_ALL"] = "1"
+
+
+    class GitHandler(CGIHTTPRequestHandler):
+        have_fork = False
+
+        def is_cgi(self):
+            self.cgi_info = "${pkgs.gitMinimal}/libexec/git-core", "git-http-backend/" + self.path  # noqa: E501
+            if "/archive/" in self.path or "/api/" in self.path:
+                return False
+            return True
+
+        def translate_path(self, path):
+            if path.endswith("git-http-backend"):
+                return path
+            return CGIHTTPRequestHandler.translate_path(self, path)
+
+
+    if __name__ == "__main__":
+        test(GitHandler)
   '';
 
   mkGitTest =
@@ -133,7 +162,7 @@ let
           (lib.concatStringsSep "\n")
         ]}
 
-        python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
@@ -200,7 +229,7 @@ let
           (lib.concatStringsSep "\n")
         ]}
 
-        python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
@@ -331,13 +360,31 @@ let
           (lib.concatStringsSep "\n")
         ]}
 
-        python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
 
         ${commands}
 
         touch $out
       '';
+
+  mkPrefetchGitTest =
+    name: npinsArgs:
+    mkGitTest {
+      name = "nix-prefetch-git-${name}";
+      repositories."foo" = gitRepo;
+      commands = ''
+        npins init --bare
+        npins add git http://localhost:8000/foo ${npinsArgs}
+        before=$(ls /build)
+
+        nix-instantiate --eval npins -A foo.outPath.outPath
+        after=$(ls /build)
+        cat npins/sources.json
+
+        [[ "$before" = "$after" ]]
+      '';
+    };
 in
 {
   initNoDefaultNix = mkGitTest {
@@ -474,7 +521,7 @@ in
 
         # In order to be able to add the submodule, we need to fake host it
         cd ..
-        ${pkgs.python3}/bin/python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
         mkdir owner
         ln -s ${repositories."owner/bar"} "owner/bar.git"
@@ -587,7 +634,7 @@ in
 
         # In order to be able to add the submodule, we need to fake host it
         cd ..
-        ${pkgs.python3}/bin/python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
         ln -s ${repositories.bar} "bar"
         cd tmp
@@ -626,7 +673,7 @@ in
 
         # In order to be able to add the submodule, we need to fake host it
         cd ..
-        ${pkgs.python3}/bin/python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
         mkdir owner
         ln -s ${repositories."owner/bar"} "owner/bar.git"
@@ -665,7 +712,7 @@ in
 
         # In order to be able to add the submodule, we need to fake host it
         cd ..
-        ${pkgs.python3}/bin/python -m http.server 8000 &
+        ${gitServe}/bin/git-serve &
         timeout 30 sh -c 'set -e; until ${pkgs.netcat}/bin/nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
         mkdir owner
         ln -s ${repositories."owner/bar"} "owner/bar.git"
@@ -690,59 +737,37 @@ in
     '';
   };
 
-  nixPrefetch =
+  nixPrefetchBranch = mkPrefetchGitTest "branch" "--branch test-branch";
+  nixPrefetchTag = mkPrefetchGitTest "tag" "--at v0.2";
+  nixPrefetchHash = mkPrefetchGitTest "hash" "--branch test-branch --at 81289a3c12d4f528d27794b9e47f4ff5cf534a88";
+
+  importGitFromFlake =
     let
-      mkPrefetchGitTest =
-        name: npinsArgs:
-        mkGitTest {
-          name = "nix-prefetch-git-${name}";
-          inherit gitRepo;
-          commands = ''
-            npins init --bare
-            npins add git http://localhost:8000/foo ${npinsArgs}
-            before=$(ls /build)
-
-            nix-instantiate --eval npins -A foo.outPath.outPath
-            after=$(ls /build)
-            cat npins/sources.json
-
-            [[ "$before" = "$after" ]]
-          '';
-        };
+      flake = pkgs.writeText "flake.nix" ''
+        {
+          inputs.foo.url = "git+http://localhost:8000/foo?ref=test-branch";
+          inputs.foo.flake = false;
+          outputs = _: {};
+        }
+      '';
     in
-    {
-      branch = mkPrefetchGitTest "branch" "--branch test-branch";
-      tag = mkPrefetchGitTest "tag" "--at v0.2";
-      hash = mkPrefetchGitTest "hash" "--branch test-branch --at 9ba40d123c3e6adb35c99ad04fd9de6bcdc1c9d5";
+    mkGitTest {
+      name = "from-flake-import-git";
+      repositories."foo" = gitRepo;
+      commands = ''
+        cp ${flake} flake.nix
+        nix --extra-experimental-features flakes --extra-experimental-features nix-command flake update
 
-      importGitFromFlake =
-        let
-          flake = pkgs.writeText "flake.nix" ''
-            {
-              inputs.foo.url = "git+http://localhost:8000/foo?ref=test-branch";
-              inputs.foo.flake = false;
-              outputs = _: {};
-            }
-          '';
-        in
-        mkGitTest {
-          name = "from-flake-import-git";
-          inherit gitRepo;
-          commands = ''
-            cp ${flake} flake.nix
-            nix --extra-experimental-features flakes --extra-experimental-features nix-command flake update
+        npins init --bare
+        npins import-flake
+        git ls-remote http://localhost:8000/foo
+        nix-instantiate --eval npins -A foo.outPath
 
-            npins init --bare
-            npins import-flake
-            git ls-remote http://localhost:8000/foo
-            nix-instantiate --eval npins -A foo.outPath
+        cat npins/sources.json
 
-            cat npins/sources.json
-
-            V=$(jq -r .pins.foo.branch npins/sources.json)
-            [[ "$V" = "test-branch" ]]
-          '';
-        };
+        V=$(jq -r .pins.foo.branch npins/sources.json)
+        [[ "$V" = "test-branch" ]]
+      '';
     };
 
   gitDependencyOverride = mkGitTest rec {
