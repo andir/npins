@@ -10,11 +10,13 @@ pub struct PrefetchInfo {
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     let url = url.as_ref();
     log::debug!(
-        "Executing `nix-prefetch-url --unpack --type sha256 {}`",
+        "Executing `nix-prefetch-url --unpack --name source --type sha256 {}`",
         url
     );
     let output = tokio::process::Command::new("nix-prefetch-url")
         .arg("--unpack") // force calculation of the unpacked NAR hash
+        .arg("--name")
+        .arg("source") // use the same symbolic store path name as `builtins.fetchTarball` to avoid downloading the source twice
         .arg("--type")
         .arg("sha256")
         .arg(url)
