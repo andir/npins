@@ -649,7 +649,7 @@ impl Opts {
             if self.folder.join("sources.json").exists() {
                 log::info!(
                     "The file '{}' already exists; nothing to do.",
-                    self.folder.join("pins.json").display()
+                    self.folder.join("sources.json").display()
                 );
                 return Ok(());
             }
