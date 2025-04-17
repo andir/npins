@@ -800,9 +800,12 @@ impl Opts {
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
+        let mut has_diff = false;
         stream::iter(update_iter)
             .buffer_unordered(opts.max_concurrent_downloads)
             .try_for_each(|(name, diff)| {
+                has_diff |= !diff.is_empty();
+
                 fn write_diff(writer: &mut impl Write, name: &str, diff: Vec<diff::DiffEntry>) {
                     if diff.is_empty() {
                         writeln!(writer, "[{name}] No Changes").unwrap();
@@ -847,7 +850,9 @@ impl Opts {
         }
 
         if !opts.dry_run {
-            self.write_pins(&pins)?;
+            if has_diff {
+                self.write_pins(&pins)?;
+            }
             log::info!("Update successful.");
         } else {
             log::info!("Dry run successful.");
