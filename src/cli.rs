@@ -133,9 +133,12 @@ impl GitHubAddOpts {
                         branch.clone(),
                         self.more.submodules,
                     );
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
-                        revision: at.clone(),
-                    });
+                    let version = self
+                        .more
+                        .at
+                        .as_ref()
+                        .map(|at| git::GitRevision::new(at.clone()))
+                        .transpose()?;
                     (pin, version).into()
                 },
                 None => {
@@ -186,9 +189,12 @@ impl ForgejoAddOpts {
                         branch.clone(),
                         self.more.submodules,
                     );
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
-                        revision: at.clone(),
-                    });
+                    let version = self
+                        .more
+                        .at
+                        .as_ref()
+                        .map(|at| git::GitRevision::new(at.clone()))
+                        .transpose()?;
                     (pin, version).into()
                 },
                 None => {
@@ -252,9 +258,7 @@ impl GitLabAddOpts {
                         self.private_token.clone(),
                         self.more.submodules,
                     );
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
-                        revision: at.clone(),
-                    });
+                    let version = self.more.at.as_ref().map(|at| git::GitRevision::new(at.clone())).transpose()?;
                     (pin, version).into()
                 },
                 None => {
@@ -317,9 +321,12 @@ impl GitAddOpts {
             match &self.more.branch {
                 Some(branch) => {
                     let pin = git::GitPin::git(url, branch.clone(), self.more.submodules);
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
-                        revision: at.clone(),
-                    });
+                    let version = self
+                        .more
+                        .at
+                        .as_ref()
+                        .map(|at| git::GitRevision::new(at.clone()))
+                        .transpose()?;
                     (pin, version).into()
                 },
                 None => {

@@ -25,7 +25,16 @@ fn get_github_api_url() -> String {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct GitRevision {
-    pub revision: String,
+    revision: String,
+}
+
+impl GitRevision {
+    pub fn new(revision: String) -> Result<Self> {
+        if !revision.chars().all(|c| c.is_digit(16)) || revision.len() != 40 {
+            anyhow::bail!("'{revision}' is not a valid git revision (sha1 hash)");
+        }
+        Ok(Self { revision })
+    }
 }
 
 impl diff::Diff for GitRevision {

@@ -785,4 +785,16 @@ in
       neq "$OUTPATH" "/foo_overriden"
     '';
   };
+
+  # https://github.com/andir/npins/issues/75
+  regression_issue75 = mkGitTest rec {
+    name = "regression-issue-75";
+    repositories."foo" = gitRepo;
+    commands = ''
+      npins init --bare
+      ! npins add git http://localhost:8000/foo --branch test-branch --at v0.2
+      npins add git http://localhost:8000/foo --at v0.2
+      nix-instantiate --eval npins -A foo.outPath
+    '';
+  };
 }
