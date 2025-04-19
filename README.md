@@ -358,6 +358,47 @@ Please note, that only alphanumerical characters and _ are allow characters in o
 All other characters are converted to _.
 Also check, that you are building impure, if you are wondering, why these overrides are maybe not becoming active.
 
+### Use through `NIX_PATH`
+
+The [`NIX_PATH`](https://nix.dev/manual/nix/latest/command-ref/env-common.html#env-NIX_PATH) environment variable may be used to expose your pins.
+The above example:
+
+```nix
+let
+  sources = import ./npins;
+  pkgs = import sources.nixpkgs {};
+in
+  …
+```
+
+... will then become:
+
+```nix
+let
+  pkgs = import <nixpkgs> {};
+in
+  …
+```
+
+This can be set in different ways.
+
+#### from the shell
+
+This example uses [jq](https://jqlang.org/).
+
+```sh
+NIX_PATH="$(nix eval --json -f ./npins | jq -r 'to_entries | map("\(.key)=\(.value)") | join(":")')"
+```
+
+#### from NixOS
+
+```nix
+{ lib, ... }:
+{
+  nix.nixPath = [ lib.concatStringsSep ":" (lib.mapAttrsToList (k: v: k+"="+v) (import ./npins)) ];
+}
+```
+
 ## Contributing
 
 Contributions to this project are welcome in the form of GitHub Issues or PRs. Please consider the following before creating PRs:
