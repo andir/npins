@@ -235,7 +235,9 @@ Also check, that you are building impure, if you are wondering, why these overri
 
 ### Use through `NIX_PATH`
 
-The [`NIX_PATH`](https://nix.dev/manual/nix/latest/command-ref/env-common.html#env-NIX_PATH) environment variable may be used to expose your pins.
+While depending on the environment makes builds impure, you can use the
+[`NIX_PATH`](https://nix.dev/manual/nix/latest/command-ref/env-common.html#env-NIX_PATH)
+environment variable to expose your pins.
 The above example:
 
 ```nix
@@ -246,7 +248,7 @@ in
   …
 ```
 
-... will then become:
+... can then become:
 
 ```nix
 let
@@ -262,7 +264,13 @@ This can be set in different ways.
 This example uses [jq](https://jqlang.org/).
 
 ```sh
-NIX_PATH="$(nix eval --json -f ./npins | jq -r 'to_entries | map("\(.key)=\(.value)") | join(":")')"
+nix_path="$(nix eval --json -f ./npins | jq -r 'to_entries | map("\(.key)=\(.value)") | join(":")')"
+```
+
+This can be used in a NixOS build simply like:
+
+```sh
+NIX_PATH="${nix_path}" nixos-rebuild switch
 ```
 
 #### from NixOS
@@ -273,6 +281,11 @@ NIX_PATH="$(nix eval --json -f ./npins | jq -r 'to_entries | map("\(.key)=\(.val
   nix.nixPath = [ lib.concatStringsSep ":" (lib.mapAttrsToList (k: v: k+"="+v) (import ./npins)) ];
 }
 ```
+
+This sets the variable for the root user in NixOS, for use in resolving paths in commands after switching to it.
+In other words, just setting this will not yet affect how paths *during* that build are resolved — use the previous example for that.
+
+To set it for other users one may use home-manager's [`home.sessionVariables`](https://home-manager.dev/manual/24.11/options.xhtml#opt-home.sessionVariables).
 
 ## Contributing
 
