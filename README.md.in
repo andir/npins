@@ -257,35 +257,11 @@ in
   …
 ```
 
-This can be set in different ways.
-
-#### from the shell
-
-This example uses [jq](https://jqlang.org/).
+Using [jq](https://jqlang.org/), this can be set using:
 
 ```sh
-nix_path="$(nix eval --json -f ./npins | jq -r 'to_entries | map("\(.key)=\(.value)") | join(":")')"
+NIX_PATH="$(nix eval --json -f ./npins | jq -r 'to_entries | map("\(.key)=\(.value)") | join(":")')"
 ```
-
-This can be used in a NixOS build simply like:
-
-```sh
-NIX_PATH="${nix_path}" nixos-rebuild switch
-```
-
-#### from NixOS
-
-```nix
-{ lib, ... }:
-{
-  nix.nixPath = [ lib.concatStringsSep ":" (lib.mapAttrsToList (k: v: k+"="+v) (import ./npins)) ];
-}
-```
-
-This sets the variable for the root user in NixOS, for use in resolving paths in commands after switching to it.
-In other words, just setting this will not yet affect how paths *during* that build are resolved — use the previous example for that.
-
-To set it for other users one may use home-manager's [`home.sessionVariables`](https://home-manager.dev/manual/24.11/options.xhtml#opt-home.sessionVariables).
 
 ## Contributing
 
