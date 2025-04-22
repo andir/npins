@@ -113,6 +113,7 @@ Commands:
   import-flake  Try to import entries from flake.lock
   freeze        Freeze a pin entry
   unfreeze      Thaw a pin entry
+  get-path      Evaluates the store path to a pin, fetching it if necessary. Don't forget to add a GC root
   help          Print this message or the help of the given subcommand(s)
 
 Options:

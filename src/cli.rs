@@ -438,6 +438,13 @@ pub struct FreezeOpts {
     pub names: Vec<String>,
 }
 
+#[derive(Debug, Parser)]
+pub struct GetPathOpts {
+    /// Name of the pin
+    #[structopt(required = true)]
+    pub name: String,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
@@ -472,6 +479,9 @@ pub enum Command {
 
     /// Thaw a pin entry
     Unfreeze(FreezeOpts),
+
+    /// Evaluates the store path to a pin, fetching it if necessary. Don't forget to add a GC root
+    GetPath(GetPathOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -1035,6 +1045,25 @@ impl Opts {
         Ok(())
     }
 
+    async fn get_path(&self, o: &GetPathOpts) -> Result<()> {
+        /* Although redundant, we still parse the lock file here for better error messages */
+        self.read_pins()?;
+
+        let path = self
+            .lock_file
+            .to_owned()
+            .unwrap_or(self.folder.join("sources.json"));
+        let out_path = nix::nix_eval_pin(&path, &o.name)
+            .await
+            .context("Could not evaluate pin")?;
+        /* note(piegames): HMU if you ever find yourself using npins on Windows */
+        use std::os::unix::ffi::OsStrExt;
+        std::io::stdout()
+            .write_all(out_path.as_path().as_os_str().as_bytes())
+            .unwrap();
+        Ok(())
+    }
+
     pub async fn run(&self) -> Result<()> {
         if self.lock_file.is_some() && &*self.folder != std::path::Path::new("npins") {
             anyhow::bail!("If --lock-file is set, --directory will be ignored and thus should not be set to a non-default value (which is \"npins\")");
@@ -1050,6 +1079,7 @@ impl Opts {
             Command::ImportFlake(o) => self.import_flake(o).await?,
             Command::Freeze(o) => self.freeze(o).await?,
             Command::Unfreeze(o) => self.unfreeze(o).await?,
+            Command::GetPath(o) => self.get_path(o).await?,
         };
 
         Ok(())

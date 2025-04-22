@@ -797,4 +797,17 @@ in
       nix-instantiate --eval npins -A foo.outPath
     '';
   };
+
+  getPath = mkGitTest rec {
+    name = "get-path";
+    repositories."foo" = gitRepo;
+    commands = ''
+      npins init --bare
+      npins add git http://localhost:8000/foo -b test-branch
+      npins show
+      set +x
+
+      eq "$(nix-instantiate --eval npins -A foo.outPath)" "\"$(npins get-path foo)\""
+    '';
+  };
 }
