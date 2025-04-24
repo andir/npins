@@ -118,6 +118,34 @@ pub enum Repository {
 }
 
 impl Repository {
+    pub fn git(url: url::Url) -> Self {
+        Self::Git { url }
+    }
+
+    pub fn github(owner: impl Into<String>, repo: impl Into<String>) -> Self {
+        Repository::GitHub {
+            owner: owner.into(),
+            repo: repo.into(),
+        }
+    }
+
+    pub fn forgejo(server: Url, owner: impl Into<String>, repo: impl Into<String>) -> Self {
+        Repository::Forgejo {
+            server,
+            owner: owner.into(),
+            repo: repo.into(),
+        }
+    }
+
+    pub fn gitlab(repo_path: String, server: Option<Url>, private_token: Option<String>) -> Self {
+        let server = server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap());
+        Repository::GitLab {
+            repo_path,
+            server,
+            private_token,
+        }
+    }
+
     /// Get the URL to the represented Git repository
     fn git_url(&self) -> Result<Url> {
         Ok(match self {
@@ -269,61 +297,9 @@ impl diff::Diff for GitPin {
 }
 
 impl GitPin {
-    pub fn git(url: Url, branch: String, submodules: bool) -> Self {
+    pub fn new(repository: Repository, branch: String, submodules: bool) -> Self {
         Self {
-            repository: Repository::Git { url },
-            branch,
-            submodules,
-        }
-    }
-
-    pub fn github(
-        owner: impl Into<String>,
-        repo: impl Into<String>,
-        branch: String,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::GitHub {
-                owner: owner.into(),
-                repo: repo.into(),
-            },
-            branch,
-            submodules,
-        }
-    }
-
-    pub fn forgejo(
-        server: Url,
-        owner: impl Into<String>,
-        repo: impl Into<String>,
-        branch: String,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::Forgejo {
-                server,
-                owner: owner.into(),
-                repo: repo.into(),
-            },
-            branch,
-            submodules,
-        }
-    }
-
-    pub fn gitlab(
-        repo_path: String,
-        branch: String,
-        server: Option<Url>,
-        private_token: Option<String>,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::GitLab {
-                repo_path,
-                server: server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap()),
-                private_token,
-            },
+            repository,
             branch,
             submodules,
         }
@@ -426,79 +402,15 @@ impl diff::Diff for GitReleasePin {
 }
 
 impl GitReleasePin {
-    pub fn git(
-        url: Url,
+    pub fn new(
+        repository: Repository,
         pre_releases: bool,
         version_upper_bound: Option<String>,
         release_prefix: Option<String>,
         submodules: bool,
     ) -> Self {
         Self {
-            repository: Repository::Git { url },
-            pre_releases,
-            version_upper_bound,
-            release_prefix,
-            submodules,
-        }
-    }
-
-    pub fn github(
-        owner: impl Into<String>,
-        repo: impl Into<String>,
-        pre_releases: bool,
-        version_upper_bound: Option<String>,
-        release_prefix: Option<String>,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::GitHub {
-                owner: owner.into(),
-                repo: repo.into(),
-            },
-            pre_releases,
-            version_upper_bound,
-            release_prefix,
-            submodules,
-        }
-    }
-
-    pub fn forgejo(
-        server: Url,
-        owner: impl Into<String>,
-        repo: impl Into<String>,
-        pre_releases: bool,
-        version_upper_bound: Option<String>,
-        release_prefix: Option<String>,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::Forgejo {
-                server,
-                owner: owner.into(),
-                repo: repo.into(),
-            },
-            pre_releases,
-            version_upper_bound,
-            release_prefix,
-            submodules,
-        }
-    }
-
-    pub fn gitlab(
-        repo_path: String,
-        server: Option<Url>,
-        pre_releases: bool,
-        version_upper_bound: Option<String>,
-        private_token: Option<String>,
-        release_prefix: Option<String>,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::GitLab {
-                repo_path,
-                server: server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap()),
-                private_token,
-            },
+            repository,
             pre_releases,
             version_upper_bound,
             release_prefix,

@@ -276,13 +276,13 @@ mod test {
             NixPins {
                 pins: btreemap![
                     "nixos-mailserver".into() => Pin::Git {
-                        input: git::GitPin::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap(), "nixos-21.11".into(), false),
+                        input: git::GitPin::new(git::Repository::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap()), "nixos-21.11".into(), false),
                         version: Some(git::GitRevision::new("6e3a7b2ea6f0d68b82027b988aa25d3423787303".into()).unwrap()),
                         hashes: Some(git::OptionalUrlHashes { url: None, hash: "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44".into() } ),
                         frozen: Frozen::default(),
                     },
                     "nixpkgs".into() => Pin::Git {
-                        input: git::GitPin::github("nixos", "nixpkgs", "nixpkgs-unstable".into(), false),
+                        input: git::GitPin::new(git::Repository::github("nixos", "nixpkgs"), "nixpkgs-unstable".into(), false),
                         version: Some(git::GitRevision::new("5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2".into()).unwrap()),
                         hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb".into() }),
                         frozen: Frozen::default(),
@@ -294,7 +294,7 @@ mod test {
                         frozen: Frozen::default(),
                     },
                     "youtube-dl".into() => Pin::GitRelease {
-                        input: git::GitReleasePin::github("ytdl-org", "youtube-dl", false, None, None, false),
+                        input: git::GitReleasePin::new(git::Repository::github("ytdl-org", "youtube-dl"), false, None, None, false),
                         version: Some(GenericVersion { version: "youtube-dl 2021.12.17".into() }),
                         hashes: None,
                         frozen: Frozen::default(),

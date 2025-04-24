@@ -123,16 +123,13 @@ pub struct GitHubAddOpts {
 
 impl GitHubAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
+        let repository = git::Repository::github(&self.owner, &self.repository);
+
         Ok((
             Some(self.repository.clone()),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::github(
-                        &self.owner,
-                        &self.repository,
-                        branch.clone(),
-                        self.more.submodules,
-                    );
+                    let pin = git::GitPin::new(repository, branch.clone(), self.more.submodules);
                     let version = self
                         .more
                         .at
@@ -142,9 +139,8 @@ impl GitHubAddOpts {
                     (pin, version).into()
                 },
                 None => {
-                    let pin = git::GitReleasePin::github(
-                        &self.owner,
-                        &self.repository,
+                    let pin = git::GitReleasePin::new(
+                        repository,
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.more.release_prefix.clone(),
@@ -177,18 +173,13 @@ impl ForgejoAddOpts {
             },
             _ => Err(err),
         })?;
+        let repository = git::Repository::forgejo(server_url, &self.owner, &self.repository);
 
         Ok((
             Some(self.repository.clone()),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::forgejo(
-                        server_url,
-                        &self.owner,
-                        &self.repository,
-                        branch.clone(),
-                        self.more.submodules,
-                    );
+                    let pin = git::GitPin::new(repository, branch.clone(), self.more.submodules);
                     let version = self
                         .more
                         .at
@@ -198,10 +189,8 @@ impl ForgejoAddOpts {
                     (pin, version).into()
                 },
                 None => {
-                    let pin = git::GitReleasePin::forgejo(
-                        server_url,
-                        &self.owner,
-                        &self.repository,
+                    let pin = git::GitReleasePin::new(
+                        repository,
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.more.release_prefix.clone(),
@@ -244,6 +233,11 @@ pub struct GitLabAddOpts {
 
 impl GitLabAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
+        let repository = git::Repository::gitlab(
+            self.repo_path.join("/"),
+            Some(self.server.clone()),
+            self.private_token.clone(),
+        );
         Ok((
             Some(self.repo_path
                 .last()
@@ -251,23 +245,19 @@ impl GitLabAddOpts {
                 .clone()),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::gitlab(
-                        self.repo_path.join("/"),
+                    let pin = git::GitPin::new(
+                        repository,
                         branch.clone(),
-                        Some(self.server.clone()),
-                        self.private_token.clone(),
                         self.more.submodules,
                     );
                     let version = self.more.at.as_ref().map(|at| git::GitRevision::new(at.clone())).transpose()?;
                     (pin, version).into()
                 },
                 None => {
-                    let pin = git::GitReleasePin::gitlab(
-                        self.repo_path.join("/"),
-                        Some(self.server.clone()),
+                    let pin = git::GitReleasePin::new(
+                        repository,
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
-                        self.private_token.clone(),
                         self.more.release_prefix.clone(),
                         self.more.submodules,
                     );
@@ -315,12 +305,13 @@ impl GitAddOpts {
             Some(seg) => seg.to_owned(),
         };
         let name = name.strip_suffix(".git").unwrap_or(&name);
+        let repository = git::Repository::git(url);
 
         Ok((
             Some(name.to_owned()),
             match &self.more.branch {
                 Some(branch) => {
-                    let pin = git::GitPin::git(url, branch.clone(), self.more.submodules);
+                    let pin = git::GitPin::new(repository, branch.clone(), self.more.submodules);
                     let version = self
                         .more
                         .at
@@ -330,8 +321,8 @@ impl GitAddOpts {
                     (pin, version).into()
                 },
                 None => {
-                    let pin = git::GitReleasePin::git(
-                        url,
+                    let pin = git::GitReleasePin::new(
+                        repository,
                         self.more.pre_releases,
                         self.more.version_upper_bound.clone(),
                         self.more.release_prefix.clone(),
