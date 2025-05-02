@@ -543,6 +543,7 @@ async fn fetch_remote(url: &str, args: &[&str]) -> Result<Vec<RemoteInfo>> {
     let process = Command::new("git")
         // Disable any interactive login attempts, failing gracefully instead
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
         .arg("ls-remote")
         .args(args)
         .output()

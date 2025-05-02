@@ -66,6 +66,7 @@ pub async fn nix_prefetch_git(
     let output = output
         // Disable any interactive login attempts, failing gracefully instead
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
         .arg(url)
         .arg(git_ref.as_ref())
         .output()
