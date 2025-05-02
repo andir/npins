@@ -229,7 +229,7 @@ impl Repository {
             Repository::Git { .. } => None,
             Repository::GitHub { owner, repo } => Some(
                 format!(
-                    "{github_api}/repos/{owner}/{repo}/tarball/{tag}",
+                    "{github_api}/repos/{owner}/{repo}/tarball/refs/tags/{tag}",
                     github_api = get_github_api_url(),
                     owner = owner,
                     repo = repo,
@@ -938,11 +938,45 @@ mod test {
             ReleasePinHashes {
                 revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
                 url: Some(
-                    "https://api.github.com/repos/jstutters/MidiOSC/tarball/v1.1"
+                    "https://api.github.com/repos/jstutters/MidiOSC/tarball/refs/tags/v1.1"
                         .parse()
                         .unwrap()
                 ),
                 hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+            }
+        );
+        Ok(())
+    }
+
+    // That repo has a tag and a branch with the same name, and the naive endpoint for
+    // GitHub which usually works then returns
+    // {
+    //   "message": "'0.2.1' has multiple possibilities: https://github.com/alexfedosov/AFHorizontalDayPicker/tarball/refs/heads/0.2.1, https://github.com/alexfedosov/AFHorizontalDayPicker/tarball/refs/tags/0.2.1",
+    //   "documentation_url": "https://docs.github.com/rest/repos/contents#download-a-repository-archive-tar",
+    //   "status": "300"
+    // }
+    #[tokio::test]
+    async fn test_github_release_ambiguous() -> Result<()> {
+        let pin = GitReleasePin {
+            repository: Repository::github("alexfedosov", "AFHorizontalDayPicker"),
+            pre_releases: false,
+            version_upper_bound: None,
+            release_prefix: None,
+            submodules: false,
+        };
+        let version = GenericVersion {
+            version: "0.2.1".into(),
+        };
+        assert_eq!(
+            pin.fetch(&version).await?,
+            ReleasePinHashes {
+                revision: "ca59ad1dc1b55108f1d17f20bdf443aad3e2f0f5".into(),
+                url: Some(
+                    "https://api.github.com/repos/alexfedosov/AFHorizontalDayPicker/tarball/refs/tags/0.2.1"
+                        .parse()
+                        .unwrap()
+                ),
+                hash: "0arqpja90n3yy767x0ckwg4biqm4igcpa0vznvx3daaywjkb1v7v".into(),
             }
         );
         Ok(())
