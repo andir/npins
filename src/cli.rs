@@ -1,21 +1,23 @@
 //! The main CLI application
-use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::{cell::RefCell, collections::BTreeMap};
 
 use npins::*;
 
 use std::{
     collections::BTreeSet,
-    io::{stderr, stdout, IsTerminal, Write},
+    io::{stderr, Write},
     ops::Not,
 };
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use crossterm::{
-    cursor, execute,
-    style::{ContentStyle, Print, StyledContent, Stylize},
-    terminal,
+    cursor::MoveToPreviousLine,
+    queue,
+    style::{Print, Stylize},
+    terminal::{Clear, ClearType},
+    QueueableCommand,
 };
 use futures::{
     future,
@@ -550,20 +552,6 @@ pub enum Command {
     Unfreeze(FreezeOpts),
 }
 
-fn print_diff(name: &str, diff: impl AsRef<[diff::DiffEntry]>) {
-    let diff = diff.as_ref();
-    if diff.is_empty() {
-        println!("[{name}] No Changes");
-    } else {
-        // Lock the stream so that we can print the diff in multiple calls without interleaving prints from other threads
-        let mut stdout_lock = stdout().lock();
-        writeln!(stdout_lock, "[{name}] Changes:").unwrap();
-        for d in diff {
-            write!(stdout_lock, "{}", d).unwrap();
-        }
-    }
-}
-
 #[derive(Debug, Parser)]
 #[command(
     version,
@@ -731,20 +719,23 @@ impl Opts {
 
     async fn update(&self, opts: &UpdateOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
-        let length = pins.pins.len();
 
-        let mut valid_names = BTreeSet::new();
+        let mut selected_pins = BTreeSet::new();
         for name in &opts.names {
-            if valid_names.insert(name).not() {
+            if selected_pins.insert(name).not() {
                 log::warn!("Duplicate pin provided: {name}")
             }
         }
-        valid_names.retain(|&name| {
-            let exists = pins.pins.contains_key(name);
-            if exists.not() {
-                log::warn!("Provided pin does not exist: {name}");
-            }
-            exists
+        selected_pins.retain(|&name| match pins.pins.get(name) {
+            Some(p) if !opts.update_frozen && p.is_frozen() => {
+                log::warn!("Frozen pin provided: {name}");
+                false
+            },
+            Some(_) => true,
+            None => {
+                log::warn!("Pin does not exist: {name}");
+                false
+            },
         });
 
         let strategy = match (opts.partial, opts.full) {
@@ -754,72 +745,72 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        for (name, pin) in &pins.pins {
-            let (mut style, status) = match (
-                opts.names.is_empty() || valid_names.contains(name),
-                pin.is_frozen() && !opts.update_frozen,
-            ) {
-                (true, false) => (ContentStyle::new().grey(), "queued"),
-                (true, true) => (ContentStyle::new().dark_grey(), "frozen"),
-                (false, _) => (ContentStyle::new().dark_grey(), "ignored"),
-            };
-
-            if stderr().is_terminal().not() {
-                style = ContentStyle::new();
-            }
-
-            eprintln!("{} ({status})", style.apply(name));
-        }
-
-        let pin_writer = |mut name: StyledContent<&str>, status: &str, index: usize| {
-            if stderr().is_terminal() && !self.verbose {
-                let seek_distance = (length - index) as u16;
-
-                execute!(
-                    stderr(),
-                    cursor::MoveToPreviousLine(seek_distance),
-                    terminal::Clear(terminal::ClearType::CurrentLine),
-                    Print(format_args!("{name} ({status})")),
-                    cursor::MoveToNextLine(seek_distance)
-                )
-            } else {
-                *name.style_mut() = ContentStyle::new();
-                eprintln!("{name} ({status})");
-                Ok(())
-            }
-        };
+        let in_progress = RefCell::new(BTreeSet::<&str>::new());
 
         let update_iter = pins
             .pins
             .iter_mut()
-            .enumerate()
-            .filter(|(_, (name, pin))| {
-                (opts.names.is_empty() || valid_names.contains(name))
-                    && (opts.update_frozen || !pin.is_frozen())
+            .filter(|(name, pin)| {
+                selected_pins.contains(name)
+                    || (opts.names.is_empty() && (opts.update_frozen || !pin.is_frozen()))
             })
-            .map(|(i, (name, pin))| async move {
-                pin_writer(name.as_str().dark_yellow(), "in progress", i)?;
+            .inspect(|(name, _)| {
+                let mut in_progress = in_progress.borrow_mut();
+                let mut stderr = stderr().lock();
 
+                if in_progress.is_empty().not() {
+                    queue!(
+                        stderr,
+                        MoveToPreviousLine(in_progress.len() as u16),
+                        Clear(ClearType::FromCursorDown)
+                    )
+                    .unwrap();
+                }
+
+                in_progress.insert(name);
+                for n in in_progress.iter() {
+                    stderr.queue(Print(n.dark_yellow())).unwrap();
+                    stderr.write_all(b"\n").unwrap();
+                }
+                stderr.flush().unwrap();
+            })
+            .map(|(name, pin)| async move {
                 let diff = Self::update_one(pin, strategy).await?;
-
-                let (style, status) = if diff.is_empty() {
-                    (ContentStyle::new().dark_green(), "unaltered")
-                } else {
-                    (ContentStyle::new().green().bold(), "updated")
-                };
-
-                pin_writer(style.apply(name), status, i)?;
-
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
         stream::iter(update_iter)
             .buffer_unordered(opts.max_concurrent_downloads)
-            .try_filter(|(_, diff)| future::ready(diff.is_empty().not()))
-            .try_collect::<Vec<_>>()
-            .await?
-            .into_iter()
-            .for_each(|(name, diff)| print_diff(name, diff));
+            .try_for_each(|(name, diff)| {
+                let mut in_progress = in_progress.borrow_mut();
+                let mut stderr = stderr().lock();
+
+                queue!(
+                    stderr,
+                    MoveToPreviousLine(in_progress.len() as u16),
+                    Clear(ClearType::FromCursorDown)
+                )
+                .unwrap();
+
+                in_progress.remove(name.as_str());
+                if diff.is_empty() {
+                    writeln!(stderr, "[{name}] No Changes").unwrap();
+                } else {
+                    writeln!(stderr, "[{name}] Changes:").unwrap();
+                    for entry in diff {
+                        write!(stderr, "{entry}").unwrap();
+                    }
+                }
+
+                for n in in_progress.iter() {
+                    stderr.queue(Print(n.dark_yellow())).unwrap();
+                    stderr.write_all(b"\n").unwrap();
+                }
+
+                stderr.flush().unwrap();
+                future::ready(Ok(()))
+            })
+            .await?;
 
         if !opts.dry_run {
             self.write_pins(&pins)?;
