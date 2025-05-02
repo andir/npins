@@ -635,17 +635,14 @@ async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
         .await
         .context("Failed waiting for git ls-remote subprocess")?;
     if !process.status.success() {
-        log::error!("git ls-remote failed. stderr output:");
-        String::from_utf8_lossy(&process.stderr)
-            .split('\n')
-            .for_each(|line| log::error!("> {}", line));
         anyhow::bail!(
-            "git ls-remote failed with exit code {}",
+            "git ls-remote failed with exit code {}\n{}",
             process
                 .status
                 .code()
                 .map(|code| code.to_string())
-                .unwrap_or_else(|| "None".into())
+                .unwrap_or_else(|| "None".into()),
+            String::from_utf8_lossy(&process.stderr)
         );
     }
     log::debug!("git ls-remote stdout:");
