@@ -112,6 +112,35 @@ pub struct GenericGitAddOpts {
     pub submodules: bool,
 }
 
+impl GenericGitAddOpts {
+    fn add(&self, repository: git::Repository) -> Result<Pin> {
+        Ok(match &self.branch {
+            Some(branch) => {
+                let pin = git::GitPin::new(repository, branch.clone(), self.submodules);
+                let version = self
+                    .at
+                    .as_ref()
+                    .map(|at| git::GitRevision::new(at.clone()))
+                    .transpose()?;
+                (pin, version).into()
+            },
+            None => {
+                let pin = git::GitReleasePin::new(
+                    repository,
+                    self.pre_releases,
+                    self.version_upper_bound.clone(),
+                    self.release_prefix.clone(),
+                    self.submodules,
+                );
+                let version = self.at.as_ref().map(|at| GenericVersion {
+                    version: at.clone(),
+                });
+                (pin, version).into()
+            },
+        })
+    }
+}
+
 #[derive(Debug, Parser)]
 pub struct GitHubAddOpts {
     pub owner: String,
@@ -125,34 +154,7 @@ impl GitHubAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
         let repository = git::Repository::github(&self.owner, &self.repository);
 
-        Ok((
-            Some(self.repository.clone()),
-            match &self.more.branch {
-                Some(branch) => {
-                    let pin = git::GitPin::new(repository, branch.clone(), self.more.submodules);
-                    let version = self
-                        .more
-                        .at
-                        .as_ref()
-                        .map(|at| git::GitRevision::new(at.clone()))
-                        .transpose()?;
-                    (pin, version).into()
-                },
-                None => {
-                    let pin = git::GitReleasePin::new(
-                        repository,
-                        self.more.pre_releases,
-                        self.more.version_upper_bound.clone(),
-                        self.more.release_prefix.clone(),
-                        self.more.submodules,
-                    );
-                    let version = self.more.at.as_ref().map(|at| GenericVersion {
-                        version: at.clone(),
-                    });
-                    (pin, version).into()
-                },
-            },
-        ))
+        Ok((Some(self.repository.clone()), self.more.add(repository)?))
     }
 }
 
@@ -175,34 +177,7 @@ impl ForgejoAddOpts {
         })?;
         let repository = git::Repository::forgejo(server_url, &self.owner, &self.repository);
 
-        Ok((
-            Some(self.repository.clone()),
-            match &self.more.branch {
-                Some(branch) => {
-                    let pin = git::GitPin::new(repository, branch.clone(), self.more.submodules);
-                    let version = self
-                        .more
-                        .at
-                        .as_ref()
-                        .map(|at| git::GitRevision::new(at.clone()))
-                        .transpose()?;
-                    (pin, version).into()
-                },
-                None => {
-                    let pin = git::GitReleasePin::new(
-                        repository,
-                        self.more.pre_releases,
-                        self.more.version_upper_bound.clone(),
-                        self.more.release_prefix.clone(),
-                        self.more.submodules,
-                    );
-                    let version = self.more.at.as_ref().map(|at| GenericVersion {
-                        version: at.clone(),
-                    });
-                    (pin, version).into()
-                },
-            },
-        ))
+        Ok((Some(self.repository.clone()), self.more.add(repository)?))
     }
 }
 
@@ -243,30 +218,7 @@ impl GitLabAddOpts {
                 .last()
                 .ok_or_else(|| anyhow::format_err!("GitLab repository path must at least have one element (usually two: owner, repo)"))?
                 .clone()),
-            match &self.more.branch {
-                Some(branch) => {
-                    let pin = git::GitPin::new(
-                        repository,
-                        branch.clone(),
-                        self.more.submodules,
-                    );
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision::new(at.clone())).transpose()?;
-                    (pin, version).into()
-                },
-                None => {
-                    let pin = git::GitReleasePin::new(
-                        repository,
-                        self.more.pre_releases,
-                        self.more.version_upper_bound.clone(),
-                        self.more.release_prefix.clone(),
-                        self.more.submodules,
-                    );
-                    let version = self.more.at.as_ref().map(|at| GenericVersion {
-                        version: at.clone(),
-                    });
-                    (pin, version).into()
-                },
-            },
+            self.more.add(repository)?,
         ))
     }
 }
@@ -307,34 +259,7 @@ impl GitAddOpts {
         let name = name.strip_suffix(".git").unwrap_or(&name);
         let repository = git::Repository::git(url);
 
-        Ok((
-            Some(name.to_owned()),
-            match &self.more.branch {
-                Some(branch) => {
-                    let pin = git::GitPin::new(repository, branch.clone(), self.more.submodules);
-                    let version = self
-                        .more
-                        .at
-                        .as_ref()
-                        .map(|at| git::GitRevision::new(at.clone()))
-                        .transpose()?;
-                    (pin, version).into()
-                },
-                None => {
-                    let pin = git::GitReleasePin::new(
-                        repository,
-                        self.more.pre_releases,
-                        self.more.version_upper_bound.clone(),
-                        self.more.release_prefix.clone(),
-                        self.more.submodules,
-                    );
-                    let version = self.more.at.as_ref().map(|at| GenericVersion {
-                        version: at.clone(),
-                    });
-                    (pin, version).into()
-                },
-            },
-        ))
+        Ok((Some(name.to_owned()), self.more.add(repository)?))
     }
 }
 
