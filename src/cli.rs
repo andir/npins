@@ -5,7 +5,7 @@ use npins::*;
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
-    io::{stderr, Write},
+    io::{stderr, IsTerminal, Write},
     ops::Not,
     path::PathBuf,
 };
@@ -765,6 +765,9 @@ impl Opts {
                     || (opts.names.is_empty() && (opts.update_frozen || !pin.is_frozen()))
             })
             .inspect(|(name, _)| {
+                if stderr().is_terminal().not() {
+                    return;
+                }
                 let mut in_progress = in_progress.borrow_mut();
                 let mut stderr = stderr().lock();
 
@@ -794,8 +797,23 @@ impl Opts {
         stream::iter(update_iter)
             .buffer_unordered(opts.max_concurrent_downloads)
             .try_for_each(|(name, diff)| {
-                let mut in_progress = in_progress.borrow_mut();
+                fn write_diff(writer: &mut impl Write, name: &str, diff: Vec<diff::DiffEntry>) {
+                    if diff.is_empty() {
+                        writeln!(writer, "[{name}] No Changes").unwrap();
+                    } else {
+                        writeln!(writer, "[{name}] Changes:").unwrap();
+                        for entry in diff {
+                            write!(writer, "{entry}").unwrap();
+                        }
+                    }
+                }
+
                 let mut stderr = stderr().lock();
+                if stderr.is_terminal().not() {
+                    write_diff(&mut stderr, name, diff);
+                    return future::ready(Ok(()));
+                }
+                let mut in_progress = in_progress.borrow_mut();
 
                 queue!(
                     stderr,
@@ -805,14 +823,7 @@ impl Opts {
                 .unwrap();
 
                 in_progress.remove(name.as_str());
-                if diff.is_empty() {
-                    writeln!(stderr, "[{name}] No Changes").unwrap();
-                } else {
-                    writeln!(stderr, "[{name}] Changes:").unwrap();
-                    for entry in diff {
-                        write!(stderr, "{entry}").unwrap();
-                    }
-                }
+                write_diff(&mut stderr, name, diff);
 
                 for n in in_progress.iter() {
                     stderr.queue(Print(n.dark_yellow())).unwrap();
