@@ -1,13 +1,13 @@
 //! The main CLI application
-use std::path::PathBuf;
-use std::{cell::RefCell, collections::BTreeMap};
 
 use npins::*;
 
 use std::{
-    collections::BTreeSet,
+    cell::{Cell, RefCell},
+    collections::{BTreeMap, BTreeSet},
     io::{stderr, Write},
     ops::Not,
+    path::PathBuf,
 };
 
 use anyhow::{Context, Result};
@@ -738,6 +738,15 @@ impl Opts {
             },
         });
 
+        let length = if opts.names.is_empty() {
+            pins.pins
+                .iter()
+                .filter(|(_, pin)| (opts.update_frozen || !pin.is_frozen()))
+                .count()
+        } else {
+            selected_pins.len()
+        };
+
         let strategy = match (opts.partial, opts.full) {
             (false, false) => UpdateStrategy::Normal,
             (false, true) => UpdateStrategy::Full,
@@ -746,6 +755,7 @@ impl Opts {
         };
 
         let in_progress = RefCell::new(BTreeSet::<&str>::new());
+        let finished = Cell::new(0);
 
         let update_iter = pins
             .pins
@@ -772,6 +782,8 @@ impl Opts {
                     stderr.queue(Print(n.dark_yellow())).unwrap();
                     stderr.write_all(b"\n").unwrap();
                 }
+                write!(stderr, "{}/{length} Pins", finished.get()).unwrap();
+
                 stderr.flush().unwrap();
             })
             .map(|(name, pin)| async move {
@@ -806,15 +818,22 @@ impl Opts {
                     stderr.queue(Print(n.dark_yellow())).unwrap();
                     stderr.write_all(b"\n").unwrap();
                 }
+                finished.set(finished.get() + 1);
+                write!(stderr, "{}/{length} Pins", finished.get()).unwrap();
 
                 stderr.flush().unwrap();
                 future::ready(Ok(()))
             })
             .await?;
+        if length != 0 && stderr().is_terminal() {
+            eprintln!();
+        }
 
         if !opts.dry_run {
             self.write_pins(&pins)?;
-            log::info!("Update successful.");
+            log::info!("Updated lockfile.");
+        } else {
+            log::info!("Dry run successful.");
         }
 
         Ok(())
