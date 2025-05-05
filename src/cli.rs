@@ -6,7 +6,6 @@ use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
     io::{stderr, IsTerminal, Write},
-    ops::Not,
     path::PathBuf,
 };
 
@@ -722,18 +721,18 @@ impl Opts {
 
         let mut selected_pins = BTreeSet::new();
         for name in &opts.names {
-            if selected_pins.insert(name).not() {
-                log::warn!("Duplicate pin provided: {name}")
+            if !selected_pins.insert(name) {
+                log::warn!("Ignoring duplicate pin: {name}")
             }
         }
         selected_pins.retain(|&name| match pins.pins.get(name) {
             Some(p) if !opts.update_frozen && p.is_frozen() => {
-                log::warn!("Frozen pin provided: {name}");
+                log::warn!("Ignoring frozen pin: {name}");
                 false
             },
             Some(_) => true,
             None => {
-                log::warn!("Pin does not exist: {name}");
+                log::warn!("Specified pin does not exist: {name}");
                 false
             },
         });
@@ -765,13 +764,13 @@ impl Opts {
                     || (opts.names.is_empty() && (opts.update_frozen || !pin.is_frozen()))
             })
             .inspect(|(name, _)| {
-                if stderr().is_terminal().not() {
+                if !stderr().is_terminal() {
                     return;
                 }
                 let mut in_progress = in_progress.borrow_mut();
                 let mut stderr = stderr().lock();
 
-                if in_progress.is_empty().not() {
+                if !in_progress.is_empty() {
                     queue!(
                         stderr,
                         MoveToPreviousLine(in_progress.len() as u16),
@@ -785,7 +784,7 @@ impl Opts {
                     stderr.queue(Print(n.dark_yellow())).unwrap();
                     stderr.write_all(b"\n").unwrap();
                 }
-                write!(stderr, "{}/{length} Pins", finished.get()).unwrap();
+                write!(stderr, "Updated {}/{length} pins", finished.get()).unwrap();
 
                 stderr.flush().unwrap();
             })
@@ -809,7 +808,7 @@ impl Opts {
                 }
 
                 let mut stderr = stderr().lock();
-                if stderr.is_terminal().not() {
+                if !stderr.is_terminal() {
                     write_diff(&mut stderr, name, diff);
                     return future::ready(Ok(()));
                 }
@@ -830,7 +829,7 @@ impl Opts {
                     stderr.write_all(b"\n").unwrap();
                 }
                 finished.set(finished.get() + 1);
-                write!(stderr, "{}/{length} Pins", finished.get()).unwrap();
+                write!(stderr, "Updated {}/{length} pins", finished.get()).unwrap();
 
                 stderr.flush().unwrap();
                 future::ready(Ok(()))
@@ -842,7 +841,7 @@ impl Opts {
 
         if !opts.dry_run {
             self.write_pins(&pins)?;
-            log::info!("Updated lockfile.");
+            log::info!("Update successful.");
         } else {
             log::info!("Dry run successful.");
         }
