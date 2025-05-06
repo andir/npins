@@ -931,7 +931,7 @@ mod test {
             pin.fetch(&version).await?,
             OptionalUrlHashes {
                 url: None,
-                hash: "17giznxp84h53jsm334dkp1fz6x9ff2yqfkq34ihq0ray1x3yhyd".into(),
+                hash: "sha256-zUM/evAqAwwjGXg67IVzqZvvwp2NjFG1HAUSdLv98Z0=".into(),
             }
         );
         Ok(())
@@ -959,7 +959,7 @@ mod test {
             pin.fetch(&version).await?,
             ReleasePinHashes {
                 url: None,
-                hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+                hash: "sha256-BjxJ5aG8NyfDLcBNZrDVV2CAK4tdHNCBdiuJYKB8BmA=".into(),
                 revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
             }
         );

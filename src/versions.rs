@@ -1,11 +1,12 @@
 //! Versioning support for the save format
 
 use super::*;
+use crate::nix::hash_to_sri;
 use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
 /// The current format version
-pub const LATEST: u64 = 5;
+pub const LATEST: u64 = 6;
 
 /// Custom manual deserialize wrapper that checks the version
 pub fn from_value_versioned(value: Value) -> Result<NixPins> {
@@ -45,7 +46,7 @@ pub fn to_value_versioned(pins: &NixPins) -> serde_json::Value {
 ///
 /// This operates on a JSON value level
 pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
-    let version = pins_raw
+    let mut version = pins_raw
         .get("version")
         .and_then(Value::as_u64)
         .ok_or_else(|| {
@@ -55,41 +56,82 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
         })?;
 
     /* This is where the upgrading happens (at the moment we don't have any versions to upgrade from) */
-    match version {
-        0 => {
-            let pins = pins_raw
-                .get_mut("pins")
-                .and_then(Value::as_object_mut)
-                .ok_or_else(|| anyhow::format_err!("sources.json must contain a `pins` object"))?;
-            for (name, pin) in pins.iter_mut() {
-                upgrade_v0_pin(
-                    name,
-                    pin.as_object_mut()
-                        .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?,
-                )
-                .context(anyhow::format_err!(
-                    "Pin {} could not be upgraded to the latest format version",
-                    name
-                ))?;
-            }
-        },
-        // All these versions are already handled by serde default fields
-        1 | 2 | 3 | 4 => {
-            log::info!("There is nothing to do");
-        },
-        5 => {
-            log::info!("sources.json is already up to date");
-        },
-        unknown => {
-            anyhow::bail!(
-                "Unknown format version {}, maybe try updating the application?",
-                unknown
-            );
-        },
+    while version < LATEST {
+        match version {
+            0 => {
+                let pins = pins_raw
+                    .get_mut("pins")
+                    .and_then(Value::as_object_mut)
+                    .ok_or_else(|| {
+                        anyhow::format_err!("sources.json must contain a `pins` object")
+                    })?;
+                for (name, pin) in pins.iter_mut() {
+                    upgrade_v0_pin(
+                        name,
+                        pin.as_object_mut()
+                            .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?,
+                    )
+                    .context(anyhow::format_err!(
+                        "Pin {} could not be upgraded to the latest format version",
+                        name
+                    ))?;
+                }
+                version = 1;
+            },
+            // All these versions are already handled by serde default fields
+            1 | 2 | 3 | 4 => {
+                log::info!("There is nothing to do");
+                version = 5;
+            },
+            5 => {
+                let pins = pins_raw
+                    .get_mut("pins")
+                    .and_then(Value::as_object_mut)
+                    .ok_or_else(|| {
+                        anyhow::format_err!("sources.json must contain a `pins` object")
+                    })?;
+
+                for (name, pin) in pins.iter_mut() {
+                    let raw_pin = pin
+                        .as_object_mut()
+                        .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?;
+                    let pin: Pin =
+                        serde_json::from_value(serde_json::Value::Object(raw_pin.clone()))?;
+
+                    if let Pin::Git { hashes, .. } = pin {
+                        if let Some(url_hashes) = hashes {
+                            log::debug!("Migrating Git hash of '{}' to SRI format", name);
+                            let sri_hash = hash_to_sri(&url_hashes.hash, "sha256")?;
+
+                            raw_pin.remove("hash");
+                            raw_pin.insert("hash".into(), sri_hash.into());
+                        }
+                    } else if let Pin::GitRelease { hashes, .. } = pin {
+                        if let Some(url_hashes) = hashes {
+                            log::debug!("Migrating GitRelease hash of '{}' to SRI format", name);
+                            let sri_hash = hash_to_sri(&url_hashes.hash, "sha256")?;
+
+                            raw_pin.remove("hash");
+                            raw_pin.insert("hash".into(), sri_hash.into());
+                        }
+                    }
+                }
+                version = 6;
+            },
+            LATEST => {
+                log::info!("sources.json is already up to date");
+            },
+            unknown => {
+                anyhow::bail!(
+                    "Unknown format version {}, maybe try updating the application?",
+                    unknown
+                );
+            },
+        }
     }
 
     /* Set the new version */
-    *pins_raw.get_mut("version").unwrap() = json!(LATEST);
+    *pins_raw.get_mut("version").unwrap() = json!(version);
 
     Ok(serde_json::Value::Object(pins_raw))
 }
@@ -278,13 +320,13 @@ mod test {
                     "nixos-mailserver".into() => Pin::Git {
                         input: git::GitPin::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap(), "nixos-21.11".into(), false),
                         version: Some(git::GitRevision { revision: "6e3a7b2ea6f0d68b82027b988aa25d3423787303".into() }),
-                        hashes: Some(git::OptionalUrlHashes { url: None, hash: "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44".into() } ),
+                        hashes: Some(git::OptionalUrlHashes { url: None, hash: "sha256-hNhzLOp+dApEY15vwLAQZu+sjEQbJcOXCaSfAT6lpsQ=".into() } ),
                         frozen: Frozen::default(),
                     },
                     "nixpkgs".into() => Pin::Git {
                         input: git::GitPin::github("nixos", "nixpkgs", "nixpkgs-unstable".into(), false),
                         version: Some(git::GitRevision { revision: "5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2".into() }),
-                        hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb".into() }),
+                        hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "sha256-a8GGtxn2iL3WAkY5H+4E0s3Q7XJt6bTOvos9qqxT5OQ=".into() }),
                         frozen: Frozen::default(),
                     },
                     "streamlit".into() => Pin::PyPi {
