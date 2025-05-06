@@ -46,7 +46,7 @@ pub fn to_value_versioned(pins: &NixPins) -> serde_json::Value {
 ///
 /// This operates on a JSON value level
 pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
-    let version = pins_raw
+    let mut version = pins_raw
         .get("version")
         .and_then(Value::as_u64)
         .ok_or_else(|| {
@@ -56,72 +56,82 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
         })?;
 
     /* This is where the upgrading happens (at the moment we don't have any versions to upgrade from) */
-    match version {
-        0 => {
-            let pins = pins_raw
-                .get_mut("pins")
-                .and_then(Value::as_object_mut)
-                .ok_or_else(|| anyhow::format_err!("sources.json must contain a `pins` object"))?;
-            for (name, pin) in pins.iter_mut() {
-                upgrade_v0_pin(
-                    name,
-                    pin.as_object_mut()
-                        .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?,
-                )
-                .context(anyhow::format_err!(
-                    "Pin {} could not be upgraded to the latest format version",
-                    name
-                ))?;
-            }
-        },
-        // All these versions are already handled by serde default fields
-        1 | 2 | 3 | 4 => {
-            log::info!("There is nothing to do");
-        },
-        5 => {
-            let pins = pins_raw
-                .get_mut("pins")
-                .and_then(Value::as_object_mut)
-                .ok_or_else(|| anyhow::format_err!("sources.json must contain a `pins` object"))?;
+    while version < LATEST {
+        match version {
+            0 => {
+                let pins = pins_raw
+                    .get_mut("pins")
+                    .and_then(Value::as_object_mut)
+                    .ok_or_else(|| {
+                        anyhow::format_err!("sources.json must contain a `pins` object")
+                    })?;
+                for (name, pin) in pins.iter_mut() {
+                    upgrade_v0_pin(
+                        name,
+                        pin.as_object_mut()
+                            .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?,
+                    )
+                    .context(anyhow::format_err!(
+                        "Pin {} could not be upgraded to the latest format version",
+                        name
+                    ))?;
+                }
+                version = 1;
+            },
+            // All these versions are already handled by serde default fields
+            1 | 2 | 3 | 4 => {
+                log::info!("There is nothing to do");
+                version = 5;
+            },
+            5 => {
+                let pins = pins_raw
+                    .get_mut("pins")
+                    .and_then(Value::as_object_mut)
+                    .ok_or_else(|| {
+                        anyhow::format_err!("sources.json must contain a `pins` object")
+                    })?;
 
-            for (name, pin) in pins.iter_mut() {
-                let raw_pin = pin
-                    .as_object_mut()
-                    .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?;
-                let pin: Pin = serde_json::from_value(serde_json::Value::Object(raw_pin.clone()))?;
+                for (name, pin) in pins.iter_mut() {
+                    let raw_pin = pin
+                        .as_object_mut()
+                        .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?;
+                    let pin: Pin =
+                        serde_json::from_value(serde_json::Value::Object(raw_pin.clone()))?;
 
-                if let Pin::Git { hashes, .. } = pin {
-                    if let Some(url_hashes) = hashes {
-                        log::debug!("Migrating Git hash of '{}' to SRI format", name);
-                        let sri_hash = hash_to_sri("sha256", &url_hashes.hash)?;
+                    if let Pin::Git { hashes, .. } = pin {
+                        if let Some(url_hashes) = hashes {
+                            log::debug!("Migrating Git hash of '{}' to SRI format", name);
+                            let sri_hash = hash_to_sri(&url_hashes.hash, "sha256")?;
 
-                        raw_pin.remove("hash");
-                        raw_pin.insert("hash".into(), sri_hash.into());
-                    }
-                } else if let Pin::GitRelease { hashes, .. } = pin {
-                    if let Some(url_hashes) = hashes {
-                        log::debug!("Migrating GitRelease hash of '{}' to SRI format", name);
-                        let sri_hash = hash_to_sri("sha256", &url_hashes.hash)?;
+                            raw_pin.remove("hash");
+                            raw_pin.insert("hash".into(), sri_hash.into());
+                        }
+                    } else if let Pin::GitRelease { hashes, .. } = pin {
+                        if let Some(url_hashes) = hashes {
+                            log::debug!("Migrating GitRelease hash of '{}' to SRI format", name);
+                            let sri_hash = hash_to_sri(&url_hashes.hash, "sha256")?;
 
-                        raw_pin.remove("hash");
-                        raw_pin.insert("hash".into(), sri_hash.into());
+                            raw_pin.remove("hash");
+                            raw_pin.insert("hash".into(), sri_hash.into());
+                        }
                     }
                 }
-            }
-        },
-        6 => {
-            log::info!("sources.json is already up to date");
-        },
-        unknown => {
-            anyhow::bail!(
-                "Unknown format version {}, maybe try updating the application?",
-                unknown
-            );
-        },
+                version = 6;
+            },
+            LATEST => {
+                log::info!("sources.json is already up to date");
+            },
+            unknown => {
+                anyhow::bail!(
+                    "Unknown format version {}, maybe try updating the application?",
+                    unknown
+                );
+            },
+        }
     }
 
     /* Set the new version */
-    *pins_raw.get_mut("version").unwrap() = json!(LATEST);
+    *pins_raw.get_mut("version").unwrap() = json!(version);
 
     Ok(serde_json::Value::Object(pins_raw))
 }
