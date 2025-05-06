@@ -624,7 +624,9 @@ impl RemoteInfo {
 }
 
 /// Convenience wrapper around calling `git ls-remote`
-async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
+async fn fetch_remote(url: &str, args: &[&str]) -> Result<Vec<RemoteInfo>> {
+    check_url(url).await?;
+
     log::debug!("Executing `git ls-remote {}`", args.join(" "));
     let process = Command::new("git")
         // Disable any interactive login attempts, failing gracefully instead
@@ -674,7 +676,7 @@ async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
 pub async fn fetch_ref(repo: &Url, ref_: impl AsRef<str>) -> Result<RemoteInfo> {
     let ref_ = ref_.as_ref();
 
-    let mut remotes = fetch_remote(&["--refs", repo.as_str(), ref_])
+    let mut remotes = fetch_remote(repo.as_str(), &["--refs", repo.as_str(), ref_])
         .await
         .with_context(|| format!("Failed to get revision from remote for {} {}", repo, ref_))?;
 
@@ -698,7 +700,7 @@ pub async fn fetch_branch_head(repo: &Url, branch: impl AsRef<str>) -> Result<Re
 
 /// List all tags of a repo
 pub async fn fetch_tags(repo: &Url) -> Result<Vec<RemoteInfo>> {
-    let remotes = fetch_remote(&["--refs", repo.as_str(), "refs/tags/*"])
+    let remotes = fetch_remote(repo.as_str(), &["--refs", repo.as_str(), "refs/tags/*"])
         .await
         .with_context(|| format!("Failed to list tags for {}", repo))?;
 
@@ -706,7 +708,7 @@ pub async fn fetch_tags(repo: &Url) -> Result<Vec<RemoteInfo>> {
 }
 
 pub async fn fetch_default_branch(repo: &Url) -> Result<String> {
-    let remotes = fetch_remote(&["--symref", repo.as_str(), "HEAD"])
+    let remotes = fetch_remote(repo.as_str(), &["--symref", repo.as_str(), "HEAD"])
         .await
         .with_context(|| format!("Failed to resolve default branch for {}", repo))?;
 

@@ -1,3 +1,4 @@
+use crate::check_url;
 use anyhow::{Context, Result};
 use log::debug;
 
@@ -9,6 +10,8 @@ pub struct PrefetchInfo {
 
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     let url = url.as_ref();
+    check_url(url).await?;
+
     log::debug!(
         "Executing `nix-prefetch-url --unpack --name source --type sha256 {}`",
         url
@@ -44,6 +47,8 @@ pub async fn nix_prefetch_git(
     submodules: bool,
 ) -> Result<String> {
     let url = url.as_ref();
+    check_url(url).await?;
+
     log::debug!(
         "Executing: `nix-prefetch-git {}{} {}`",
         if submodules {
