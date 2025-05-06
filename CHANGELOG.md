@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Changed the hashes to use the SRI format
+- Added support for locking `git` pins by passing the hash to `fetchGit` (https://github.com/andir/npins/pull/139)
+
 ## 0.3.1
 
 - Fixed `npins update` looking weird when having many pins (https://github.com/andir/npins/pull/138)

@@ -852,7 +852,7 @@ mod test {
             pin.fetch(&version).await?,
             OptionalUrlHashes {
                 url: None,
-                hash: "17giznxp84h53jsm334dkp1fz6x9ff2yqfkq34ihq0ray1x3yhyd".into(),
+                hash: "sha256-zUM/evAqAwwjGXg67IVzqZvvwp2NjFG1HAUSdLv98Z0=".into(),
             }
         );
         Ok(())
@@ -880,7 +880,7 @@ mod test {
             pin.fetch(&version).await?,
             ReleasePinHashes {
                 url: None,
-                hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+                hash: "sha256-BjxJ5aG8NyfDLcBNZrDVV2CAK4tdHNCBdiuJYKB8BmA=".into(),
                 revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
             }
         );
@@ -908,7 +908,7 @@ mod test {
             pin.fetch(&version).await?,
             OptionalUrlHashes {
                 url: Some("https://github.com/oliverwatkins/swing_library/archive/1edb0a9cebe046cc915a218c57dbf7f40739aeee.tar.gz".parse().unwrap()),
-                hash: "17giznxp84h53jsm334dkp1fz6x9ff2yqfkq34ihq0ray1x3yhyd".into(),
+                hash: "sha256-zUM/evAqAwwjGXg67IVzqZvvwp2NjFG1HAUSdLv98Z0=".into(),
             }
         );
         Ok(())
@@ -942,7 +942,7 @@ mod test {
                         .parse()
                         .unwrap()
                 ),
-                hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+                hash: "sha256-BjxJ5aG8NyfDLcBNZrDVV2CAK4tdHNCBdiuJYKB8BmA=".into(),
             }
         );
         Ok(())
@@ -976,7 +976,7 @@ mod test {
                         .parse()
                         .unwrap()
                 ),
-                hash: "0arqpja90n3yy767x0ckwg4biqm4igcpa0vznvx3daaywjkb1v7v".into(),
+                hash: "sha256-++ywpuReqTb6tn8DddmLpOK4yOOTgX7M8X5YkJS8OCs=".into(),
             }
         );
         Ok(())
@@ -1004,7 +1004,7 @@ mod test {
             pin.fetch(&version).await?,
             OptionalUrlHashes {
                 url: Some("https://git.lix.systems/lix-project/lix/archive/4bbdb2f5564b9b42bcaf0e1eec28325300f31c72.tar.gz".parse().unwrap()),
-                hash: "03rygh7i9wzl6mhha6cv5q26iyzwy8l59d5cq4r6j5kpss9l1hn3".into(),
+                hash: "sha256-w8JAk9Z3Fmkyway0VCjy/PtoBC6bGQVhNfTzFA98Pg8=".into(),
             }
         );
         Ok(())
@@ -1039,7 +1039,7 @@ mod test {
                         .parse()
                         .unwrap()
                 ),
-                hash: "1iyylsiv1n6mf6rbi4k4fm5nv24a940cwfz92gk9fx6axh2kxjbz".into(),
+                hash: "sha256-f8k+BezKdJfmE+k7zgBJiohtS3VkkriycdXYsKOm3sc=".into(),
             }
         );
         Ok(())
@@ -1067,7 +1067,7 @@ mod test {
             pin.fetch(&version).await?,
             OptionalUrlHashes {
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?sha=e7145078163692697b843915a665d4f41139a65c".parse().unwrap()),
-                hash: "0nmcr0g0cms4yx9wsgbyvxyvdlqwa9qdb8179g47rs0y04iylcsv".into(),
+                hash: "sha256-WzPqIwEe6HzISyeg1XBSHNO2fd9+Pc1T90RXBh7IrFo=".into(),
             }
         );
         Ok(())
@@ -1100,7 +1100,7 @@ mod test {
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?ref=v1.16.0"
                     .parse()
                     .unwrap()),
-                hash: "0nmcr0g0cms4yx9wsgbyvxyvdlqwa9qdb8179g47rs0y04iylcsv".into(),
+                hash: "sha256-WzPqIwEe6HzISyeg1XBSHNO2fd9+Pc1T90RXBh7IrFo=".into(),
             }
         );
         Ok(())
@@ -1128,7 +1128,7 @@ mod test {
             pin.fetch(&version).await?,
             OptionalUrlHashes {
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?sha=bca2071b6923d45d9aabac27b3ea1e40f5fa3006".parse().unwrap()),
-                hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
+                hash: "sha256-r84Y5/hI0rM/UWK569+nWo+BHuovmlQh3Zs6U2Srx14=".into(),
             }
         );
         Ok(())
@@ -1159,7 +1159,7 @@ mod test {
             ReleasePinHashes {
                 revision: "2c89145d52d072a4ca5da900c2676d890bfab1ff".into(),
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?ref=40.0".parse().unwrap()),
-                hash: "0pn7mdj56flvvlhm96igx8g833sslzgypfb2a4zv7lj8z3kiikmg".into(),
+                hash: "sha256-r84Y5/hI0rM/UWK569+nWo+BHuovmlQh3Zs6U2Srx14=".into(),
             }
         );
         Ok(())
