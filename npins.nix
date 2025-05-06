@@ -51,6 +51,10 @@ let
     version = cargoToml.package.version;
     cargoLock = {
       lockFile = src + "/Cargo.lock";
+
+      outputHashes = {
+        "nix-compat-0.1.0" = "sha256-QmOI/LsjwVNGo2xjtH5BDkt/93hC+VxtpK5O5XJQ3Gw=";
+      };
     };
 
     inherit src;
