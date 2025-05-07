@@ -133,9 +133,12 @@ impl GitHubAddOpts {
                         branch.clone(),
                         self.more.submodules,
                     );
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
-                        revision: at.clone(),
-                    });
+                    let version = self
+                        .more
+                        .at
+                        .as_ref()
+                        .map(|at| git::GitRevision::new(at.clone()))
+                        .transpose()?;
                     (pin, version).into()
                 },
                 None => {
@@ -186,9 +189,12 @@ impl ForgejoAddOpts {
                         branch.clone(),
                         self.more.submodules,
                     );
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
-                        revision: at.clone(),
-                    });
+                    let version = self
+                        .more
+                        .at
+                        .as_ref()
+                        .map(|at| git::GitRevision::new(at.clone()))
+                        .transpose()?;
                     (pin, version).into()
                 },
                 None => {
@@ -252,9 +258,7 @@ impl GitLabAddOpts {
                         self.private_token.clone(),
                         self.more.submodules,
                     );
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
-                        revision: at.clone(),
-                    });
+                    let version = self.more.at.as_ref().map(|at| git::GitRevision::new(at.clone())).transpose()?;
                     (pin, version).into()
                 },
                 None => {
@@ -317,9 +321,12 @@ impl GitAddOpts {
             match &self.more.branch {
                 Some(branch) => {
                     let pin = git::GitPin::git(url, branch.clone(), self.more.submodules);
-                    let version = self.more.at.as_ref().map(|at| git::GitRevision {
-                        revision: at.clone(),
-                    });
+                    let version = self
+                        .more
+                        .at
+                        .as_ref()
+                        .map(|at| git::GitRevision::new(at.clone()))
+                        .transpose()?;
                     (pin, version).into()
                 },
                 None => {
@@ -631,22 +638,26 @@ impl Opts {
             let p = self.folder.join("default.nix");
             let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
             fh.write_all(default_nix.as_bytes())?;
+        }
 
-            // Only create the pins if the file isn't there yet
-            if self.folder.join("sources.json").exists() {
-                log::info!(
-                    "The file '{}' already exists; nothing to do.",
-                    self.folder.join("sources.json").display()
-                );
-                return Ok(());
-            }
+        let sources_json = self.folder.join("sources.json");
+        let path = self.lock_file.as_ref().unwrap_or(&sources_json);
+        // Only create the pins if the file isn't there yet
+        if path.exists() {
+            log::info!(
+                "The file '{}' already exists; nothing to do.",
+                path.display()
+            );
+            return Ok(());
         }
 
         let initial_pins = if o.bare {
-            log::info!("Writing initial sources.json (empty)");
+            log::info!("Writing initial lock file (empty)");
             NixPins::default()
         } else {
-            log::info!("Writing initial sources.json with nixpkgs entry (need to fetch latest commit first)");
+            log::info!(
+                "Writing initial lock file with nixpkgs entry (need to fetch latest commit first)"
+            );
             let mut pin = NixPins::new_with_nixpkgs();
             Self::update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
                 .await
@@ -656,7 +667,10 @@ impl Opts {
         self.write_pins(&initial_pins)?;
         log::info!(
             "Successfully written initial files to '{}'.",
-            self.lock_file.as_ref().unwrap_or(&self.folder).display()
+            self.lock_file
+                .as_ref()
+                .unwrap_or(&self.folder.join("sources.json"))
+                .display()
         );
         Ok(())
     }
@@ -793,9 +807,12 @@ impl Opts {
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
+        let mut has_diff = false;
         stream::iter(update_iter)
             .buffer_unordered(opts.max_concurrent_downloads)
             .try_for_each(|(name, diff)| {
+                has_diff |= !diff.is_empty();
+
                 fn write_diff(writer: &mut impl Write, name: &str, diff: Vec<diff::DiffEntry>) {
                     if diff.is_empty() {
                         writeln!(writer, "[{name}] No Changes").unwrap();
@@ -840,7 +857,9 @@ impl Opts {
         }
 
         if !opts.dry_run {
-            self.write_pins(&pins)?;
+            if has_diff {
+                self.write_pins(&pins)?;
+            }
             log::info!("Update successful.");
         } else {
             log::info!("Dry run successful.");
@@ -868,17 +887,18 @@ impl Opts {
             }
         }
 
-        log::info!("Upgrading sources.json to the newest format version");
-        let path = self.folder.join("sources.json");
+        log::info!("Upgrading lock file to the newest format version");
+        let sources_json = self.folder.join("sources.json");
+        let path = self.lock_file.as_ref().unwrap_or(&sources_json);
         let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
             format!(
-                "Failed to open {}. You must initialize npins before you can show current pins.",
+                "Failed to open {}. You must initialize npins first.",
                 path.display()
             )
         })?);
 
         let pins_raw: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(fh)
-            .context("sources.json must be a valid JSON file with an object as top level")?;
+            .context("lock file must be a valid JSON file with an object as top level")?;
 
         let pins_raw_new = versions::upgrade(pins_raw.clone()).context("Upgrading failed")?;
         let pins: NixPins = serde_json::from_value(pins_raw_new.clone())?;

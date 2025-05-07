@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.1
+
+- Fixed `npins update` looking weird when having many pins (https://github.com/andir/npins/pull/138)
+- Fixed `npins update` touching the lock file even if there were no updates (https://github.com/andir/npins/issues/101)
+- Fixed some bugs with lockfile mode where it would still look for a "sources.json"
+- Fixed a regression in the CLI argument parsing with `--name` (https://github.com/andir/npins/issues/128, https://github.com/andir/npins/pull/129)
+- Fixed the caching for git prefetching, so it won't download twice anymore (https://github.com/andir/npins/pull/132)
+- Fixed another CLI glitch (https://github.com/andir/npins/issues/75)
+
 ## 0.3.0
 
 - Pins can now be "frozen", which will skip updating them (https://github.com/andir/npins/pull/78)
