@@ -23,6 +23,14 @@ fn get_github_api_url() -> String {
         .unwrap_or_else(|_| String::from("https://api.github.com"))
 }
 
+/// Extract the scheme and host of a domain, stripping the rest
+fn strip_url(mut url: Url) -> Url {
+    url.set_query(None);
+    url.set_fragment(None);
+    url.set_path("");
+    url
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct GitRevision {
     revision: String,
@@ -118,7 +126,55 @@ pub enum Repository {
 }
 
 impl Repository {
-    pub fn git(url: url::Url) -> Self {
+    /// Takes in only an URL and tries to find the most specific repository type that matches. Falls back to `Self::Git`
+    ///
+    /// For forges that can also be self-hosted, only the well-known "main" forge will be taken into account (e.g. gitlab.com).
+    /// Only works for HTTP(S) URLs.
+    /// Invalid URLs will equally fall back to `Self::Git`, as we can't know for sure what is invalid without trying it out later.
+    pub async fn git_auto(url: Url) -> Self {
+        let url2 = url.clone();
+        match (url.scheme(), url.domain()) {
+            ("http" | "https", Some("github.com")) => Self::github_from_url(url),
+            ("http" | "https", Some("gitlab.com")) => Self::gitlab_from_url(url),
+            ("http" | "https", Some("codeberg.org")) => Self::forgejo_from_url(url),
+            ("http" | "https", _) => Self::probe_forge(url).await,
+            _ => None,
+        }
+        .unwrap_or(Self::git(url2))
+    }
+
+    ///
+    /// Takes in a URL of unknown forge and tries to determine which forge the hoster is
+    /// And then parse the url into the according Repository Variant
+    async fn probe_forge(url: Url) -> Option<Self> {
+        async fn probe(mut test_url: Url, path: &str) -> Result<()> {
+            test_url.set_path(path);
+            let _: serde_json::Value = get_and_deserialize(test_url).await?;
+            Ok(())
+        }
+
+        /* We probe some known endpoints unique to the respective GitLab and Forgejo APIs to determine if a corresponding server is running */
+        let distinct_api_endpoints = [
+            (
+                "/api/v4/projects",
+                Self::gitlab_from_url as fn(Url) -> Option<Self>,
+            ),
+            (
+                "/api/v1/settings/api",
+                Self::forgejo_from_url as fn(Url) -> Option<Self>,
+            ),
+        ];
+
+        for (path, func) in distinct_api_endpoints {
+            match probe(url.clone(), path).await {
+                Ok(_) => return func(url),
+                _ => {},
+            }
+        }
+        None
+    }
+
+    pub fn git(url: Url) -> Self {
         Self::Git { url }
     }
 
@@ -126,6 +182,24 @@ impl Repository {
         Repository::GitHub {
             owner: owner.into(),
             repo: repo.into(),
+        }
+    }
+
+    /// Try to create a `GitHub` type repository from a GitHub repository URL.
+    /// Returns `None` if the URL is in any way.
+    pub fn github_from_url(url: Url) -> Option<Self> {
+        match (
+            url.scheme(),
+            url.domain(),
+            url.path_segments()
+                .map(|split| split.collect::<Vec<_>>())
+                .as_deref(),
+        ) {
+            ("http" | "https", Some("github.com"), Some([owner, repo])) => Some(Self::github(
+                owner.to_string(),
+                repo.strip_suffix(".git").unwrap_or(repo).to_string(),
+            )),
+            _ => None,
         }
     }
 
@@ -137,12 +211,46 @@ impl Repository {
         }
     }
 
+    pub fn forgejo_from_url(url: Url) -> Option<Self> {
+        match (
+            url.scheme(),
+            url.domain(),
+            url.path_segments()
+                .map(|split| split.collect::<Vec<_>>())
+                .as_deref(),
+        ) {
+            ("http" | "https", Some(_domain), Some([owner, repo])) => Some(Self::forgejo(
+                strip_url(url.clone()),
+                owner.to_string(),
+                repo.to_string(),
+            )),
+            _ => None,
+        }
+    }
+
     pub fn gitlab(repo_path: String, server: Option<Url>, private_token: Option<String>) -> Self {
         let server = server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap());
         Repository::GitLab {
             repo_path,
             server,
             private_token,
+        }
+    }
+
+    /// Try to create a `GitLab` type repository from a GitLab repository URL (any instance).
+    /// Returns `None` if the URL is in any way.
+    pub fn gitlab_from_url(url: Url) -> Option<Self> {
+        let authority = strip_url(url.clone());
+        match (url.scheme(), url.domain(), url.path()) {
+            ("http" | "https", Some(_domain), repo_path) => Some(Self::gitlab(
+                repo_path
+                    .strip_suffix(".git")
+                    .unwrap_or(repo_path)
+                    .to_string(),
+                Some(authority),
+                None,
+            )),
+            _ => None,
         }
     }
 
@@ -1216,5 +1324,63 @@ mod test {
             }
         );
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_repository_auto() {
+        assert_eq!(
+            Repository::git_auto("https://github.com/NixOS/Nixpkgs".parse().unwrap()).await,
+            Repository::GitHub {
+                owner: "NixOS".into(),
+                repo: "Nixpkgs".into()
+            },
+        );
+        assert_eq!(
+            Repository::git_auto("https://github.com/NixOS/Nixpkgs.git".parse().unwrap()).await,
+            Repository::GitHub {
+                owner: "NixOS".into(),
+                repo: "Nixpkgs".into()
+            },
+        );
+        assert_eq!(
+            Repository::git_auto(
+                "https://gitlab.com/Repos/Dont/Have/To/Be/Real"
+                    .parse()
+                    .unwrap()
+            )
+            .await,
+            Repository::GitLab {
+                server: "https://gitlab.com".parse().unwrap(),
+                repo_path: "/Repos/Dont/Have/To/Be/Real".into(),
+                private_token: None
+            },
+        );
+        assert_eq!(
+            Repository::git_auto(
+                "https://gitlab.gnome.org/GNOME/gnome-control-center/"
+                    .parse()
+                    .unwrap()
+            )
+            .await,
+            Repository::GitLab {
+                server: "https://gitlab.gnome.org".parse().unwrap(),
+                repo_path: "/GNOME/gnome-control-center/".to_string(),
+                private_token: None
+            },
+        );
+        assert_eq!(
+            Repository::git_auto("https://github.com/MyOrganization".parse().unwrap()).await,
+            Repository::Git {
+                url: "https://github.com/MyOrganization".parse().unwrap()
+            },
+        );
+        assert_eq!(
+            Repository::git_auto("https://git.lix.systems/lix-project/lix".parse().unwrap()).await,
+            Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".to_string(),
+                repo: "lix".to_string()
+            },
+        );
     }
 }

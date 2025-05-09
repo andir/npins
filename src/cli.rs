@@ -2,15 +2,8 @@
 
 use npins::*;
 
-use std::{
-    cell::{Cell, RefCell},
-    collections::{BTreeMap, BTreeSet},
-    io::{stderr, IsTerminal, Write},
-    path::PathBuf,
-};
-
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use crossterm::{
     cursor::MoveToPreviousLine,
     style::{Print, Stylize},
@@ -21,6 +14,12 @@ use futures::{
     future,
     stream::{self, StreamExt},
     TryStreamExt,
+};
+use std::{
+    cell::{Cell, RefCell},
+    collections::{BTreeMap, BTreeSet},
+    io::{stderr, IsTerminal, Write},
+    path::PathBuf,
 };
 
 use url::{ParseError, Url};
@@ -222,17 +221,35 @@ impl GitLabAddOpts {
     }
 }
 
+#[derive(Debug, Parser, Clone, Copy, Default, ValueEnum)]
+pub enum GitForgeOpts {
+    /// A generic git pin, with no further information
+    None,
+    #[default]
+    /// Try to determine the Forge from the given url, potentially by probing the server
+    Auto,
+    /// A Gitlab forge, e.g. gitlab.com
+    Gitlab,
+    /// A Github forge, i.e. github.com
+    Github,
+    /// A Forgejo forge, e.g. forgejo.org
+    Forgejo,
+}
+
 #[derive(Debug, Parser)]
 pub struct GitAddOpts {
     /// The git remote URL. For example <https://github.com/andir/ate.git>
     pub url: String,
+
+    #[arg(long, value_enum, default_value = "auto")]
+    pub forge: GitForgeOpts,
 
     #[command(flatten)]
     pub more: GenericGitAddOpts,
 }
 
 impl GitAddOpts {
-    pub fn add(&self) -> Result<(Option<String>, Pin)> {
+    pub async fn add(&self) -> Result<(Option<String>, Pin)> {
         let url = Url::parse(&self.url)
             .map_err(|e| {
                 match e {
@@ -256,7 +273,17 @@ impl GitAddOpts {
             Some(seg) => seg.to_owned(),
         };
         let name = name.strip_suffix(".git").unwrap_or(&name);
-        let repository = git::Repository::git(url);
+
+        use git::Repository;
+        let url2 = url.clone();
+        let repository = match self.forge {
+            GitForgeOpts::Auto => Some(Repository::git_auto(url).await),
+            GitForgeOpts::None => Some(Repository::git(url)),
+            GitForgeOpts::Github => Repository::github_from_url(url),
+            GitForgeOpts::Gitlab => Repository::gitlab_from_url(url),
+            GitForgeOpts::Forgejo => Repository::forgejo_from_url(url),
+        }
+        .unwrap_or(Repository::git(url2));
 
         Ok((Some(name.to_owned()), self.more.add(repository)?))
     }
@@ -350,10 +377,10 @@ pub struct AddOpts {
 }
 
 impl AddOpts {
-    fn run(&self) -> Result<(String, Pin)> {
+    async fn run(&self) -> Result<(String, Pin)> {
         let (name, mut pin) = match &self.command {
             AddCommands::Channel(c) => c.add()?,
-            AddCommands::Git(g) => g.add()?,
+            AddCommands::Git(g) => g.add().await?,
             AddCommands::GitHub(gh) => gh.add()?,
             AddCommands::Forgejo(fg) => fg.add()?,
             AddCommands::GitLab(gl) => gl.add()?,
@@ -623,7 +650,7 @@ impl Opts {
 
     async fn add(&self, opts: &AddOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
-        let (name, mut pin) = opts.run()?;
+        let (name, mut pin) = opts.run().await?;
         if opts.frozen {
             log::info!("Adding '{}' (frozen) …", name);
         } else {

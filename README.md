@@ -227,29 +227,49 @@ Track a git repository
 Usage: npins add git [OPTIONS] <URL>
 
 Arguments:
-  <URL>  The git remote URL. For example <https://github.com/andir/ate.git>
+  <URL>
+          The git remote URL. For example <https://github.com/andir/ate.git>
 
 Options:
-  -b, --branch <BRANCH>
-          Track a branch instead of a release
+      --forge <FORGE>
+          [default: auto]
+
+          Possible values:
+          - none:    A generic git pin, with no further information
+          - auto:    Try to determine the Forge from the given url, potentially by probing the server
+          - gitlab:  A Gitlab forge, e.g. gitlab.com
+          - github:  A Github forge, i.e. github.com
+          - forgejo: A Forgejo forge, e.g. forgejo.org
+
       --name <NAME>
           Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
-      --at <tag or rev>
-          Use a specific commit/release instead of the latest. This may be a tag name, or a git revision when --branch is set
+
+  -b, --branch <BRANCH>
+          Track a branch instead of a release
+
       --frozen
           Add the pin as frozen, meaning that it will be ignored by `npins update` by default
-      --pre-releases
-          Also track pre-releases. Conflicts with the --branch option
+
+      --at <tag or rev>
+          Use a specific commit/release instead of the latest. This may be a tag name, or a git revision when --branch is set
+
   -v, --verbose
           Print debug messages
+
+      --pre-releases
+          Also track pre-releases. Conflicts with the --branch option
+
       --upper-bound <version>
           Bound the version resolution. For example, setting this to "2" will restrict updates to 1.X versions. Conflicts with the --branch option
+
       --release-prefix <RELEASE_PREFIX>
           Optional prefix required for each release name / tag. For example, setting this to "release/" will only consider those that start with that string
+
       --submodules
           Also fetch submodules
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ### Removing dependencies
