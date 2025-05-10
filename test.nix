@@ -338,7 +338,7 @@ let
               ln -s ${gitRepo} "${repoPath}.git"
 
               # Mock the releases
-              tarballPath="api/repos/${repoPath}/tarball"
+              tarballPath="api/repos/${repoPath}/tarball/refs/tags"
               mkdir -p $tarballPath
               archivePath="${repoPath}/archive"
               mkdir -p $archivePath
@@ -604,7 +604,7 @@ in
       # Check version and url
       eq "$(jq -r .pins.bar.version npins/sources.json)" "v0.2"
       eq "$(jq -r .pins.bar.revision npins/sources.json)" "$(resolveGitCommit ${gitRepo} v0.2)"
-      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/api/repos/foo/bar/tarball/v0.2"
+      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/api/repos/foo/bar/tarball/refs/tags/v0.2"
     '';
   };
 
@@ -695,7 +695,7 @@ in
       eq "$(jq -r .pins.foo2.version npins/sources.json)" "v0.5"
       eq "$(jq -r .pins.foo.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
       eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
-      eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/api/repos/owner/foo/tarball/v0.5"
+      eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/api/repos/owner/foo/tarball/refs/tags/v0.5"
       # release pins with submodules don't have a URL
       eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
     '';

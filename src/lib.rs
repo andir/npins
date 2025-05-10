@@ -47,6 +47,20 @@ where
     Ok(serde_json::from_str(&response)?)
 }
 
+/// Issue a http HEAD request to an URL as a quick sanity check for its validity.
+/// Doing this beforehand adds little overhead and greatly improves error messages
+async fn check_url(url: &str) -> anyhow::Result<()> {
+    log::debug!("Checking {url}");
+    let response = build_client()?.head(url).send().await?;
+    /* Some servers don't like HEAD and will give us "405 Method Not Allowed" for that,
+     * this has nothing to do with out sanity check and can safely be ignored.
+     */
+    if response.status() != reqwest::StatusCode::from_u16(405).unwrap() {
+        response.error_for_status()?;
+    }
+    anyhow::Ok(())
+}
+
 /// The main trait implemented by all pins
 ///
 /// It comes with two associated types, `Version` and `Hashes`. Together, each of these types
