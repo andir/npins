@@ -1,3 +1,4 @@
+use crate::check_url;
 use anyhow::{Context, Result};
 use log::debug;
 
@@ -9,6 +10,8 @@ pub struct PrefetchInfo {
 
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     let url = url.as_ref();
+    check_url(url).await?;
+
     log::debug!(
         "Executing `nix-prefetch-url --unpack --name source --type sha256 {}`",
         url
@@ -44,6 +47,8 @@ pub async fn nix_prefetch_git(
     submodules: bool,
 ) -> Result<String> {
     let url = url.as_ref();
+    check_url(url).await?;
+
     log::debug!(
         "Executing: `nix-prefetch-git {}{} {}`",
         if submodules {
@@ -61,6 +66,7 @@ pub async fn nix_prefetch_git(
     let output = output
         // Disable any interactive login attempts, failing gracefully instead
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
         .arg(url)
         .arg(git_ref.as_ref())
         .output()

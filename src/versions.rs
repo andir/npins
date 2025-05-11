@@ -54,38 +54,57 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
             )
         })?;
 
-    /* This is where the upgrading happens (at the moment we don't have any versions to upgrade from) */
-    match version {
-        0 => {
-            let pins = pins_raw
-                .get_mut("pins")
-                .and_then(Value::as_object_mut)
-                .ok_or_else(|| anyhow::format_err!("sources.json must contain a `pins` object"))?;
-            for (name, pin) in pins.iter_mut() {
-                upgrade_v0_pin(
-                    name,
-                    pin.as_object_mut()
-                        .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?,
-                )
-                .context(anyhow::format_err!(
-                    "Pin {} could not be upgraded to the latest format version",
-                    name
-                ))?;
-            }
-        },
-        // All these versions are already handled by serde default fields
-        1 | 2 | 3 | 4 => {
-            log::info!("There is nothing to do");
-        },
-        5 => {
-            log::info!("sources.json is already up to date");
-        },
-        unknown => {
-            anyhow::bail!(
-                "Unknown format version {}, maybe try updating the application?",
-                unknown
-            );
-        },
+    /* A generic wrapper that updates all pins individually with a provided upgrade function.
+     * This can be used in all cases where only the pin structure and not the overall file structure
+     * changes, which should actually be most cases.
+     */
+    fn generic_upgrader(
+        pins_raw: &mut Map<String, Value>,
+        update_pin_fn: fn(&str, &mut Map<String, Value>) -> Result<()>,
+    ) -> Result<()> {
+        let pins = pins_raw
+            .get_mut("pins")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| anyhow::format_err!("sources.json must contain a `pins` object"))?;
+        for (name, pin) in pins.iter_mut() {
+            update_pin_fn(
+                name,
+                pin.as_object_mut()
+                    .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?,
+            )
+            .context(anyhow::format_err!("Pin {} could not be upgraded", name))?;
+        }
+        Ok(())
+    }
+
+    /* Registry for version upgrade closures. Every uprade is registered for a version and will
+     * modify `pins_raw` to be of its following version.
+     * Most version upgrades are handled by serde default fields and don't need any special treatment.
+     * They are omitted here; Only non-trivial upgrades should be inserted.
+     */
+    type Upgrader = Box<dyn Fn(&mut Map<String, Value>) -> Result<()>>;
+    let version_upgraders: BTreeMap<u64, Upgrader> = [(
+        0,
+        Box::new(|pins_raw: &mut Map<String, Value>| generic_upgrader(pins_raw, upgrade_v0_pin))
+            as Upgrader,
+    )]
+    .into_iter()
+    .collect();
+
+    /* Some quick version checks to provide better user feedback */
+    if version > LATEST {
+        anyhow::bail!(
+            "Unknown format version {}, maybe try updating the application?",
+            version
+        );
+    } else if version == LATEST {
+        log::info!("sources.json is already up to date");
+    } else {
+        for (v, upgrader) in version_upgraders.range(version..) {
+            log::info!("Upgrading to v{}", v + 1);
+            upgrader(&mut pins_raw)?;
+        }
+        log::info!("Upgrade complete");
     }
 
     /* Set the new version */
@@ -107,6 +126,10 @@ macro_rules! rename {
     }}
 }
 
+/* v0→v1. This upgrade changes the structure of git pins from a Git/GitHub/GitHubRelease split
+ * to a Git/GitRelease split where both kinds of pin can handle all types of repositories (GitHub or not)
+ * via the `Repository` struct.
+ */
 fn upgrade_v0_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
     log::debug!("Updating {} to v1", name);
 
@@ -276,13 +299,13 @@ mod test {
             NixPins {
                 pins: btreemap![
                     "nixos-mailserver".into() => Pin::Git {
-                        input: git::GitPin::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap(), "nixos-21.11".into(), false),
+                        input: git::GitPin::new(git::Repository::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap()), "nixos-21.11".into(), false),
                         version: Some(git::GitRevision::new("6e3a7b2ea6f0d68b82027b988aa25d3423787303".into()).unwrap()),
                         hashes: Some(git::OptionalUrlHashes { url: None, hash: "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44".into() } ),
                         frozen: Frozen::default(),
                     },
                     "nixpkgs".into() => Pin::Git {
-                        input: git::GitPin::github("nixos", "nixpkgs", "nixpkgs-unstable".into(), false),
+                        input: git::GitPin::new(git::Repository::github("nixos", "nixpkgs"), "nixpkgs-unstable".into(), false),
                         version: Some(git::GitRevision::new("5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2".into()).unwrap()),
                         hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb".into() }),
                         frozen: Frozen::default(),
@@ -294,7 +317,7 @@ mod test {
                         frozen: Frozen::default(),
                     },
                     "youtube-dl".into() => Pin::GitRelease {
-                        input: git::GitReleasePin::github("ytdl-org", "youtube-dl", false, None, None, false),
+                        input: git::GitReleasePin::new(git::Repository::github("ytdl-org", "youtube-dl"), false, None, None, false),
                         version: Some(GenericVersion { version: "youtube-dl 2021.12.17".into() }),
                         hashes: None,
                         frozen: Frozen::default(),

@@ -76,32 +76,36 @@ impl FlakePin {
                 // TODO: parsing the query string to retrieve servers other than
                 // gitlab.com is not supported for now, but could be added.
                 let branch = self.fetch_default_branch("https://gitlab.com").await?;
-                git::GitPin::gitlab(
-                    format!(
-                        "{}/{}",
-                        self.locked
-                            .owner
-                            .context("missing field owner in gitlab flake input")?,
-                        self.locked
-                            .repo
-                            .context("missing field repo in gitlab flake input")?
+                git::GitPin::new(
+                    git::Repository::gitlab(
+                        format!(
+                            "{}/{}",
+                            self.locked
+                                .owner
+                                .context("missing field owner in gitlab flake input")?,
+                            self.locked
+                                .repo
+                                .context("missing field repo in gitlab flake input")?
+                        ),
+                        None,
+                        None,
                     ),
                     branch,
-                    None,
-                    None,
                     false,
                 )
                 .into()
             },
             Github => {
                 let branch = self.fetch_default_branch("https://github.com").await?;
-                git::GitPin::github(
-                    self.locked
-                        .owner
-                        .context("missing owner field in github flake input")?,
-                    self.locked
-                        .repo
-                        .context("missing field repo in github flake input")?,
+                git::GitPin::new(
+                    git::Repository::github(
+                        self.locked
+                            .owner
+                            .context("missing owner field in github flake input")?,
+                        self.locked
+                            .repo
+                            .context("missing field repo in github flake input")?,
+                    ),
                     branch,
                     false,
                 )
@@ -112,8 +116,10 @@ impl FlakePin {
                 if let Some(shortened) = ref_.strip_prefix("refs/heads/") {
                     ref_ = shortened.to_string();
                 }
-                git::GitPin::git(
-                    self.locked.url.context("missing url on git flake input")?,
+                git::GitPin::new(
+                    git::Repository::git(
+                        self.locked.url.context("missing url on git flake input")?,
+                    ),
                     ref_,
                     false,
                 )

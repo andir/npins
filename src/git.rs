@@ -118,6 +118,34 @@ pub enum Repository {
 }
 
 impl Repository {
+    pub fn git(url: url::Url) -> Self {
+        Self::Git { url }
+    }
+
+    pub fn github(owner: impl Into<String>, repo: impl Into<String>) -> Self {
+        Repository::GitHub {
+            owner: owner.into(),
+            repo: repo.into(),
+        }
+    }
+
+    pub fn forgejo(server: Url, owner: impl Into<String>, repo: impl Into<String>) -> Self {
+        Repository::Forgejo {
+            server,
+            owner: owner.into(),
+            repo: repo.into(),
+        }
+    }
+
+    pub fn gitlab(repo_path: String, server: Option<Url>, private_token: Option<String>) -> Self {
+        let server = server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap());
+        Repository::GitLab {
+            repo_path,
+            server,
+            private_token,
+        }
+    }
+
     /// Get the URL to the represented Git repository
     fn git_url(&self) -> Result<Url> {
         Ok(match self {
@@ -201,7 +229,7 @@ impl Repository {
             Repository::Git { .. } => None,
             Repository::GitHub { owner, repo } => Some(
                 format!(
-                    "{github_api}/repos/{owner}/{repo}/tarball/{tag}",
+                    "{github_api}/repos/{owner}/{repo}/tarball/refs/tags/{tag}",
                     github_api = get_github_api_url(),
                     owner = owner,
                     repo = repo,
@@ -269,61 +297,9 @@ impl diff::Diff for GitPin {
 }
 
 impl GitPin {
-    pub fn git(url: Url, branch: String, submodules: bool) -> Self {
+    pub fn new(repository: Repository, branch: String, submodules: bool) -> Self {
         Self {
-            repository: Repository::Git { url },
-            branch,
-            submodules,
-        }
-    }
-
-    pub fn github(
-        owner: impl Into<String>,
-        repo: impl Into<String>,
-        branch: String,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::GitHub {
-                owner: owner.into(),
-                repo: repo.into(),
-            },
-            branch,
-            submodules,
-        }
-    }
-
-    pub fn forgejo(
-        server: Url,
-        owner: impl Into<String>,
-        repo: impl Into<String>,
-        branch: String,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::Forgejo {
-                server,
-                owner: owner.into(),
-                repo: repo.into(),
-            },
-            branch,
-            submodules,
-        }
-    }
-
-    pub fn gitlab(
-        repo_path: String,
-        branch: String,
-        server: Option<Url>,
-        private_token: Option<String>,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::GitLab {
-                repo_path,
-                server: server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap()),
-                private_token,
-            },
+            repository,
             branch,
             submodules,
         }
@@ -426,79 +402,15 @@ impl diff::Diff for GitReleasePin {
 }
 
 impl GitReleasePin {
-    pub fn git(
-        url: Url,
+    pub fn new(
+        repository: Repository,
         pre_releases: bool,
         version_upper_bound: Option<String>,
         release_prefix: Option<String>,
         submodules: bool,
     ) -> Self {
         Self {
-            repository: Repository::Git { url },
-            pre_releases,
-            version_upper_bound,
-            release_prefix,
-            submodules,
-        }
-    }
-
-    pub fn github(
-        owner: impl Into<String>,
-        repo: impl Into<String>,
-        pre_releases: bool,
-        version_upper_bound: Option<String>,
-        release_prefix: Option<String>,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::GitHub {
-                owner: owner.into(),
-                repo: repo.into(),
-            },
-            pre_releases,
-            version_upper_bound,
-            release_prefix,
-            submodules,
-        }
-    }
-
-    pub fn forgejo(
-        server: Url,
-        owner: impl Into<String>,
-        repo: impl Into<String>,
-        pre_releases: bool,
-        version_upper_bound: Option<String>,
-        release_prefix: Option<String>,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::Forgejo {
-                server,
-                owner: owner.into(),
-                repo: repo.into(),
-            },
-            pre_releases,
-            version_upper_bound,
-            release_prefix,
-            submodules,
-        }
-    }
-
-    pub fn gitlab(
-        repo_path: String,
-        server: Option<Url>,
-        pre_releases: bool,
-        version_upper_bound: Option<String>,
-        private_token: Option<String>,
-        release_prefix: Option<String>,
-        submodules: bool,
-    ) -> Self {
-        Self {
-            repository: Repository::GitLab {
-                repo_path,
-                server: server.unwrap_or_else(|| "https://gitlab.com/".parse().unwrap()),
-                private_token,
-            },
+            repository,
             pre_releases,
             version_upper_bound,
             release_prefix,
@@ -624,28 +536,28 @@ impl RemoteInfo {
 }
 
 /// Convenience wrapper around calling `git ls-remote`
-async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
+async fn fetch_remote(url: &str, args: &[&str]) -> Result<Vec<RemoteInfo>> {
+    check_url(url).await?;
+
     log::debug!("Executing `git ls-remote {}`", args.join(" "));
     let process = Command::new("git")
         // Disable any interactive login attempts, failing gracefully instead
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
         .arg("ls-remote")
         .args(args)
         .output()
         .await
         .context("Failed waiting for git ls-remote subprocess")?;
     if !process.status.success() {
-        log::error!("git ls-remote failed. stderr output:");
-        String::from_utf8_lossy(&process.stderr)
-            .split('\n')
-            .for_each(|line| log::error!("> {}", line));
         anyhow::bail!(
-            "git ls-remote failed with exit code {}",
+            "git ls-remote failed with exit code {}\n{}",
             process
                 .status
                 .code()
                 .map(|code| code.to_string())
-                .unwrap_or_else(|| "None".into())
+                .unwrap_or_else(|| "None".into()),
+            String::from_utf8_lossy(&process.stderr)
         );
     }
     log::debug!("git ls-remote stdout:");
@@ -677,7 +589,7 @@ async fn fetch_remote(args: &[&str]) -> Result<Vec<RemoteInfo>> {
 pub async fn fetch_ref(repo: &Url, ref_: impl AsRef<str>) -> Result<RemoteInfo> {
     let ref_ = ref_.as_ref();
 
-    let mut remotes = fetch_remote(&["--refs", repo.as_str(), ref_])
+    let mut remotes = fetch_remote(repo.as_str(), &["--refs", repo.as_str(), ref_])
         .await
         .with_context(|| format!("Failed to get revision from remote for {} {}", repo, ref_))?;
 
@@ -701,7 +613,7 @@ pub async fn fetch_branch_head(repo: &Url, branch: impl AsRef<str>) -> Result<Re
 
 /// List all tags of a repo
 pub async fn fetch_tags(repo: &Url) -> Result<Vec<RemoteInfo>> {
-    let remotes = fetch_remote(&["--refs", repo.as_str(), "refs/tags/*"])
+    let remotes = fetch_remote(repo.as_str(), &["--refs", repo.as_str(), "refs/tags/*"])
         .await
         .with_context(|| format!("Failed to list tags for {}", repo))?;
 
@@ -709,7 +621,7 @@ pub async fn fetch_tags(repo: &Url) -> Result<Vec<RemoteInfo>> {
 }
 
 pub async fn fetch_default_branch(repo: &Url) -> Result<String> {
-    let remotes = fetch_remote(&["--symref", repo.as_str(), "HEAD"])
+    let remotes = fetch_remote(repo.as_str(), &["--symref", repo.as_str(), "HEAD"])
         .await
         .with_context(|| format!("Failed to resolve default branch for {}", repo))?;
 
@@ -1026,11 +938,45 @@ mod test {
             ReleasePinHashes {
                 revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
                 url: Some(
-                    "https://api.github.com/repos/jstutters/MidiOSC/tarball/v1.1"
+                    "https://api.github.com/repos/jstutters/MidiOSC/tarball/refs/tags/v1.1"
                         .parse()
                         .unwrap()
                 ),
                 hash: "0q06gjh6129bfs0x072xicmq0q2psnq6ckf05p1jfdxwl7jljg06".into(),
+            }
+        );
+        Ok(())
+    }
+
+    // That repo has a tag and a branch with the same name, and the naive endpoint for
+    // GitHub which usually works then returns
+    // {
+    //   "message": "'0.2.1' has multiple possibilities: https://github.com/alexfedosov/AFHorizontalDayPicker/tarball/refs/heads/0.2.1, https://github.com/alexfedosov/AFHorizontalDayPicker/tarball/refs/tags/0.2.1",
+    //   "documentation_url": "https://docs.github.com/rest/repos/contents#download-a-repository-archive-tar",
+    //   "status": "300"
+    // }
+    #[tokio::test]
+    async fn test_github_release_ambiguous() -> Result<()> {
+        let pin = GitReleasePin {
+            repository: Repository::github("alexfedosov", "AFHorizontalDayPicker"),
+            pre_releases: false,
+            version_upper_bound: None,
+            release_prefix: None,
+            submodules: false,
+        };
+        let version = GenericVersion {
+            version: "0.2.1".into(),
+        };
+        assert_eq!(
+            pin.fetch(&version).await?,
+            ReleasePinHashes {
+                revision: "ca59ad1dc1b55108f1d17f20bdf443aad3e2f0f5".into(),
+                url: Some(
+                    "https://api.github.com/repos/alexfedosov/AFHorizontalDayPicker/tarball/refs/tags/0.2.1"
+                        .parse()
+                        .unwrap()
+                ),
+                hash: "0arqpja90n3yy767x0ckwg4biqm4igcpa0vznvx3daaywjkb1v7v".into(),
             }
         );
         Ok(())
