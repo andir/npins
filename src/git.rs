@@ -590,7 +590,7 @@ async fn fetch_remote(url: &str, args: &[&str]) -> Result<Vec<RemoteInfo>> {
 pub async fn fetch_ref(repo: &Url, ref_: impl AsRef<str>) -> Result<RemoteInfo> {
     let ref_ = ref_.as_ref();
 
-    let mut remotes = fetch_remote(repo.as_str(), &["--refs", repo.as_str(), ref_])
+    let remotes = fetch_remote(repo.as_str(), &["--refs", repo.as_str(), ref_])
         .await
         .with_context(|| format!("Failed to get revision from remote for {} {}", repo, ref_))?;
 
@@ -599,12 +599,13 @@ pub async fn fetch_ref(repo: &Url, ref_: impl AsRef<str>) -> Result<RemoteInfo> 
         "git ls-remote output is empty. Are you sure '{}' exists? Note: If you want to tag a revision, you need to also specify a branch ('--branch').",
         ref_,
     );
-    anyhow::ensure!(
-        remotes.len() == 1,
-        "git ls-remote output has multiple results. This should not have happened!",
-    );
 
-    Ok(remotes.remove(0))
+    /* git ls-remote always postfix-matches the ref like a glob, but we want an exact match.
+     * See https://github.com/andir/npins/issues/142
+     */
+    remotes.into_iter().find(|r| r.ref_ == ref_).ok_or_else(
+        || anyhow::format_err!("git ls-remote output does not contain the requested remote '{}'. This should not have happened!", ref_)
+    )
 }
 
 /// Get the revision for a branch
@@ -829,6 +830,23 @@ mod test {
             ]
         );
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fetch_ref() {
+        /* Regression test for https://github.com/andir/npins/issues/142 */
+        assert_eq!(
+            fetch_ref(
+                &"https://seed.radicle.garden/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git"
+                    .parse()
+                    .unwrap(),
+                "refs/heads/master"
+            )
+            .await
+            .unwrap()
+            .ref_,
+            "refs/heads/master".to_string()
+        );
     }
 
     #[tokio::test]
