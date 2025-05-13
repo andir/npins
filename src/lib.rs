@@ -47,18 +47,37 @@ where
     Ok(serde_json::from_str(&response)?)
 }
 
-/// Issue a http HEAD request to an URL as a quick sanity check for its validity.
-/// Doing this beforehand adds little overhead and greatly improves error messages
-async fn check_url(url: &str) -> anyhow::Result<()> {
-    log::debug!("Checking {url}");
-    let response = build_client()?.head(url).send().await?;
-    /* Some servers don't like HEAD and will give us "405 Method Not Allowed" for that,
-     * this has nothing to do with out sanity check and can safely be ignored.
-     */
-    if response.status() != reqwest::StatusCode::from_u16(405).unwrap() {
-        response.error_for_status()?;
+/// Issue a http GET request to an URL without actually fetching its output,
+/// as a quick sanity check for its validity.
+/// This is meant as a check on the unhappy path to improve error messages:
+/// If `git ls-remote` or `nix-prefetch` fails for some reason and the URL already fails this simple
+/// HTTP check, we can ignore the error message from these tools and replace it with our own.
+///
+/// If `result` is `Ok`, it is passed on unchanged and nothing is done.
+/// If `result` is `Err`, the check will be executed and the error replaced in case of failure.
+async fn check_url<T>(result: anyhow::Result<T>, url: &str) -> anyhow::Result<T> {
+    if result.is_err() {
+        log::debug!("Checking {url}");
+        /* Note that *in theory* we should be able to use a HEAD request instead of GET, however
+         * several HTTP servers don't comply with that so we have to GET and then throw away the content instead.
+         * Some return 405 Method Not Allowed which would be fine, however GitLab for example simply returns
+         * 403 Forbidden on HEAD for an URL that is 200 on GET.
+         */
+        build_client()?.get(url).send().await?.error_for_status()?;
     }
-    anyhow::Ok(())
+    result
+}
+
+/// The git url to a repo has no defined endpoint in the protocol, and thus
+/// may not be routed by all web servers. However, $GIT_REMOTE/info/refs is
+/// a valid endpoint that MUST be implemented by all git servers.
+/// https://git-scm.com/docs/http-protocol
+async fn check_git_url<T>(result: anyhow::Result<T>, git_url: &str) -> anyhow::Result<T> {
+    check_url(
+        result,
+        &format!("{git_url}/info/refs?service=git-upload-pack"),
+    )
+    .await
 }
 
 /// The main trait implemented by all pins

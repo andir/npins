@@ -537,52 +537,53 @@ impl RemoteInfo {
 
 /// Convenience wrapper around calling `git ls-remote`
 async fn fetch_remote(url: &str, args: &[&str]) -> Result<Vec<RemoteInfo>> {
-    check_url(url).await?;
-
-    log::debug!("Executing `git ls-remote {}`", args.join(" "));
-    let process = Command::new("git")
-        // Disable any interactive login attempts, failing gracefully instead
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
-        .arg("ls-remote")
-        .args(args)
-        .output()
-        .await
-        .context("Failed waiting for git ls-remote subprocess")?;
-    if !process.status.success() {
-        anyhow::bail!(
-            "git ls-remote failed with exit code {}\n{}",
-            process
-                .status
-                .code()
-                .map(|code| code.to_string())
-                .unwrap_or_else(|| "None".into()),
-            String::from_utf8_lossy(&process.stderr)
-        );
-    }
-    log::debug!("git ls-remote stdout:");
-    String::from_utf8_lossy(&process.stdout)
-        .split('\n')
-        .for_each(|line| log::debug!("> {}", line));
-
-    String::from_utf8_lossy(&process.stdout)
-        .split('\n')
-        .filter(|line| !line.is_empty())
-        .map(|line| {
-            let (revision, ref_) = line
-                .split_once('\t')
-                .ok_or_else(|| anyhow::format_err!("Output line contains no '\\t'"))?;
-            anyhow::ensure!(
-                !ref_.contains('\t'),
-                "Output line contains more than one '\\t'"
+    let result = async {
+        log::debug!("Executing `git ls-remote {}`", args.join(" "));
+        let process = Command::new("git")
+            // Disable any interactive login attempts, failing gracefully instead
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
+            .arg("ls-remote")
+            .args(args)
+            .output()
+            .await
+            .context("Failed waiting for git ls-remote subprocess")?;
+        if !process.status.success() {
+            anyhow::bail!(
+                "git ls-remote failed with exit code {}\n{}",
+                process
+                    .status
+                    .code()
+                    .map(|code| code.to_string())
+                    .unwrap_or_else(|| "None".into()),
+                String::from_utf8_lossy(&process.stderr)
             );
-            log::debug!("Found remote: {}, {}", revision, ref_);
-            Ok(RemoteInfo {
-                revision: revision.into(),
-                ref_: ref_.into(),
+        }
+        log::debug!("git ls-remote stdout:");
+        String::from_utf8_lossy(&process.stdout)
+            .split('\n')
+            .for_each(|line| log::debug!("> {}", line));
+
+        String::from_utf8_lossy(&process.stdout)
+            .split('\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| {
+                let (revision, ref_) = line
+                    .split_once('\t')
+                    .ok_or_else(|| anyhow::format_err!("Output line contains no '\\t'"))?;
+                anyhow::ensure!(
+                    !ref_.contains('\t'),
+                    "Output line contains more than one '\\t'"
+                );
+                log::debug!("Found remote: {}, {}", revision, ref_);
+                Ok(RemoteInfo {
+                    revision: revision.into(),
+                    ref_: ref_.into(),
+                })
             })
-        })
-        .collect::<Result<Vec<RemoteInfo>>>()
+            .collect::<Result<Vec<RemoteInfo>>>()
+    };
+    check_git_url(result.await, url).await
 }
 
 /// Get the commit for a ref
