@@ -82,7 +82,7 @@ let
     if url != null && !submodules then
       builtins.fetchTarball {
         inherit url;
-        sha256 = hash; # FIXME: check nix version & use SRI hashes
+        sha256 = hash;
       }
     else
       let
@@ -109,9 +109,9 @@ let
       in
       builtins.fetchGit {
         rev = revision;
-        inherit name;
-        # hash = hash;
-        inherit url submodules;
+        narHash = hash;
+
+        inherit name submodules url;
       };
 
   mkPyPiSource =
@@ -140,7 +140,7 @@ let
       sha256 = hash;
     };
 in
-if version == 5 then
+if version == 6 then
   builtins.mapAttrs mkSource data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"

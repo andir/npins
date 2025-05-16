@@ -1,11 +1,22 @@
 use crate::check_url;
 use anyhow::{Context, Result};
+use data_encoding::BASE64;
 use log::debug;
 
 #[allow(unused)]
 pub struct PrefetchInfo {
     store_path: String,
     hash: String,
+}
+
+pub fn hash_to_sri(s: &str, algo: &str) -> Result<String> {
+    let hash = nix_compat::nixhash::from_str(s, Some(algo))?;
+
+    Ok(format!(
+        "{}-{}",
+        hash.algo(),
+        BASE64.encode(hash.digest_as_bytes())
+    ))
 }
 
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
@@ -37,8 +48,11 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    log::debug!("Got hash: {}", stdout);
-    Ok(String::from(stdout.trim()))
+    let hash = stdout.trim();
+
+    log::debug!("Got sha256: {}", hash);
+
+    hash_to_sri(&hash, "sha256")
 }
 
 pub async fn nix_prefetch_git(
@@ -111,5 +125,5 @@ pub async fn nix_prefetch_git(
     let info: NixPrefetchGitResponse = serde_json::from_slice(&output.stdout)
         .context("Failed to deserialize nix-pfetch-git JSON response.")?;
 
-    Ok(info.sha256)
+    hash_to_sri(&info.sha256, "sha256")
 }
