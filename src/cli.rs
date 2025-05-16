@@ -429,6 +429,15 @@ pub struct UpdateOpts {
 }
 
 #[derive(Debug, Parser)]
+pub struct VerifyOpts {
+    /// Verifies only the specified pins.
+    pub names: Vec<String>,
+    /// Maximum number of simultaneous downloads
+    #[structopt(default_value = "5", long)]
+    pub max_concurrent_downloads: usize,
+}
+
+#[derive(Debug, Parser)]
 pub struct InitOpts {
     /// Don't add an initial `nixpkgs` entry
     #[arg(long)]
@@ -483,6 +492,9 @@ pub enum Command {
 
     /// Updates all or the given pins to the latest version.
     Update(UpdateOpts),
+
+    /// Verifies that all or the given pins still have correct hashes. This is like `update --partial --dry-run` and then checking that the diff is empty
+    Verify(VerifyOpts),
 
     /// Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
     Upgrade,
@@ -778,6 +790,100 @@ impl Opts {
         Ok(())
     }
 
+    async fn verify(&self, opts: &VerifyOpts) -> Result<()> {
+        let mut pins = self.read_pins()?;
+
+        let mut selected_pins = BTreeSet::new();
+        for name in &opts.names {
+            if !selected_pins.insert(name) {
+                log::warn!("Ignoring duplicate pin: {name}")
+            }
+        }
+        selected_pins.retain(|&name| match pins.pins.get(name) {
+            Some(_) => true,
+            None => {
+                log::warn!("Specified pin does not exist: {name}");
+                false
+            },
+        });
+
+        let length = if opts.names.is_empty() {
+            pins.pins.len()
+        } else {
+            selected_pins.len()
+        };
+
+        const STRATEGY: UpdateStrategy = UpdateStrategy::HashesOnly;
+
+        let animation = Animation::new(|stderr, finished| {
+            write!(stderr, "Verified {finished}/{length} pins").unwrap()
+        });
+        let animation = &animation;
+
+        let update_iter = pins
+            .pins
+            .iter_mut()
+            .filter(|(name, _pin)| selected_pins.contains(name) || opts.names.is_empty())
+            .map(|(name, pin)| async move {
+                animation.on_pin_start(&*name);
+                let diff_result = Self::update_one(pin, STRATEGY).await;
+                animation.on_pin_finish(&*name);
+                animation.write(|stderr| match &diff_result {
+                    Ok(diff) => write_diff(stderr, name, &diff),
+                    Err(err) => {
+                        writeln!(stderr, "[{name}] Failed download").unwrap();
+                        writeln!(stderr, "{err:?}").unwrap();
+                    },
+                });
+                (name, diff_result)
+            });
+
+        let (differences, failed) = stream::iter(update_iter)
+            .buffer_unordered(opts.max_concurrent_downloads)
+            /* Filter out empty diffs */
+            .filter(|(_, diff_result)| {
+                futures::future::ready(
+                    diff_result
+                        .as_ref()
+                        .map(|diff| !diff.is_empty())
+                        .unwrap_or(true),
+                )
+            })
+            .fold(
+                (vec![], vec![]),
+                |(mut differences, mut failed), (name, diff_result)| async move {
+                    match diff_result {
+                        Ok(_) => differences.push(name),
+                        Err(_) => failed.push(name),
+                    }
+                    (differences, failed)
+                },
+            )
+            .await;
+
+        /* Flush the status line */
+        if length != 0 && stderr().is_terminal() {
+            eprintln!();
+        }
+
+        if differences.is_empty() && failed.is_empty() {
+            log::info!("Verification passed.");
+            Ok(())
+        } else {
+            if differences.len() > 0 {
+                log::error!(
+                    "The {} pins failed verification: {:?}",
+                    differences.len(),
+                    differences
+                );
+            }
+            if failed.len() > 0 {
+                log::error!("The {} pins failed to download: {:?}", failed.len(), failed);
+            }
+            anyhow::bail!("Verification failed.")
+        }
+    }
+
     fn upgrade(&self) -> Result<()> {
         if self.lock_file.is_none() {
             anyhow::ensure!(
@@ -1057,6 +1163,7 @@ impl Opts {
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
             Command::Update(o) => self.update(o).await?,
+            Command::Verify(o) => self.verify(o).await?,
             Command::Upgrade => self.upgrade()?,
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,

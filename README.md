@@ -107,6 +107,7 @@ Commands:
   add           Adds a new pin entry
   show          Lists the current pin entries
   update        Updates all or the given pins to the latest version
+  verify        Verifies that all or the given pins still have correct hashes. This is like `update --partial --dry-run` and then checking that the diff is empty
   upgrade       Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
   remove        Removes one pin entry
   import-niv    Try to import entries from Niv
