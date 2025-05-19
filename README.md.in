@@ -233,6 +233,38 @@ Please note, that only alphanumerical characters and _ are allow characters in o
 All other characters are converted to _.
 Also check, that you are building impure, if you are wondering, why these overrides are maybe not becoming active.
 
+### Running the latest unreleased `npins`
+
+The recommended way is to use our packaging [in the repository](./npins.nix) by pinning npins itself with npins:
+
+```
+npins add github andir npins -b master
+```
+
+```nix
+let
+  sources = import ./npins;
+  npinsSources = import (sources.npins + "/npins");
+  npinsPkgs = import npinsSources.nixpkgs { };
+in
+npinsPkgs.callPackage (sources.npins + "/npins.nix") {}
+```
+
+Alternatively, a good old package override can do the same:
+
+```nix
+pkgs.npins.overrideAttrs (final: old: {
+  version = …;
+  src = (import ./npins).npins;
+
+  cargoHash = null;
+  cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+    src = final.src;
+    hash = …;
+  };
+})
+```
+
 ## Contributing
 
 Contributions to this project are welcome in the form of GitHub Issues or PRs. Please consider the following before creating PRs:
