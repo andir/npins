@@ -40,6 +40,7 @@ pkgs.mkShell {
       nixfmt-rfc-style
       lix
       nix-prefetch-git
+      nix-prefetch-docker
       git
       npins
     ]

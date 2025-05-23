@@ -294,6 +294,25 @@ impl PyPiAddOpts {
 }
 
 #[derive(Debug, Parser)]
+pub struct ContainerAddOpts {
+    pub image_name: String,
+    pub image_tag: String,
+}
+
+impl ContainerAddOpts {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
+        Ok((
+            Some(self.image_name.clone()),
+            container::Pin {
+                image_name: self.image_name.clone(),
+                image_tag: self.image_tag.clone(),
+            }
+            .into(),
+        ))
+    }
+}
+
+#[derive(Debug, Parser)]
 pub struct TarballAddOpts {
     /// Tarball URL
     pub url: Url,
@@ -326,6 +345,9 @@ pub enum AddCommands {
     /// Track a package on PyPi
     #[command(name = "pypi")]
     PyPi(PyPiAddOpts),
+    /// Track an OCI container
+    #[command(name = "container")]
+    Container(ContainerAddOpts),
     /// Track a tarball
     ///
     /// This can be either a static URL that never changes its contents or a
@@ -360,6 +382,7 @@ impl AddOpts {
             AddCommands::GitLab(gl) => gl.add()?,
             AddCommands::PyPi(p) => p.add()?,
             AddCommands::Tarball(p) => p.add()?,
+            AddCommands::Container(p) => p.add()?,
         };
 
         let name = match (&self.name, name) {

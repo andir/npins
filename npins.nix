@@ -7,10 +7,10 @@
   runCommand,
   stdenv,
   darwin,
-
   # runtime dependencies
   lix, # for nix-prefetch-url
   nix-prefetch-git,
+  nix-prefetch-docker,
   git, # for git ls-remote
 }:
 let
@@ -44,6 +44,7 @@ let
   runtimePath = lib.makeBinPath [
     lix
     nix-prefetch-git
+    nix-prefetch-docker
     git
   ];
   self = rustPlatform.buildRustPackage {
