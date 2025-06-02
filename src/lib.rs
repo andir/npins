@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use diff::{Diff, OptionExt};
+use nix_compat::nixhash::NixHash;
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -333,14 +334,14 @@ impl diff::Diff for GenericVersion {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct GenericHash {
-    pub hash: String,
+    pub hash: NixHash,
 }
 
 impl diff::Diff for GenericHash {
     fn properties(&self) -> Vec<(String, String)> {
-        vec![("hash".into(), self.hash.clone())]
+        vec![("hash".into(), self.hash.to_string())]
     }
 }
 
@@ -382,14 +383,14 @@ impl std::default::Default for Frozen {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct GenericUrlHashes {
     pub url: url::Url,
-    pub hash: String,
+    pub hash: NixHash,
 }
 
 impl diff::Diff for GenericUrlHashes {
     fn properties(&self) -> Vec<(String, String)> {
         vec![
             ("url".into(), self.url.to_string()),
-            ("hash".into(), self.hash.clone()),
+            ("hash".into(), self.hash.to_string()),
         ]
     }
 }

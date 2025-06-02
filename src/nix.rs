@@ -1,5 +1,6 @@
 use crate::{check_git_url, check_url};
 use anyhow::{Context, Result};
+use nix_compat::nixhash::{HashAlgo, NixHash};
 use std::path::Path;
 
 #[allow(unused)]
@@ -8,13 +9,7 @@ pub struct PrefetchInfo {
     hash: String,
 }
 
-pub fn hash_to_sri(s: &str, algo: &str) -> Result<String> {
-    let hash = nix_compat::nixhash::from_str(s, Some(algo))?;
-
-    Ok(hash.to_sri_string())
-}
-
-pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
+pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<NixHash> {
     let url = url.as_ref();
     let result = async {
         log::debug!(
@@ -41,9 +36,16 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
             )));
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::debug!("Got hash: {}", stdout);
-        hash_to_sri(&stdout.trim(), "sha256")
+        // try to parse the returned hash.
+        let hash_str = std::str::from_utf8(&output.stdout)
+            .with_context(|| "nix-prefetch-url sent invalid utf8")?
+            // Trim, otherwise the call to `from_nix_nixbase32` will fail due to newline
+            .trim();
+        // FIXME: nix-compat expects nixbase32-encoded string in format "alg:digest", but
+        // `nix-prefetch-url` gives digest only. Gross way to do this is to specify alg manually
+        let annotated_nix32_hash = format!("sha256:{hash_str}");
+        NixHash::from_nix_nixbase32(&annotated_nix32_hash)
+            .with_context(|| format!("failed to convert {} to NixHash", hash_str))
     };
     check_url(result.await, url).await
 }
@@ -52,7 +54,7 @@ pub async fn nix_prefetch_git(
     url: impl AsRef<str>,
     git_ref: impl AsRef<str>,
     submodules: bool,
-) -> Result<String> {
+) -> Result<NixHash> {
     let url = url.as_ref();
 
     let result = async {
@@ -117,7 +119,9 @@ pub async fn nix_prefetch_git(
         );
         let info: NixPrefetchGitResponse = serde_json::from_slice(&output.stdout)
             .context("Failed to deserialize nix-pfetch-git JSON response.")?;
-        hash_to_sri(&info.sha256, "sha256")
+
+        NixHash::from_str(&info.sha256, Some(HashAlgo::Sha256))
+            .with_context(|| format!("failed to parse {} as NixHash", &info.sha256))
     };
     check_git_url(result.await, url).await
 }

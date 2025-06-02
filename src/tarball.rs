@@ -89,9 +89,9 @@ impl Updatable for TarballPin {
         Ok(LockedTarball { locked_url })
     }
 
-    async fn fetch(&self, version: &LockedTarball) -> Result<GenericHash> {
+    async fn fetch(&self, version: &LockedTarball) -> Result<Self::Hashes> {
         let url = version.locked_url.as_ref().unwrap_or(&self.url);
         let hash = nix::nix_prefetch_tarball(&url).await?;
-        Ok(GenericHash { hash })
+        Ok(Self::Hashes { hash })
     }
 }

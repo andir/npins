@@ -1,8 +1,8 @@
 //! Versioning support for the save format
 
 use super::*;
-use crate::nix::hash_to_sri;
 use anyhow::{Context, Result};
+use nix_compat::nixhash::HashAlgo;
 use serde_json::{json, Map, Value};
 
 /// The current format version
@@ -240,7 +240,12 @@ fn upgrade_v5_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
 
     if let Some(raw_hash) = raw_pin.remove("hash") {
         let hash: String = serde_json::from_value(raw_hash)?;
-        raw_pin.insert("hash".into(), hash_to_sri(&hash, "sha256")?.into());
+        raw_pin.insert(
+            "hash".into(),
+            NixHash::from_str(&hash, Some(HashAlgo::Sha256))?
+                .to_string()
+                .into(),
+        );
     }
 
     Ok(())
@@ -323,19 +328,19 @@ mod test {
                     "nixos-mailserver".into() => Pin::Git {
                         input: git::GitPin::new(git::Repository::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap()), "nixos-21.11".into(), false),
                         version: Some(git::GitRevision::new("6e3a7b2ea6f0d68b82027b988aa25d3423787303".into()).unwrap()),
-                        hashes: Some(git::OptionalUrlHashes { url: None, hash: "sha256-hNhzLOp+dApEY15vwLAQZu+sjEQbJcOXCaSfAT6lpsQ=".into() } ),
+                        hashes: Some(git::OptionalUrlHashes { url: None, hash: NixHash::from_sri("sha256-hNhzLOp+dApEY15vwLAQZu+sjEQbJcOXCaSfAT6lpsQ=").unwrap() } ),
                         frozen: Frozen::default(),
                     },
                     "nixpkgs".into() => Pin::Git {
                         input: git::GitPin::new(git::Repository::github("nixos", "nixpkgs"), "nixpkgs-unstable".into(), false),
                         version: Some(git::GitRevision::new("5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2".into()).unwrap()),
-                        hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: "sha256-a8GGtxn2iL3WAkY5H+4E0s3Q7XJt6bTOvos9qqxT5OQ=".into() }),
+                        hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: NixHash::from_sri("sha256-a8GGtxn2iL3WAkY5H+4E0s3Q7XJt6bTOvos9qqxT5OQ=").unwrap() }),
                         frozen: Frozen::default(),
                     },
                     "streamlit".into() => Pin::PyPi {
                         input: pypi::Pin { name: "streamlit".into(), version_upper_bound: None },
                         version: Some(GenericVersion { version: "1.3.1".into() }),
-                        hashes: Some(GenericUrlHashes { url: "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz".parse().unwrap(), hash: "sha256-rex5NcnPd0uRFbJFbPL0jE9JufZxWal9sP4ig1fBr98=".into() } ),
+                        hashes: Some(GenericUrlHashes { url: "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz".parse().unwrap(), hash: NixHash::from_sri("sha256-rex5NcnPd0uRFbJFbPL0jE9JufZxWal9sP4ig1fBr98=").unwrap() } ),
                         frozen: Frozen::default(),
                     },
                     "youtube-dl".into() => Pin::GitRelease {
