@@ -3,8 +3,8 @@
     "nixos-21.11": {
       "type": "Channel",
       "name": "nixos-21.11",
-      "url": "https://releases.nixos.org/nixos/21.11/nixos-21.11.335820.521e4d7d13b/nixexprs.tar.xz",
-      "hash": "16p4cxpzlwdj6pv29a2dd0cv439v0dwlddzkdh1wnv7075nw2lyh"
+      "url": "https://releases.nixos.org/nixos/21.11/nixos-21.11.337975.eabc3821918/nixexprs.tar.xz",
+      "hash": "sha256-des9OUzC+IcCqisK3ReEAwfz4NGWxY1X03Mrh8//A7s="
     },
     "nixos-mailserver": {
       "type": "Git",
@@ -16,7 +16,7 @@
       "submodules": false,
       "revision": "6e3a7b2ea6f0d68b82027b988aa25d3423787303",
       "url": null,
-      "hash": "1i56llz037x416bw698v8j6arvv622qc0vsycd20lx3yx8n77n44"
+      "hash": "sha256-hNhzLOp+dApEY15vwLAQZu+sjEQbJcOXCaSfAT6lpsQ="
     },
     "nixpkgs": {
       "type": "Git",
@@ -27,17 +27,24 @@
       },
       "branch": "nixpkgs-unstable",
       "submodules": false,
-      "revision": "5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2",
-      "url": "https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz",
-      "hash": "1r74afnalgcbpv7b9sbdfbnx1kfj0kp1yfa60bbbv27n36vqdhbb"
+      "revision": "6afe187897bef7933475e6af374c893f4c84a293",
+      "url": "https://github.com/nixos/nixpkgs/archive/6afe187897bef7933475e6af374c893f4c84a293.tar.gz",
+      "hash": "sha256-K9yBph93OLTNw02Q6e9CYFGrUhvEXnh45vrZqIRWfvQ="
     },
     "streamlit": {
       "type": "PyPi",
       "name": "streamlit",
       "version_upper_bound": null,
-      "version": "1.3.1",
-      "url": "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz",
-      "hash": "adec7935c9cf774b9115b2456cf2f48c4f49b9f67159a97db0fe228357c1afdf"
+      "version": "1.45.1",
+      "url": "https://files.pythonhosted.org/packages/f0/46/9b3f73886f82d27849ce1e7a74ae7c39f5323e46da0b6e8847ad4c25f44c/streamlit-1.45.1.tar.gz",
+      "hash": "sha256-431WwK9SQNvCQJdogOgTZmicKQpVk3ZBckb5s/UbQhc="
+    },
+    "ubuntu": {
+      "type": "Container",
+      "image_name": "ubuntu",
+      "image_tag": "latest",
+      "image_digest": "sha256:b59d21599a2b151e23eea5f6602f4af4d7d31c4e236d22bf0b62b86d2e386b8f",
+      "hash": "sha256-YdbJusA6R6SRxpoMZzQI/F0XoIw2cQKlz4FMvbAHGoA="
     },
     "youtube-dl": {
       "type": "GitRelease",
@@ -48,12 +55,13 @@
       },
       "pre_releases": false,
       "version_upper_bound": null,
+      "release_prefix": null,
       "submodules": false,
       "version": "2021.12.17",
       "revision": "1807cff9c2ee5e9f4f311634d68f34d709fb665e",
       "url": "https://api.github.com/repos/ytdl-org/youtube-dl/tarball/2021.12.17",
-      "hash": "0a0ljx67q0gh8wza84gk33g31v02bd0a7lzawhn33i42iihms2w7"
+      "hash": "sha256-hwtdYYyCxDEs5OrTo0BbAuww3hjzEaQ+R/ABfEyXFCg="
     }
   },
-  "version": 4
+  "version": 7
 }
