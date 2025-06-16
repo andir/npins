@@ -263,7 +263,7 @@ impl Repository {
                         ]
                         .iter(),
                     );
-                url.set_query(Some(&format!("ref={}", tag)));
+                url.set_query(Some(&format!("sha={}", tag)));
                 if let Some(token) = private_token {
                     url.set_query(Some(&format!("private_token={}", token)));
                 }
@@ -1116,12 +1116,46 @@ mod test {
             pin.fetch(&version).await?,
             ReleasePinHashes {
                 revision: "d42ec2b04df9da97e465883fcd1f9a5d6e794027".into(),
-                url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?ref=v1.16.0"
+                url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?sha=v1.16.0"
                     .parse()
                     .unwrap()),
-                hash: "sha256-WzPqIwEe6HzISyeg1XBSHNO2fd9+Pc1T90RXBh7IrFo=".into(),
+                hash: "sha256-jcOkr5tJdEw1RL3jB8ItE8PLOVNzQtOyzDv8x/ySiiA=".into(),
             }
         );
+        Ok(())
+    }
+
+    // Test that once a pin is pinned, it will stay pinned as is
+    // Regression test for https://github.com/andir/npins/issues/146
+    // We pin some old GNOME version, to make sure the pin won't fail
+    #[tokio::test]
+    async fn test_gitlab_release_noupdate() -> Result<()> {
+        let pin = GitReleasePin {
+            repository: Repository::GitLab {
+                repo_path: "GNOME/gnome-shell".into(),
+                server: "https://gitlab.gnome.org/".parse().unwrap(),
+                private_token: None,
+            },
+            pre_releases: false,
+            version_upper_bound: None,
+            release_prefix: None,
+            submodules: false,
+        };
+        let version = GenericVersion {
+            version: "40.0".into(),
+        };
+
+        assert_eq!(
+            pin.fetch(&version).await?,
+            ReleasePinHashes {
+                revision: "435d48ad7eaf9d91cc6719fda852cd9fd54afa2e".into(),
+                url: Some("https://gitlab.gnome.org/api/v4/projects/GNOME%2Fgnome-shell/repository/archive.tar.gz?sha=40.0"
+                    .parse()
+                    .unwrap()),
+                hash: "sha256-dxgbhEQt9FIjsleC6ob6FJv5XdxmKMb+NWbxEtAJYtA=".into(),
+            }
+        );
+
         Ok(())
     }
 
@@ -1177,8 +1211,8 @@ mod test {
             pin.fetch(&version).await?,
             ReleasePinHashes {
                 revision: "2c89145d52d072a4ca5da900c2676d890bfab1ff".into(),
-                url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?ref=40.0".parse().unwrap()),
-                hash: "sha256-r84Y5/hI0rM/UWK569+nWo+BHuovmlQh3Zs6U2Srx14=".into(),
+                url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?sha=40.0".parse().unwrap()),
+                hash: "sha256-6+XMyOJOm2DTqnr4iCFupjW+Z7td4J+GJwSv1Am/5e8=".into(),
             }
         );
         Ok(())
