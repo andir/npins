@@ -67,3 +67,33 @@ impl Updatable for Pin {
         })
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    const DEAD_TEST_CONTAINER: &'static str = "docker.io/dperson/torproxy";
+
+    #[tokio::test]
+    async fn update_and_fetch_container() {
+        let pin = Pin {
+            image_name: DEAD_TEST_CONTAINER.to_string(),
+            image_tag: "latest".to_string(),
+        };
+        let version = pin.update(None).await.unwrap();
+        assert_eq!(
+            version,
+            ContainerVersion {
+                image_digest:
+                    "sha256:d8b5f1cf24f1b7a0aa334929a264b2606a107223dd0d51eb1cda8aae6fbeec53"
+                        .to_string()
+            }
+        );
+        assert_eq!(
+            pin.fetch(&version).await.unwrap(),
+            ContainerHash {
+                hash: "sha256-1js//EIumaRXILTRW2fp/uinV0dvfA7CzFPQM7neIUo=".to_string()
+            }
+        );
+    }
+}
