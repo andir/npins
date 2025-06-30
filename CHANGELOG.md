@@ -4,6 +4,7 @@
 
 - Changed the hashes to use the SRI format
 - Added support for locking `git` pins by passing the hash to `fetchGit` (https://github.com/andir/npins/pull/139)
+- Added Nixpkgs support for fetching pins as proper derivations (https://github.com/andir/npins/pull/153)
 
 ## 0.3.1
 

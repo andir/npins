@@ -378,7 +378,7 @@ let
         npins add git http://localhost:8000/foo ${npinsArgs}
         before=$(ls /build)
 
-        nix-instantiate --eval npins -A foo.outPath.outPath
+        nix-instantiate --eval npins -A foo.outPath
         after=$(ls /build)
         cat npins/sources.json
 
