@@ -21,7 +21,6 @@ let
 
   # https://github.com/NixOS/nixpkgs/blob/0258808f5744ca980b9a1f24fe0b1e6f0fecee9c/lib/strings.nix#L269
   stringAsChars = f: s: concatStrings (map f (stringToCharacters s));
-  concatMapStrings = f: list: concatStrings (map f list);
   concatStrings = builtins.concatStringsSep "";
 
   # If the environment variable NPINS_OVERRIDE_${name} is set, then use
@@ -73,7 +72,6 @@ let
       url ? null,
       submodules,
       hash,
-      branch ? null,
       ...
     }:
     assert repository ? type;
