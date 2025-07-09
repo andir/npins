@@ -1,6 +1,7 @@
 use crate::{check_git_url, check_url};
 use anyhow::{Context, Result};
 use data_encoding::BASE64;
+use std::path::Path;
 
 #[allow(unused)]
 pub struct PrefetchInfo {
@@ -124,4 +125,60 @@ pub async fn nix_prefetch_git(
         hash_to_sri(&info.sha256, "sha256")
     };
     check_git_url(result.await, url).await
+}
+
+pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::PathBuf> {
+    const DEFAULT_NIX: &'static str = include_str!("default.nix");
+
+    let lockfile_path = lockfile_path.canonicalize()?;
+    let lockfile_path = lockfile_path
+        .to_str()
+        .context("Lockfile path must be UTF-8")?;
+
+    /* This is the Nix code we evaluate.
+     * It is effectively `'{pin, path}: ((import default.nix) { input = builtins.toPath path; }) .${pin}.outPath'`,
+     * except that the default.nix is inlined instead of imported (we have the code baked into the binary).
+     *
+     * The pin's name may contain special characters etc., so instead of splicing it in here with `format!` we
+     * do a little dance with a function declaration that we'll then call with `--argstr`. That saves us from
+     * one round-trip of a string value into Nix syntax and back.
+     *
+     * Same with the path, but this also means that we are passing the path in as string, so need to convert it
+     * back to a path again.
+     */
+    let nix_eval_code =
+        format!("{{pin, path}}: (({DEFAULT_NIX}) {{ input = /. + path; }}).${{pin}}.outPath");
+
+    log::debug!(
+        "Executing: `nix-instantiate --eval --json --expr '{{pin}}: (import default.nix).${{pin}}.outPath' --argstr pin '{pin}' --argstr path '{{«snip»}}'`",
+    );
+    let output = tokio::process::Command::new("nix-instantiate")
+        .arg("--show-trace")
+        .arg("--eval")
+        .arg("--json")
+        .arg("--expr")
+        .arg(nix_eval_code)
+        .arg("--argstr")
+        .arg("pin")
+        .arg(pin)
+        .arg("--argstr")
+        .arg("path")
+        .arg(lockfile_path)
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .context("Failed to spawn `nix-instantiate`")?
+        .wait_with_output()
+        .await
+        .context("Failed to spawn `nix-instantiate`")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to eval pin: '{}'\n{}",
+            pin,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    serde_json::from_slice::<std::path::PathBuf>(&output.stdout)
+        .context("Failed to deserialize nix-instantiate JSON response.")
 }
