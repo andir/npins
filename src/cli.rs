@@ -13,7 +13,6 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use crossterm::{
     cursor::MoveToPreviousLine,
-    queue,
     style::{Print, Stylize},
     terminal::{Clear, ClearType},
     QueueableCommand,
@@ -461,6 +460,13 @@ pub struct FreezeOpts {
     pub names: Vec<String>,
 }
 
+#[derive(Debug, Parser)]
+pub struct GetPathOpts {
+    /// Name of the pin
+    #[structopt(required = true)]
+    pub name: String,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Intializes the npins directory. Running this multiple times will restore/upgrade the
@@ -495,6 +501,9 @@ pub enum Command {
 
     /// Thaw a pin entry
     Unfreeze(FreezeOpts),
+
+    /// Evaluates the store path to a pin, fetching it if necessary. Don't forget to add a GC root
+    GetPath(GetPathOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -528,6 +537,17 @@ pub struct Opts {
 
     #[command(subcommand)]
     command: Command,
+}
+
+fn write_diff(writer: &mut impl Write, name: &str, diff: &[diff::DiffEntry]) {
+    if diff.is_empty() {
+        writeln!(writer, "[{name}] No Changes").unwrap();
+    } else {
+        writeln!(writer, "[{name}] Changes:").unwrap();
+        for entry in diff {
+            write!(writer, "{entry}").unwrap();
+        }
+    }
 }
 
 impl Opts {
@@ -706,8 +726,10 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        let in_progress = RefCell::new(BTreeSet::<&str>::new());
-        let finished = Cell::new(0);
+        let animation = Animation::new(|stderr, finished| {
+            write!(stderr, "Updated {finished}/{length} pins").unwrap()
+        });
+        let animation = &animation;
 
         let update_iter = pins
             .pins
@@ -716,81 +738,30 @@ impl Opts {
                 selected_pins.contains(name)
                     || (opts.names.is_empty() && (opts.update_frozen || !pin.is_frozen()))
             })
-            .inspect(|(name, _)| {
-                if !stderr().is_terminal() {
-                    return;
-                }
-                let mut in_progress = in_progress.borrow_mut();
-                let mut stderr = stderr().lock();
-
-                if !in_progress.is_empty() {
-                    queue!(
-                        stderr,
-                        MoveToPreviousLine(in_progress.len() as u16),
-                        Clear(ClearType::FromCursorDown)
-                    )
-                    .unwrap();
-                }
-
-                in_progress.insert(name);
-                for n in in_progress.iter() {
-                    stderr.queue(Print(n.dark_yellow())).unwrap();
-                    stderr.write_all(b"\n").unwrap();
-                }
-                write!(stderr, "Updated {}/{length} pins", finished.get()).unwrap();
-
-                stderr.flush().unwrap();
-            })
             .map(|(name, pin)| async move {
+                animation.on_pin_start(&*name);
                 let diff = Self::update_one(pin, strategy).await?;
+                animation.on_pin_finish(&*name);
+                animation.write(|stderr| write_diff(stderr, name, &diff));
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
         let mut has_diff = false;
         stream::iter(update_iter)
             .buffer_unordered(opts.max_concurrent_downloads)
-            .try_for_each(|(name, diff)| {
+            .try_for_each(|(_name, diff)| {
                 has_diff |= !diff.is_empty();
-
-                fn write_diff(writer: &mut impl Write, name: &str, diff: Vec<diff::DiffEntry>) {
-                    if diff.is_empty() {
-                        writeln!(writer, "[{name}] No Changes").unwrap();
-                    } else {
-                        writeln!(writer, "[{name}] Changes:").unwrap();
-                        for entry in diff {
-                            write!(writer, "{entry}").unwrap();
-                        }
-                    }
-                }
-
-                let mut stderr = stderr().lock();
-                if !stderr.is_terminal() {
-                    write_diff(&mut stderr, name, diff);
-                    return future::ready(Ok(()));
-                }
-                let mut in_progress = in_progress.borrow_mut();
-
-                queue!(
-                    stderr,
-                    MoveToPreviousLine(in_progress.len() as u16),
-                    Clear(ClearType::FromCursorDown)
-                )
-                .unwrap();
-
-                in_progress.remove(name.as_str());
-                write_diff(&mut stderr, name, diff);
-
-                for n in in_progress.iter() {
-                    stderr.queue(Print(n.dark_yellow())).unwrap();
-                    stderr.write_all(b"\n").unwrap();
-                }
-                finished.set(finished.get() + 1);
-                write!(stderr, "Updated {}/{length} pins", finished.get()).unwrap();
-
-                stderr.flush().unwrap();
                 future::ready(Ok(()))
             })
-            .await?;
+            .await
+            .inspect_err(|_| {
+                /* Flush the status line */
+                if length != 0 && stderr().is_terminal() {
+                    eprintln!();
+                }
+            })?;
+
+        /* Flush the status line */
         if length != 0 && stderr().is_terminal() {
             eprintln!();
         }
@@ -1058,6 +1029,25 @@ impl Opts {
         Ok(())
     }
 
+    async fn get_path(&self, o: &GetPathOpts) -> Result<()> {
+        /* Although redundant, we still parse the lock file here for better error messages */
+        self.read_pins()?;
+
+        let path = self
+            .lock_file
+            .to_owned()
+            .unwrap_or(self.folder.join("sources.json"));
+        let out_path = nix::nix_eval_pin(&path, &o.name)
+            .await
+            .context("Could not evaluate pin")?;
+        /* note(piegames): HMU if you ever find yourself using npins on Windows */
+        use std::os::unix::ffi::OsStrExt;
+        std::io::stdout()
+            .write_all(out_path.as_path().as_os_str().as_bytes())
+            .unwrap();
+        Ok(())
+    }
+
     pub async fn run(&self) -> Result<()> {
         if self.lock_file.is_some() && &*self.folder != std::path::Path::new("npins") {
             anyhow::bail!("If --lock-file is set, --directory will be ignored and thus should not be set to a non-default value (which is \"npins\")");
@@ -1073,9 +1063,91 @@ impl Opts {
             Command::ImportFlake(o) => self.import_flake(o).await?,
             Command::Freeze(o) => self.freeze(o).await?,
             Command::Unfreeze(o) => self.unfreeze(o).await?,
+            Command::GetPath(o) => self.get_path(o).await?,
         };
 
         Ok(())
+    }
+}
+
+/// Helper struct for the CLI animation used by `npins update`
+struct Animation<'a, F> {
+    in_progress: RefCell<BTreeSet<&'a str>>,
+    finished: Cell<i32>,
+    write_bottom_line: F,
+}
+
+impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
+    pub fn new(write_bottom_line: F) -> Self {
+        Self {
+            in_progress: Default::default(),
+            finished: Default::default(),
+            write_bottom_line,
+        }
+    }
+
+    /// Update the set of in_progress pins, redrawing it in the process.
+    /// The closure passed may also print information, which will then be displayed above the
+    /// list of in-progress pins.
+    fn update_in_progress(
+        &'a self,
+        stderr: &mut std::io::StderrLock,
+        updater: impl for<'b> FnOnce(&'b mut BTreeSet<&'a str>, &mut std::io::StderrLock),
+    ) {
+        let mut in_progress = self.in_progress.borrow_mut();
+        if !in_progress.is_empty() {
+            crossterm::queue!(
+                stderr,
+                MoveToPreviousLine(in_progress.len() as u16),
+                Clear(ClearType::FromCursorDown)
+            )
+            .unwrap();
+        }
+
+        updater(&mut *in_progress, stderr);
+        for n in in_progress.iter() {
+            stderr.queue(Print(n.dark_yellow())).unwrap();
+            stderr.write_all(b"\n").unwrap();
+        }
+
+        (self.write_bottom_line)(stderr, self.finished.get());
+    }
+
+    /// Write something above the animation of in-progress pins
+    pub fn write(&'a self, writer: impl FnOnce(&mut std::io::StderrLock)) {
+        if !stderr().is_terminal() {
+            writer(&mut stderr().lock());
+        } else {
+            self.update_in_progress(&mut stderr().lock(), |_, stderr| writer(stderr));
+        }
+    }
+
+    /// To be called every time a pin starts processing
+    pub fn on_pin_start(&'a self, name: &'a str) {
+        /* No animations outside a terminal */
+        if !stderr().is_terminal() {
+            return;
+        }
+
+        let mut stderr = stderr().lock();
+        self.update_in_progress(&mut stderr, |in_progress, _| {
+            in_progress.insert(name);
+        });
+        stderr.flush().unwrap();
+    }
+
+    pub fn on_pin_finish(&'a self, name: &str) {
+        let mut stderr = stderr().lock();
+
+        if !stderr.is_terminal() {
+            return;
+        }
+
+        self.finished.set(self.finished.get() + 1);
+        self.update_in_progress(&mut stderr, |in_progress, _| {
+            in_progress.remove(name);
+        });
+        stderr.flush().unwrap();
     }
 }
 

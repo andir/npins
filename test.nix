@@ -437,7 +437,7 @@ let
         npins add git http://localhost:8000/foo ${npinsArgs}
         before=$(ls /build)
 
-        nix-instantiate --eval npins -A foo.outPath.outPath
+        nix-instantiate --eval npins -A foo.outPath
         after=$(ls /build)
         cat npins/sources.json
 
@@ -868,6 +868,19 @@ in
       ! npins add git http://localhost:8000/foo --branch test-branch --at v0.2
       npins add git http://localhost:8000/foo --at v0.2
       nix-instantiate --eval npins -A foo.outPath
+    '';
+  };
+
+  getPath = mkGitTest rec {
+    name = "get-path";
+    repositories."foo" = gitRepo;
+    commands = ''
+      npins init --bare
+      npins add git http://localhost:8000/foo -b test-branch
+      npins show
+      set +x
+
+      eq "$(nix-instantiate --eval npins -A foo.outPath)" "\"$(npins get-path foo)\""
     '';
   };
 }
