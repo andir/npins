@@ -1,6 +1,9 @@
 //! Pin a PyPi package
 
-use crate::{nix::hash_to_sri, *};
+use crate::{
+    nix::{hash_to_sri, LogMessage},
+    *,
+};
 use anyhow::{Context, Result};
 use lenient_version::Version;
 use serde::{Deserialize, Serialize};
@@ -102,7 +105,11 @@ impl Updatable for Pin {
         Ok(GenericVersion { version })
     }
 
-    async fn fetch(&self, version: &GenericVersion) -> Result<GenericUrlHashes> {
+    async fn fetch(
+        &self,
+        version: &GenericVersion,
+        _logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+    ) -> Result<GenericUrlHashes> {
         /* Fetch the JSON metadata for a Pypi package.
          * Url template: `https://pypi.org/pypi/$pname/json`
          * JSON schema (as in the returned value): https://warehouse.pypa.io/api-reference/json.html
@@ -192,7 +199,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             GenericUrlHashes {
                 hash: "sha256-OVOxWLe2kGQtaM1r6x1Z9uEFJvLuEKb7RjapE8yV5xg=".into(),
                 url: "https://files.pythonhosted.org/packages/d1/d5/0c270c22d61ff6b883d0f24956f13e904b131b5ac2829e0af1cda99d70b1/gaiatest-0.34.tar.gz".parse().unwrap(),
@@ -218,7 +225,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             GenericUrlHashes {
                 hash: "sha256-OdCcZiclX885yTiTeZVmW2N3eZxPoUH2tIG8teamiKw=".into(),
                 url: "https://files.pythonhosted.org/packages/fd/75/6e72889c3b154a179040b94963a50901966ff30b68600271df374b2ded7a/streamlit-0.89.0.tar.gz".parse().unwrap(),

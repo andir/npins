@@ -16,7 +16,7 @@ jobs:
       - name: Cargo Build Lib
         run: nix-shell --run "cargo build --lib"
       - name: Cargo Build CLI
-        run: nix-shell --run "cargo build --bin npins --features=clap,crossterm,env_logger"
+        run: nix-shell --run "cargo build --bin npins --features=clap,indicatif,env_logger"
       - name: Run pre-commit hooks
         run: nix-shell --run "pre-commit run --all"
       - name: Cargo test

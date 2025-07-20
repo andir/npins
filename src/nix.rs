@@ -1,7 +1,10 @@
 use crate::{check_git_url, check_url};
 use anyhow::{Context, Result};
 use data_encoding::BASE64;
-use std::path::Path;
+use serde::Deserialize;
+use serde_repr::Deserialize_repr;
+use std::{path::Path, process::Stdio};
+use tokio::io::{AsyncBufReadExt, BufReader};
 
 #[allow(unused)]
 pub struct PrefetchInfo {
@@ -19,23 +22,60 @@ pub fn hash_to_sri(s: &str, algo: &str) -> Result<String> {
     ))
 }
 
-pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
+pub async fn nix_prefetch_tarball(
+    url: impl AsRef<str>,
+    logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+) -> Result<String> {
     let url = url.as_ref();
     let result = async {
-        log::debug!(
-            "Executing `nix-prefetch-url --unpack --name source --type sha256 {}`",
-            url
-        );
-        let output = tokio::process::Command::new("nix-prefetch-url")
+        log::debug!("Executing `nix store prefetch-file --unpack --name source --hash-type sha256 --log-format internal-json {url}`",);
+        let mut child = tokio::process::Command::new("nix")
+            .arg("store") // force calculation of the unpacked NAR hash
+            .arg("prefetch-file")
             .arg("--unpack") // force calculation of the unpacked NAR hash
             .arg("--name")
             .arg("source") // use the same symbolic store path name as `builtins.fetchTarball` to avoid downloading the source twice
-            .arg("--type")
+            .arg("--hash-type")
             .arg("sha256")
+            .arg("--json")
+            .arg("--extra-experimental-features")
+            .arg("nix-command flakes")
+            .arg("--log-format")
+            .arg("internal-json")
             .arg(url)
-            .output()
-            .await
-            .with_context(|| format!("Failed to spawn nix-prefetch-url for {}", url))?;
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .with_context(|| format!("Failed to spawn nix store prefetch-file for {}", url))?;
+
+        let output = if let Some(sender) = logging {
+            let mut stderr_output = Vec::<u8>::new();
+            let mut stderr =
+                BufReader::new(child.stderr.take().context("stderr was not captured")?);
+            loop {
+                let len = stderr.read_until(b'\n', &mut stderr_output).await?;
+                if len == 0 {
+                    break;
+                }
+
+                if let Some(json) = stderr_output[stderr_output.len() - len..]
+                    .trim_ascii_end()
+                    .strip_prefix(b"@nix ")
+                {
+                    let log = serde_json::from_slice::<LogMessage>(json);
+                    if let Ok(log) = log {
+                        let _ = sender.send(log).await;
+                    }
+                }
+            }
+
+            std::process::Output {
+                stderr: stderr_output,
+                ..child.wait_with_output().await?
+            }
+        } else {
+            child.wait_with_output().await?
+        };
 
         // FIXME: handle errors and pipe stderr through
         if !output.status.success() {
@@ -46,9 +86,17 @@ pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
             )));
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::debug!("Got hash: {}", stdout);
-        hash_to_sri(&stdout.trim(), "sha256")
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PrefetchedOutput {
+            pub hash: String,
+            #[allow(unused)]
+            pub store_path: String,
+        }
+
+        let output: PrefetchedOutput = serde_json::from_slice(&output.stdout)?;
+        log::debug!("Got hash: {}", output.hash);
+        Ok(output.hash)
     };
     check_url(result.await, url).await
 }
@@ -181,4 +229,74 @@ pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::
 
     serde_json::from_slice::<std::path::PathBuf>(&output.stdout)
         .context("Failed to deserialize nix-instantiate JSON response.")
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "action", rename_all = "lowercase")]
+#[allow(unused)]
+pub enum LogMessage {
+    Start {
+        #[serde(default)]
+        fields: Vec<Field>,
+        id: u64,
+        level: u64,
+        parent: u64,
+        text: String,
+        #[serde(rename = "type")]
+        type_: ActivityType,
+    },
+    Stop {
+        id: u64,
+    },
+    Result {
+        fields: Vec<Field>,
+        id: u64,
+        #[serde(rename = "type")]
+        type_: ResultType,
+    },
+    Msg {
+        level: u64,
+        msg: String,
+    },
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+#[allow(unused)]
+pub enum Field {
+    Int(u64),
+    Str(String),
+}
+
+#[derive(Deserialize_repr, Debug, PartialEq)]
+#[repr(u8)]
+pub enum ActivityType {
+    Unknown = 0,
+    CopyPath = 100,
+    FileTransfer = 101,
+    Realise = 102,
+    CopyPaths = 103,
+    Builds = 104,
+    Build = 105,
+    OptimiseStore = 106,
+    VerifyPaths = 107,
+    Substitute = 108,
+    QueryPathInfo = 109,
+    PostBuildHook = 110,
+    BuildWaiting = 111,
+    FetchTree = 112,
+}
+
+#[derive(Deserialize_repr, Debug)]
+#[repr(u8)]
+pub enum ResultType {
+    FileLinked = 100,
+    BuildLogLine = 101,
+    UntrustedPath = 102,
+    CorruptedPath = 103,
+    SetPhase = 104,
+    Progress = 105,
+    SetExpected = 106,
+    PostBuildLogLine = 107,
+    FetchStatus = 108,
 }

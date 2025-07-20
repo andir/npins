@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use diff::{Diff, OptionExt};
+use nix::LogMessage;
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -128,7 +129,11 @@ pub trait Updatable:
     async fn update(&self, old: Option<&Self::Version>) -> Result<Self::Version>;
 
     /// Fetch hashes for a given version
-    async fn fetch(&self, version: &Self::Version) -> Result<Self::Hashes>;
+    async fn fetch(
+        &self,
+        version: &Self::Version,
+        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+    ) -> Result<Self::Hashes>;
 }
 
 /// Create the `Pin` type
@@ -187,13 +192,13 @@ macro_rules! mkPin {
             /* If an error is returned, `self` remains unchanged. This returns a double result: the outer one
              * indicates that `update` should be called first, the inner is from the actual operation.
              */
-            pub async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
+            pub async fn fetch(&mut self, logging: Option<tokio::sync::mpsc::Sender<LogMessage>>) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, hashes, .. } => {
                         let version = version.as_ref()
                             .ok_or_else(|| anyhow::format_err!("No version information available, call `update` first or manually set one"))?;
                         /* Use very explicit syntax to force the correct types and get good compile errors */
-                        let new_hashes = <$input_name as Updatable>::fetch(input, &version).await?;
+                        let new_hashes = <$input_name as Updatable>::fetch(input, &version, logging).await?;
                         hashes.insert_diffed(new_hashes)
                     }),*
                 })

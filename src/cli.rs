@@ -1,22 +1,23 @@
 //! The main CLI application
 
-use npins::*;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use npins::{
+    nix::{ActivityType, Field, LogMessage, ResultType},
+    *,
+};
+use tokio::{select, time::interval};
 
 use std::{
-    cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+    future::Future,
     io::{stderr, IsTerminal, Write},
     path::PathBuf,
+    time::Duration,
 };
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use crossterm::{
-    cursor::MoveToPreviousLine,
-    style::{Print, Stylize},
-    terminal::{Clear, ClearType},
-    QueueableCommand,
-};
 use futures::{
     future,
     stream::{self, StreamExt},
@@ -516,14 +517,22 @@ pub struct Opts {
     command: Command,
 }
 
-fn write_diff(writer: &mut impl Write, name: &str, diff: &[diff::DiffEntry]) {
-    if diff.is_empty() {
-        writeln!(writer, "[{name}] No Changes").unwrap();
-    } else {
-        writeln!(writer, "[{name}] Changes:").unwrap();
-        for entry in diff {
-            write!(writer, "{entry}").unwrap();
+struct Differences<'a>(&'a str, &'a [diff::DiffEntry]);
+
+impl Display for Differences<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Differences(name, diff) = self;
+
+        if diff.is_empty() {
+            writeln!(f, "[{name}] No Changes")?;
+        } else {
+            writeln!(f, "[{name}] Changes:")?;
+            for entry in diff.iter() {
+                write!(f, "{entry}")?;
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -595,9 +604,13 @@ impl Opts {
                 "Writing initial lock file with nixpkgs entry (need to fetch latest commit first)"
             );
             let mut pin = NixPins::new_with_nixpkgs();
-            Self::update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
-                .await
-                .context("Failed to fetch initial nixpkgs entry")?;
+            Self::update_one(
+                pin.pins.get_mut("nixpkgs").unwrap(),
+                UpdateStrategy::Full,
+                None,
+            )
+            .await
+            .context("Failed to fetch initial nixpkgs entry")?;
             pin
         };
         self.write_pins(&initial_pins)?;
@@ -635,7 +648,7 @@ impl Opts {
         } else {
             UpdateStrategy::Full
         };
-        Self::update_one(&mut pin, strategy)
+        Self::update_one(&mut pin, strategy, None)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name.clone(), pin.clone());
@@ -647,7 +660,11 @@ impl Opts {
         Ok(())
     }
 
-    async fn update_one(pin: &mut Pin, strategy: UpdateStrategy) -> Result<Vec<diff::DiffEntry>> {
+    async fn update_one(
+        pin: &mut Pin,
+        strategy: UpdateStrategy,
+        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+    ) -> Result<Vec<diff::DiffEntry>> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
             pin.update().await?
@@ -657,7 +674,7 @@ impl Opts {
 
         /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
         let diff = if !diff1.is_empty() || strategy.must_fetch() {
-            let diff2 = pin.fetch().await?;
+            let diff2 = pin.fetch(logging).await?;
             diff1.into_iter().chain(diff2.into_iter()).collect()
         } else {
             diff1
@@ -666,7 +683,7 @@ impl Opts {
         Ok(diff)
     }
 
-    async fn update(&self, opts: &UpdateOpts) -> Result<()> {
+    async fn update(&self, opts: &UpdateOpts, verbose: bool) -> Result<()> {
         let mut pins = self.read_pins()?;
 
         let mut selected_pins = BTreeSet::new();
@@ -703,10 +720,16 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        let animation = Animation::new(|stderr, finished| {
-            write!(stderr, "Updated {finished}/{length} pins").unwrap()
+        let multiprogress =
+            (!verbose && stderr().is_terminal()).then(indicatif::MultiProgress::new);
+        let multiprogress = multiprogress.as_ref();
+        let total_progresss = multiprogress.map(|x| {
+            x.add(
+                ProgressBar::new(length as u64)
+                    .with_style(ProgressStyle::with_template("{pos}/{len} {elapsed}").unwrap()),
+            )
         });
-        let animation = &animation;
+        let final_progress = total_progresss.as_ref();
 
         let update_iter = pins
             .pins
@@ -716,32 +739,43 @@ impl Opts {
                     || (opts.names.is_empty() && (opts.update_frozen || !pin.is_frozen()))
             })
             .map(|(name, pin)| async move {
-                animation.on_pin_start(&*name);
-                let diff = Self::update_one(pin, strategy).await?;
-                animation.on_pin_finish(&*name);
-                animation.write(|stderr| write_diff(stderr, name, &diff));
+                let (state, sender) = multiprogress
+                    .map(|mp| create_pin_progressbar(mp, name.clone()))
+                    .unzip();
+                let future = Self::update_one(pin, strategy, sender);
+                let diff = if let Some((mp, pb, recv)) = state {
+                    run_pin_progressbar(name, future, mp, pb, recv).await?
+                } else {
+                    let diff = future.await?;
+                    write!(&mut stderr().lock(), "{}", Differences(name, &diff)).unwrap();
+                    diff
+                };
+                final_progress.inspect(|x| x.inc(1));
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
         let mut has_diff = false;
-        stream::iter(update_iter)
+        let mut updater = stream::iter(update_iter)
             .buffer_unordered(opts.max_concurrent_downloads)
             .try_for_each(|(_name, diff)| {
                 has_diff |= !diff.is_empty();
                 future::ready(Ok(()))
-            })
-            .await
-            .inspect_err(|_| {
-                /* Flush the status line */
-                if length != 0 && stderr().is_terminal() {
-                    eprintln!();
-                }
-            })?;
+            });
 
-        /* Flush the status line */
-        if length != 0 && stderr().is_terminal() {
-            eprintln!();
+        if let Some(final_progress) = final_progress {
+            let mut interval = interval(Duration::from_secs(1));
+            loop {
+                select! {
+                    res = &mut updater => {res?; break;},
+                    _ = interval.tick() => final_progress.tick()
+                }
+            }
+            drop(updater);
+        } else {
+            updater.await?
         }
+
+        multiprogress.inspect(|x| x.clear().unwrap());
 
         if !opts.dry_run {
             if has_diff {
@@ -881,7 +915,7 @@ impl Opts {
                 .try_into()
                 .context("Could not convert pin to npins format")?;
             pin.update().await.context("Failed to update the pin")?;
-            pin.fetch().await.context("Failed to update the pin")?;
+            pin.fetch(None).await.context("Failed to update the pin")?;
             npins.pins.insert(name.to_string(), pin);
 
             Ok(())
@@ -973,7 +1007,7 @@ impl Opts {
                 .context("Could not convert pin to npins format")?;
 
             pin.update().await?;
-            pin.fetch().await.context("Failed to update the pin")?;
+            pin.fetch(None).await.context("Failed to update the pin")?;
             npins.pins.insert(name.to_string(), pin);
 
             Ok(())
@@ -1033,7 +1067,7 @@ impl Opts {
             Command::Init(o) => self.init(o).await?,
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
-            Command::Update(o) => self.update(o).await?,
+            Command::Update(o) => self.update(o, self.verbose).await?,
             Command::Upgrade => self.upgrade()?,
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,
@@ -1047,85 +1081,112 @@ impl Opts {
     }
 }
 
-/// Helper struct for the CLI animation used by `npins update`
-struct Animation<'a, F> {
-    in_progress: RefCell<BTreeSet<&'a str>>,
-    finished: Cell<i32>,
-    write_bottom_line: F,
+fn create_pin_progressbar(
+    mp: &MultiProgress,
+    name: String,
+) -> (
+    (
+        &MultiProgress,
+        ProgressBar,
+        tokio::sync::mpsc::Receiver<LogMessage>,
+    ),
+    tokio::sync::mpsc::Sender<LogMessage>,
+) {
+    let pb = mp.insert_from_back(
+        1,
+        ProgressBar::no_length().with_style(ProgressStyle::with_template("{prefix:.3}").unwrap()),
+    );
+    pb.set_prefix(name);
+    let (send, recv) = tokio::sync::mpsc::channel(2);
+    ((mp, pb, recv), send)
 }
 
-impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
-    pub fn new(write_bottom_line: F) -> Self {
-        Self {
-            in_progress: Default::default(),
-            finished: Default::default(),
-            write_bottom_line,
-        }
-    }
+async fn run_pin_progressbar(
+    name: &str,
+    future: impl Future<Output = Result<Vec<diff::DiffEntry>>>,
+    mp: &MultiProgress,
+    pb: ProgressBar,
+    mut recv: tokio::sync::mpsc::Receiver<LogMessage>,
+) -> Result<Vec<diff::DiffEntry>> {
+    tokio::pin!(future);
 
-    /// Update the set of in_progress pins, redrawing it in the process.
-    /// The closure passed may also print information, which will then be displayed above the
-    /// list of in-progress pins.
-    fn update_in_progress(
-        &'a self,
-        stderr: &mut std::io::StderrLock,
-        updater: impl for<'b> FnOnce(&'b mut BTreeSet<&'a str>, &mut std::io::StderrLock),
-    ) {
-        let mut in_progress = self.in_progress.borrow_mut();
-        if !in_progress.is_empty() {
-            crossterm::queue!(
-                stderr,
-                MoveToPreviousLine(in_progress.len() as u16),
-                Clear(ClearType::FromCursorDown)
-            )
-            .unwrap();
-        }
+    let diff = loop {
+        let log = select! {
+            res = &mut future => { break res; }
+            Some(log) = recv.recv() => log
+        };
 
-        updater(&mut *in_progress, stderr);
-        for n in in_progress.iter() {
-            stderr.queue(Print(n.dark_yellow())).unwrap();
-            stderr.write_all(b"\n").unwrap();
-        }
+        let (downloaded, total) = match log {
+            LogMessage::Result {
+                fields,
+                id: _,
+                type_: ResultType::Progress,
+            } => {
+                let [Field::Int(downloaded), Field::Int(total), ..] = fields.as_slice() else {
+                    continue;
+                };
+                (*downloaded, *total)
+            },
+            LogMessage::Start {
+                text,
+                type_: ActivityType::Unknown,
+                ..
+            } if text.starts_with("unpacking") => {
+                pb.set_message("unpacking");
+                continue;
+            },
+            LogMessage::Start {
+                text,
+                type_: ActivityType::Unknown,
+                ..
+            } if text.starts_with("adding") => {
+                pb.set_message("adding");
+                continue;
+            },
+            // log => {
+            //     mp.println(format!("{log:?}")).unwrap();
+            //     continue;
+            // },
+            _ => continue,
+        };
 
-        (self.write_bottom_line)(stderr, self.finished.get());
-    }
-
-    /// Write something above the animation of in-progress pins
-    pub fn write(&'a self, writer: impl FnOnce(&mut std::io::StderrLock)) {
-        if !stderr().is_terminal() {
-            writer(&mut stderr().lock());
-        } else {
-            self.update_in_progress(&mut stderr().lock(), |_, stderr| writer(stderr));
-        }
-    }
-
-    /// To be called every time a pin starts processing
-    pub fn on_pin_start(&'a self, name: &'a str) {
-        /* No animations outside a terminal */
-        if !stderr().is_terminal() {
-            return;
-        }
-
-        let mut stderr = stderr().lock();
-        self.update_in_progress(&mut stderr, |in_progress, _| {
-            in_progress.insert(name);
-        });
-        stderr.flush().unwrap();
-    }
-
-    pub fn on_pin_finish(&'a self, name: &str) {
-        let mut stderr = stderr().lock();
-
-        if !stderr.is_terminal() {
-            return;
+        if total == 0 && downloaded == 0 {
+            continue;
         }
 
-        self.finished.set(self.finished.get() + 1);
-        self.update_in_progress(&mut stderr, |in_progress, _| {
-            in_progress.remove(name);
-        });
-        stderr.flush().unwrap();
-    }
+        if pb.length().is_none() {
+            let template = if total != 0 {
+                "{prefix:.3} {bar} {bytes}/{total_bytes} {eta}"
+            } else {
+                "{prefix:.3} {bytes}"
+            };
+            pb.set_style(ProgressStyle::with_template(template).unwrap());
+        }
+
+        // Nix will give us a total length after the whole thing is downloaded
+        // We do not want to set the length as to prevent the bar from showing up
+        if pb.length() != Some(total) && total != downloaded {
+            pb.set_length(total);
+        }
+
+        pb.set_position(downloaded);
+
+        // This might get called multiple times but it won't matter
+        if downloaded == total {
+            let template = if pb.length() != Some(0) {
+                "{prefix:.3} {bar} {bytes}/{total_bytes} {msg}"
+            } else {
+                "{prefix:.3} {bytes} {msg}"
+            };
+            pb.set_style(ProgressStyle::with_template(template).unwrap());
+            pb.force_draw();
+        }
+    }?;
+
+    mp.remove(&pb);
+    mp.println(Differences(name, &diff).to_string()).unwrap();
+
+    Ok(diff)
 }
 
 #[tokio::main]

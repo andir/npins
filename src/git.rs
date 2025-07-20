@@ -7,7 +7,7 @@
 //! instance. This should be preferred over the generic Git API if possible. See [`Repository`]
 //! for more on this.
 
-use crate::*;
+use crate::{nix::LogMessage, *};
 use anyhow::{Context, Result};
 use lenient_version::Version;
 use serde::{Deserialize, Serialize};
@@ -321,7 +321,11 @@ impl Updatable for GitPin {
         Ok(GitRevision { revision: latest })
     }
 
-    async fn fetch(&self, version: &GitRevision) -> Result<OptionalUrlHashes> {
+    async fn fetch(
+        &self,
+        version: &GitRevision,
+        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+    ) -> Result<OptionalUrlHashes> {
         if self.submodules {
             Ok(OptionalUrlHashes {
                 url: None,
@@ -332,7 +336,7 @@ impl Updatable for GitPin {
             // Try to find an URL for fetchtarball first, as it is faster than fetchgit
             let url = self.repository.url(&version.revision)?;
             let hash = match url.as_ref() {
-                Some(url) => nix::nix_prefetch_tarball(url).await?,
+                Some(url) => nix::nix_prefetch_tarball(url, logging).await?,
                 None => {
                     nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision, false)
                         .await?
@@ -490,7 +494,11 @@ impl Updatable for GitReleasePin {
         })
     }
 
-    async fn fetch(&self, version: &GenericVersion) -> Result<ReleasePinHashes> {
+    async fn fetch(
+        &self,
+        version: &GenericVersion,
+        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+    ) -> Result<ReleasePinHashes> {
         let repo_url = self.repository.git_url()?;
 
         let revision = fetch_ref(&repo_url, format!("refs/tags/{}", version.version))
@@ -507,7 +515,7 @@ impl Updatable for GitReleasePin {
             // Try to find an URL for fetchtarball first, as it is faster than fetchgit
             let url = self.repository.release_url(&version.version)?;
             let hash = match url.as_ref() {
-                Some(url) => nix::nix_prefetch_tarball(url).await?,
+                Some(url) => nix::nix_prefetch_tarball(url, logging).await?,
                 None => nix::nix_prefetch_git(&repo_url, &revision, false).await?,
             };
             Ok(ReleasePinHashes {
@@ -868,7 +876,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             OptionalUrlHashes {
                 url: None,
                 hash: "sha256-zUM/evAqAwwjGXg67IVzqZvvwp2NjFG1HAUSdLv98Z0=".into(),
@@ -896,7 +904,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             ReleasePinHashes {
                 url: None,
                 hash: "sha256-BjxJ5aG8NyfDLcBNZrDVV2CAK4tdHNCBdiuJYKB8BmA=".into(),
@@ -924,7 +932,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             OptionalUrlHashes {
                 url: Some("https://github.com/oliverwatkins/swing_library/archive/1edb0a9cebe046cc915a218c57dbf7f40739aeee.tar.gz".parse().unwrap()),
                 hash: "sha256-zUM/evAqAwwjGXg67IVzqZvvwp2NjFG1HAUSdLv98Z0=".into(),
@@ -953,7 +961,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             ReleasePinHashes {
                 revision: "35be5b2b2c3431de1100996487d53134f658b866".into(),
                 url: Some(
@@ -987,7 +995,7 @@ mod test {
             version: "0.2.1".into(),
         };
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             ReleasePinHashes {
                 revision: "ca59ad1dc1b55108f1d17f20bdf443aad3e2f0f5".into(),
                 url: Some(
@@ -1020,7 +1028,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             OptionalUrlHashes {
                 url: Some("https://git.lix.systems/lix-project/lix/archive/4bbdb2f5564b9b42bcaf0e1eec28325300f31c72.tar.gz".parse().unwrap()),
                 hash: "sha256-w8JAk9Z3Fmkyway0VCjy/PtoBC6bGQVhNfTzFA98Pg8=".into(),
@@ -1050,7 +1058,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             ReleasePinHashes {
                 revision: "2a4376be20d70feaa2b0e640c5041fb66ddc67ed".into(),
                 url: Some(
@@ -1083,7 +1091,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             OptionalUrlHashes {
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?sha=e7145078163692697b843915a665d4f41139a65c".parse().unwrap()),
                 hash: "sha256-WzPqIwEe6HzISyeg1XBSHNO2fd9+Pc1T90RXBh7IrFo=".into(),
@@ -1113,7 +1121,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             ReleasePinHashes {
                 revision: "d42ec2b04df9da97e465883fcd1f9a5d6e794027".into(),
                 url: Some("https://gitlab.com/api/v4/projects/maxigaz%2Fgitlab-dark/repository/archive.tar.gz?sha=v1.16.0"
@@ -1146,7 +1154,7 @@ mod test {
         };
 
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             ReleasePinHashes {
                 revision: "435d48ad7eaf9d91cc6719fda852cd9fd54afa2e".into(),
                 url: Some("https://gitlab.gnome.org/api/v4/projects/GNOME%2Fgnome-shell/repository/archive.tar.gz?sha=40.0"
@@ -1178,7 +1186,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             OptionalUrlHashes {
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?sha=bca2071b6923d45d9aabac27b3ea1e40f5fa3006".parse().unwrap()),
                 hash: "sha256-r84Y5/hI0rM/UWK569+nWo+BHuovmlQh3Zs6U2Srx14=".into(),
@@ -1208,7 +1216,7 @@ mod test {
             }
         );
         assert_eq!(
-            pin.fetch(&version).await?,
+            pin.fetch(&version, None).await?,
             ReleasePinHashes {
                 revision: "2c89145d52d072a4ca5da900c2676d890bfab1ff".into(),
                 url: Some("https://gitlab.gnome.org/api/v4/projects/Archive%2Fgnome-games/repository/archive.tar.gz?sha=40.0".parse().unwrap()),

@@ -66,7 +66,7 @@ let
       "--bin"
       "npins"
       "--features"
-      "clap,crossterm,env_logger"
+      "clap,indicatif,env_logger"
     ];
 
     # (Almost) all tests require internet

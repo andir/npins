@@ -65,11 +65,15 @@ impl Updatable for Pin {
         Ok(ChannelVersion { url })
     }
 
-    async fn fetch(&self, version: &ChannelVersion) -> Result<ChannelHash> {
+    async fn fetch(
+        &self,
+        version: &ChannelVersion,
+        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+    ) -> Result<ChannelHash> {
         /* Prefetch an URL that looks like
          * https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f
          */
-        let hash = nix::nix_prefetch_tarball(&version.url).await?;
+        let hash = nix::nix_prefetch_tarball(&version.url, logging).await?;
 
         Ok(ChannelHash { hash })
     }
