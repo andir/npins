@@ -11,6 +11,7 @@ use crate::*;
 use anyhow::{Context, Result};
 use lenient_version::Version;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::process::Command;
 use url::Url;
 
@@ -24,8 +25,12 @@ fn get_github_api_url() -> String {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+/// A git revision, with an optional timestamp.
+///
+/// Timestamps are supported for GitHub repositories only.
 pub struct GitRevision {
     revision: String,
+    timestamp: Option<String>,
 }
 
 impl GitRevision {
@@ -33,13 +38,22 @@ impl GitRevision {
         if !revision.chars().all(|c| c.is_digit(16)) || revision.len() != 40 {
             anyhow::bail!("'{revision}' is not a valid git revision (sha1 hash)");
         }
-        Ok(Self { revision })
+        Ok(Self {
+            revision,
+            timestamp: None,
+        })
     }
 }
 
 impl diff::Diff for GitRevision {
     fn properties(&self) -> Vec<(String, String)> {
-        vec![("revision".into(), self.revision.clone())]
+        vec![
+            ("revision".into(), self.revision.clone()),
+            (
+                "timestamp".into(),
+                self.timestamp.clone().unwrap_or_else(|| "N/A".into()),
+            ),
+        ]
     }
 }
 
@@ -271,6 +285,35 @@ impl Repository {
             },
         })
     }
+
+    async fn get_timestamp(&self, commit: &str) -> Result<Option<String>> {
+        Ok(match self {
+            Repository::GitHub { owner, repo } => {
+                let url: Url = format!(
+                    "{github_api}/repos/{owner}/{repo}/commits/{commit}",
+                    github_api = get_github_api_url(),
+                )
+                .parse()?;
+
+                let body: Value = build_client()?
+                    .get(url)
+                    .send()
+                    .await
+                    .context("Couldn't fetch timestamp")?
+                    .json()
+                    .await
+                    .context("Couldn't decode response as JSON")?;
+
+                Some(
+                    body["commit"]["author"]["date"]
+                        .as_str()
+                        .context("Expected date in GitHub API response to be a string")?
+                        .to_string(),
+                )
+            },
+            _ => None,
+        })
+    }
 }
 
 /// Track a given branch on a repository and always use the latest commit
@@ -318,7 +361,10 @@ impl Updatable for GitPin {
             .context("Couldn't fetch the latest commit")?
             .revision;
 
-        Ok(GitRevision { revision: latest })
+        Ok(GitRevision {
+            timestamp: self.repository.get_timestamp(&latest).await?,
+            revision: latest,
+        })
     }
 
     async fn fetch(&self, version: &GitRevision) -> Result<OptionalUrlHashes> {
@@ -865,6 +911,7 @@ mod test {
             version,
             GitRevision {
                 revision: "1edb0a9cebe046cc915a218c57dbf7f40739aeee".into(),
+                timestamp: None,
             }
         );
         assert_eq!(
@@ -921,6 +968,7 @@ mod test {
             version,
             GitRevision {
                 revision: "1edb0a9cebe046cc915a218c57dbf7f40739aeee".into(),
+                timestamp: Some("2018-12-17T09:26:57Z".into()),
             }
         );
         assert_eq!(
@@ -1017,6 +1065,7 @@ mod test {
             version,
             GitRevision {
                 revision: "4bbdb2f5564b9b42bcaf0e1eec28325300f31c72".into(),
+                timestamp: None,
             }
         );
         assert_eq!(
@@ -1080,6 +1129,7 @@ mod test {
             version,
             git::GitRevision {
                 revision: "e7145078163692697b843915a665d4f41139a65c".into(),
+                timestamp: None,
             }
         );
         assert_eq!(
@@ -1175,6 +1225,7 @@ mod test {
             version,
             git::GitRevision {
                 revision: "bca2071b6923d45d9aabac27b3ea1e40f5fa3006".into(),
+                timestamp: None,
             }
         );
         assert_eq!(

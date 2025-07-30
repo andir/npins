@@ -346,13 +346,19 @@ let
                 ln -s ${testTarball} $tarballPath/${path}
                 ln -s ${testTarball} $archivePath/${path}.tar.gz
               '') apiTarballs}
+              commitsPath="api/repos/${repoPath}/commits"
+              commitsApiResponse=$(mktemp)
+              echo '{"commit":{"author":{"date":"1970-01-01T00:00:00Z"}}}' > "$commitsApiResponse"
+              mkdir -p $commitsPath
 
               chmod -R +rw $archivePath
               chmod -R +rw $tarballPath
+              chmod -R +rw $commitsPath
               pwd
               ls -la $tarballPath
               # For each of the commits in the repo create the tarballs
               git config --global --add safe.directory ${gitRepo}
+              git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 cp "$commitsApiResponse" "$commitsPath"/XX
               git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$tarballPath/XX XX
               git -C ${gitRepo} log --oneline --format="format:%H" | xargs -I XX -n1 git -C ${gitRepo} archive -o $PWD/$archivePath/XX.tar.gz XX
             ''
