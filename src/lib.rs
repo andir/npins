@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use diff::{Diff, OptionExt};
-use nix::LogMessage;
+use nix::FetchStatus;
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -132,7 +132,7 @@ pub trait Updatable:
     async fn fetch(
         &self,
         version: &Self::Version,
-        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+        logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
     ) -> Result<Self::Hashes>;
 }
 
@@ -192,7 +192,7 @@ macro_rules! mkPin {
             /* If an error is returned, `self` remains unchanged. This returns a double result: the outer one
              * indicates that `update` should be called first, the inner is from the actual operation.
              */
-            pub async fn fetch(&mut self, logging: Option<tokio::sync::mpsc::Sender<LogMessage>>) -> Result<Vec<diff::DiffEntry>> {
+            pub async fn fetch(&mut self, logging: Option<Box<dyn FnMut(FetchStatus) + Send>>) -> Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, hashes, .. } => {
                         let version = version.as_ref()

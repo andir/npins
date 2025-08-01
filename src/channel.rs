@@ -68,7 +68,7 @@ impl Updatable for Pin {
     async fn fetch(
         &self,
         version: &ChannelVersion,
-        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+        logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
     ) -> Result<ChannelHash> {
         /* Prefetch an URL that looks like
          * https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f

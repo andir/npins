@@ -8,7 +8,7 @@ use reqwest::header::HeaderName;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::{nix::LogMessage, *};
+use crate::{nix::FetchStatus, *};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct TarballPin {
@@ -92,7 +92,7 @@ impl Updatable for TarballPin {
     async fn fetch(
         &self,
         version: &LockedTarball,
-        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+        logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
     ) -> Result<GenericHash> {
         let url = version.locked_url.as_ref().unwrap_or(&self.url);
         let hash = nix::nix_prefetch_tarball(&url, logging).await?;

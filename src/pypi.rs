@@ -1,7 +1,7 @@
 //! Pin a PyPi package
 
 use crate::{
-    nix::{hash_to_sri, LogMessage},
+    nix::{hash_to_sri, FetchStatus},
     *,
 };
 use anyhow::{Context, Result};
@@ -108,7 +108,7 @@ impl Updatable for Pin {
     async fn fetch(
         &self,
         version: &GenericVersion,
-        _logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+        _logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
     ) -> Result<GenericUrlHashes> {
         /* Fetch the JSON metadata for a Pypi package.
          * Url template: `https://pypi.org/pypi/$pname/json`

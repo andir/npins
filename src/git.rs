@@ -7,7 +7,7 @@
 //! instance. This should be preferred over the generic Git API if possible. See [`Repository`]
 //! for more on this.
 
-use crate::{nix::LogMessage, *};
+use crate::{nix::FetchStatus, *};
 use anyhow::{Context, Result};
 use lenient_version::Version;
 use serde::{Deserialize, Serialize};
@@ -324,7 +324,7 @@ impl Updatable for GitPin {
     async fn fetch(
         &self,
         version: &GitRevision,
-        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+        logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
     ) -> Result<OptionalUrlHashes> {
         if self.submodules {
             Ok(OptionalUrlHashes {
@@ -497,7 +497,7 @@ impl Updatable for GitReleasePin {
     async fn fetch(
         &self,
         version: &GenericVersion,
-        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+        logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
     ) -> Result<ReleasePinHashes> {
         let repo_url = self.repository.git_url()?;
 

@@ -1,19 +1,11 @@
 //! The main CLI application
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use npins::{
-    nix::{ActivityType, Field, LogMessage, ResultType},
-    *,
-};
-use tokio::{select, time::interval};
-
+use npins::{nix::FetchStatus, *};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
-    future::Future,
     io::{stderr, IsTerminal, Write},
     path::PathBuf,
-    time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -25,6 +17,9 @@ use futures::{
 };
 
 use url::{ParseError, Url};
+
+use progress::PinProgress;
+mod progress;
 
 const DEFAULT_NIX: &'static str = include_str!("default.nix");
 
@@ -663,7 +658,7 @@ impl Opts {
     async fn update_one(
         pin: &mut Pin,
         strategy: UpdateStrategy,
-        logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+        logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
     ) -> Result<Vec<diff::DiffEntry>> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
@@ -720,16 +715,9 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        let multiprogress =
-            (!verbose && stderr().is_terminal()).then(indicatif::MultiProgress::new);
-        let multiprogress = multiprogress.as_ref();
-        let total_progresss = multiprogress.map(|x| {
-            x.add(
-                ProgressBar::new(length as u64)
-                    .with_style(ProgressStyle::with_template("{pos}/{len} {elapsed}").unwrap()),
-            )
-        });
-        let final_progress = total_progresss.as_ref();
+        let ui =
+            (!verbose && stderr().is_terminal()).then(|| progress::ProgressUI::new(length as u64));
+        let ui_ref = ui.as_ref();
 
         let update_iter = pins
             .pins
@@ -739,43 +727,33 @@ impl Opts {
                     || (opts.names.is_empty() && (opts.update_frozen || !pin.is_frozen()))
             })
             .map(|(name, pin)| async move {
-                let (state, sender) = multiprogress
-                    .map(|mp| create_pin_progressbar(mp, name.clone()))
-                    .unzip();
-                let future = Self::update_one(pin, strategy, sender);
-                let diff = if let Some((mp, pb, recv)) = state {
-                    run_pin_progressbar(name, future, mp, pb, recv).await?
+                let pin_progress = ui_ref.map(|ui| ui.add_pin(name.clone()));
+                let callback = pin_progress
+                    .as_ref()
+                    .map(PinProgress::fetch_status_callback);
+
+                let diff = Self::update_one(pin, strategy, callback).await?;
+                if let Some(pin_progress) = pin_progress {
+                    pin_progress
+                        .write(&Differences(name, &diff).to_string())
+                        .unwrap();
+                    drop(pin_progress);
                 } else {
-                    let diff = future.await?;
-                    write!(&mut stderr().lock(), "{}", Differences(name, &diff)).unwrap();
-                    diff
+                    eprint!("{}", Differences(name, &diff));
                 };
-                final_progress.inspect(|x| x.inc(1));
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
         let mut has_diff = false;
-        let mut updater = stream::iter(update_iter)
+        stream::iter(update_iter)
             .buffer_unordered(opts.max_concurrent_downloads)
             .try_for_each(|(_name, diff)| {
                 has_diff |= !diff.is_empty();
                 future::ready(Ok(()))
-            });
+            })
+            .await?;
 
-        if let Some(final_progress) = final_progress {
-            let mut interval = interval(Duration::from_secs(1));
-            loop {
-                select! {
-                    res = &mut updater => {res?; break;},
-                    _ = interval.tick() => final_progress.tick()
-                }
-            }
-            drop(updater);
-        } else {
-            updater.await?
-        }
-
-        multiprogress.inspect(|x| x.clear().unwrap());
+        drop(ui);
 
         if !opts.dry_run {
             if has_diff {
@@ -1079,114 +1057,6 @@ impl Opts {
 
         Ok(())
     }
-}
-
-fn create_pin_progressbar(
-    mp: &MultiProgress,
-    name: String,
-) -> (
-    (
-        &MultiProgress,
-        ProgressBar,
-        tokio::sync::mpsc::Receiver<LogMessage>,
-    ),
-    tokio::sync::mpsc::Sender<LogMessage>,
-) {
-    let pb = mp.insert_from_back(
-        1,
-        ProgressBar::no_length().with_style(ProgressStyle::with_template("{prefix:.3}").unwrap()),
-    );
-    pb.set_prefix(name);
-    let (send, recv) = tokio::sync::mpsc::channel(2);
-    ((mp, pb, recv), send)
-}
-
-async fn run_pin_progressbar(
-    name: &str,
-    future: impl Future<Output = Result<Vec<diff::DiffEntry>>>,
-    mp: &MultiProgress,
-    pb: ProgressBar,
-    mut recv: tokio::sync::mpsc::Receiver<LogMessage>,
-) -> Result<Vec<diff::DiffEntry>> {
-    tokio::pin!(future);
-
-    let diff = loop {
-        let log = select! {
-            res = &mut future => { break res; }
-            Some(log) = recv.recv() => log
-        };
-
-        let (downloaded, total) = match log {
-            LogMessage::Result {
-                fields,
-                id: _,
-                type_: ResultType::Progress,
-            } => {
-                let [Field::Int(downloaded), Field::Int(total), ..] = fields.as_slice() else {
-                    continue;
-                };
-                (*downloaded, *total)
-            },
-            LogMessage::Start {
-                text,
-                type_: ActivityType::Unknown,
-                ..
-            } if text.starts_with("unpacking") => {
-                pb.set_message("unpacking");
-                continue;
-            },
-            LogMessage::Start {
-                text,
-                type_: ActivityType::Unknown,
-                ..
-            } if text.starts_with("adding") => {
-                pb.set_message("adding");
-                continue;
-            },
-            // log => {
-            //     mp.println(format!("{log:?}")).unwrap();
-            //     continue;
-            // },
-            _ => continue,
-        };
-
-        if total == 0 && downloaded == 0 {
-            continue;
-        }
-
-        if pb.length().is_none() {
-            let template = if total != 0 {
-                "{prefix:.3} {bar} {bytes}/{total_bytes} {eta}"
-            } else {
-                "{prefix:.3} {bytes}"
-            };
-            pb.set_style(ProgressStyle::with_template(template).unwrap());
-        }
-
-        // Nix will give us a total length after the whole thing is downloaded
-        // We do not want to set the length as to prevent the bar from showing up
-        if pb.length() != Some(total) && total != downloaded {
-            pb.set_length(total);
-        }
-
-        pb.set_position(downloaded);
-
-        // This might get called multiple times but it won't matter
-        if downloaded == total {
-            let template = if pb.length() != Some(0) {
-                "{prefix:.3} {bar} {bytes}/{total_bytes} {msg}"
-            } else {
-                "{prefix:.3} {bytes} {msg}"
-            };
-            pb.set_style(ProgressStyle::with_template(template).unwrap());
-            pb.force_draw();
-        }
-    }?;
-
-    mp.remove(&pb);
-    mp.println(Differences(name, &diff).to_string()).unwrap();
-
-    Ok(diff)
 }
 
 #[tokio::main]

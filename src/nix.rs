@@ -24,7 +24,7 @@ pub fn hash_to_sri(s: &str, algo: &str) -> Result<String> {
 
 pub async fn nix_prefetch_tarball(
     url: impl AsRef<str>,
-    logging: Option<tokio::sync::mpsc::Sender<LogMessage>>,
+    logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
 ) -> Result<String> {
     let url = url.as_ref();
     let result = async {
@@ -48,7 +48,7 @@ pub async fn nix_prefetch_tarball(
             .spawn()
             .with_context(|| format!("Failed to spawn nix store prefetch-file for {}", url))?;
 
-        let output = if let Some(sender) = logging {
+        let output = if let Some(mut callback) = logging {
             let mut stderr_output = Vec::<u8>::new();
             let mut stderr =
                 BufReader::new(child.stderr.take().context("stderr was not captured")?);
@@ -63,8 +63,8 @@ pub async fn nix_prefetch_tarball(
                     .strip_prefix(b"@nix ")
                 {
                     let log = serde_json::from_slice::<LogMessage>(json);
-                    if let Ok(log) = log {
-                        let _ = sender.send(log).await;
+                    if let Ok(Some(log)) = log.map(FetchStatus::from_internal_log) {
+                        callback(log);
                     }
                 }
             }
@@ -231,10 +231,48 @@ pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::
         .context("Failed to deserialize nix-instantiate JSON response.")
 }
 
+pub enum FetchStatus {
+    Progress { downloaded: u64, total: u64 },
+    Message(&'static str),
+}
+
+impl FetchStatus {
+    fn from_internal_log(log: LogMessage) -> Option<Self> {
+        match log {
+            LogMessage::Result {
+                fields,
+                id: _,
+                type_: ResultType::Progress,
+            } => {
+                let &[Field::Int(downloaded), Field::Int(total), ..] = fields.as_slice() else {
+                    return None;
+                };
+
+                if total == 0 && downloaded == 0 {
+                    return None;
+                }
+
+                Some(Self::Progress { downloaded, total })
+            },
+            LogMessage::Start {
+                text,
+                type_: ActivityType::Unknown,
+                ..
+            } if text.starts_with("unpacking") => Some(Self::Message("unpacking")),
+            LogMessage::Start {
+                text,
+                type_: ActivityType::Unknown,
+                ..
+            } if text.starts_with("adding") => Some(Self::Message("adding")),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(tag = "action", rename_all = "lowercase")]
 #[allow(unused)]
-pub enum LogMessage {
+enum LogMessage {
     Start {
         #[serde(default)]
         fields: Vec<Field>,
@@ -263,14 +301,14 @@ pub enum LogMessage {
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
 #[allow(unused)]
-pub enum Field {
+enum Field {
     Int(u64),
     Str(String),
 }
 
 #[derive(Deserialize_repr, Debug, PartialEq)]
 #[repr(u8)]
-pub enum ActivityType {
+enum ActivityType {
     Unknown = 0,
     CopyPath = 100,
     FileTransfer = 101,
@@ -289,7 +327,7 @@ pub enum ActivityType {
 
 #[derive(Deserialize_repr, Debug)]
 #[repr(u8)]
-pub enum ResultType {
+enum ResultType {
     FileLinked = 100,
     BuildLogLine = 101,
     UntrustedPath = 102,
