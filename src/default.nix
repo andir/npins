@@ -71,7 +71,15 @@ let
           }
         else
           {
-            fetchTarball = pkgs.fetchzip;
+            fetchTarball =
+              {
+                url,
+                sha256,
+              }:
+              pkgs.fetchzip {
+                inherit url sha256;
+                extension = "tar";
+              };
             inherit (pkgs) fetchurl;
             fetchGit =
               {
