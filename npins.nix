@@ -9,7 +9,6 @@
   darwin,
 
   # runtime dependencies
-  lix, # for nix-prefetch-url
   nix-prefetch-git,
   git, # for git ls-remote
 }:
@@ -42,7 +41,6 @@ let
 
   cargoToml = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
   runtimePath = lib.makeBinPath [
-    lix
     nix-prefetch-git
     git
   ];
