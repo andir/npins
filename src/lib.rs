@@ -248,7 +248,7 @@ macro_rules! mkPin {
                         let properties = input.properties().into_iter()
                             .chain(version.iter().flat_map(Diff::properties))
                             .chain(hashes.iter().flat_map(Diff::properties))
-			    .chain(frozen.properties());
+                            .chain(frozen.properties());
                         for (key, value) in properties {
                             writeln!(fmt, "    {}: {}", key, value)?;
                         }
