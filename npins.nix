@@ -7,9 +7,9 @@
   runCommand,
   stdenv,
   darwin,
-
   # runtime dependencies
   nix-prefetch-git,
+  nix-prefetch-docker,
   git, # for git ls-remote
 }:
 let
@@ -42,6 +42,7 @@ let
   cargoToml = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
   runtimePath = lib.makeBinPath [
     nix-prefetch-git
+    nix-prefetch-docker
     git
   ];
   self = rustPlatform.buildRustPackage {
