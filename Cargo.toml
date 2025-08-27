@@ -11,7 +11,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "npins"
 path = "src/cli.rs"
-required-features = [ "clap", "crossterm", "env_logger" ]
+required-features = [ "clap", "indicatif", "env_logger" ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,10 +27,11 @@ async-trait = "0.1"
 lenient_semver_parser = { version = "0.4.2", default-features = false }
 lenient_version = { version = "0.4.2" }
 futures = "0.3.31"
+serde_repr = "0.1.20"
 
 # CLI dependencies
 clap = { version = "4.5", features = [ "derive", "env" ], optional = true }
-crossterm = { version = "0.28.1", default-features = false, optional = true }
+indicatif = { version = "0.18.0", optional = true }
 env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false, optional = true }
 nix-compat = { git = "https://git.snix.dev/snix/snix", version = "0.1.0" }
 data-encoding = "2.9.0"

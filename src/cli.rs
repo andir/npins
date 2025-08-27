@@ -1,22 +1,15 @@
 //! The main CLI application
 
-use npins::*;
-
+use npins::{nix::FetchStatus, *};
 use std::{
-    cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
+    fmt::Display,
     io::{stderr, IsTerminal, Write},
     path::PathBuf,
 };
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use crossterm::{
-    cursor::MoveToPreviousLine,
-    style::{Print, Stylize},
-    terminal::{Clear, ClearType},
-    QueueableCommand,
-};
 use futures::{
     future,
     stream::{self, StreamExt},
@@ -24,6 +17,9 @@ use futures::{
 };
 
 use url::{ParseError, Url};
+
+use progress::PinProgress;
+mod progress;
 
 const DEFAULT_NIX: &'static str = include_str!("default.nix");
 
@@ -516,14 +512,22 @@ pub struct Opts {
     command: Command,
 }
 
-fn write_diff(writer: &mut impl Write, name: &str, diff: &[diff::DiffEntry]) {
-    if diff.is_empty() {
-        writeln!(writer, "[{name}] No Changes").unwrap();
-    } else {
-        writeln!(writer, "[{name}] Changes:").unwrap();
-        for entry in diff {
-            write!(writer, "{entry}").unwrap();
+struct Differences<'a>(&'a str, &'a [diff::DiffEntry]);
+
+impl Display for Differences<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Differences(name, diff) = self;
+
+        if diff.is_empty() {
+            writeln!(f, "[{name}] No Changes")?;
+        } else {
+            writeln!(f, "[{name}] Changes:")?;
+            for entry in diff.iter() {
+                write!(f, "{entry}")?;
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -595,9 +599,13 @@ impl Opts {
                 "Writing initial lock file with nixpkgs entry (need to fetch latest commit first)"
             );
             let mut pin = NixPins::new_with_nixpkgs();
-            Self::update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
-                .await
-                .context("Failed to fetch initial nixpkgs entry")?;
+            Self::update_one(
+                pin.pins.get_mut("nixpkgs").unwrap(),
+                UpdateStrategy::Full,
+                None,
+            )
+            .await
+            .context("Failed to fetch initial nixpkgs entry")?;
             pin
         };
         self.write_pins(&initial_pins)?;
@@ -635,7 +643,7 @@ impl Opts {
         } else {
             UpdateStrategy::Full
         };
-        Self::update_one(&mut pin, strategy)
+        Self::update_one(&mut pin, strategy, None)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name.clone(), pin.clone());
@@ -647,7 +655,11 @@ impl Opts {
         Ok(())
     }
 
-    async fn update_one(pin: &mut Pin, strategy: UpdateStrategy) -> Result<Vec<diff::DiffEntry>> {
+    async fn update_one(
+        pin: &mut Pin,
+        strategy: UpdateStrategy,
+        logging: Option<Box<dyn FnMut(FetchStatus) + Send>>,
+    ) -> Result<Vec<diff::DiffEntry>> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
             pin.update().await?
@@ -657,7 +669,7 @@ impl Opts {
 
         /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
         let diff = if !diff1.is_empty() || strategy.must_fetch() {
-            let diff2 = pin.fetch().await?;
+            let diff2 = pin.fetch(logging).await?;
             diff1.into_iter().chain(diff2.into_iter()).collect()
         } else {
             diff1
@@ -666,7 +678,7 @@ impl Opts {
         Ok(diff)
     }
 
-    async fn update(&self, opts: &UpdateOpts) -> Result<()> {
+    async fn update(&self, opts: &UpdateOpts, verbose: bool) -> Result<()> {
         let mut pins = self.read_pins()?;
 
         let mut selected_pins = BTreeSet::new();
@@ -703,10 +715,9 @@ impl Opts {
             (true, true) => panic!("partial and full are mutually exclusive"),
         };
 
-        let animation = Animation::new(|stderr, finished| {
-            write!(stderr, "Updated {finished}/{length} pins").unwrap()
-        });
-        let animation = &animation;
+        let ui =
+            (!verbose && stderr().is_terminal()).then(|| progress::ProgressUI::new(length as u64));
+        let ui_ref = ui.as_ref();
 
         let update_iter = pins
             .pins
@@ -716,10 +727,20 @@ impl Opts {
                     || (opts.names.is_empty() && (opts.update_frozen || !pin.is_frozen()))
             })
             .map(|(name, pin)| async move {
-                animation.on_pin_start(&*name);
-                let diff = Self::update_one(pin, strategy).await?;
-                animation.on_pin_finish(&*name);
-                animation.write(|stderr| write_diff(stderr, name, &diff));
+                let pin_progress = ui_ref.map(|ui| ui.add_pin(name.clone()));
+                let callback = pin_progress
+                    .as_ref()
+                    .map(PinProgress::fetch_status_callback);
+
+                let diff = Self::update_one(pin, strategy, callback).await?;
+                if let Some(pin_progress) = pin_progress {
+                    pin_progress
+                        .write(&Differences(name, &diff).to_string())
+                        .unwrap();
+                    drop(pin_progress);
+                } else {
+                    eprint!("{}", Differences(name, &diff));
+                };
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
@@ -730,18 +751,9 @@ impl Opts {
                 has_diff |= !diff.is_empty();
                 future::ready(Ok(()))
             })
-            .await
-            .inspect_err(|_| {
-                /* Flush the status line */
-                if length != 0 && stderr().is_terminal() {
-                    eprintln!();
-                }
-            })?;
+            .await?;
 
-        /* Flush the status line */
-        if length != 0 && stderr().is_terminal() {
-            eprintln!();
-        }
+        drop(ui);
 
         if !opts.dry_run {
             if has_diff {
@@ -881,7 +893,7 @@ impl Opts {
                 .try_into()
                 .context("Could not convert pin to npins format")?;
             pin.update().await.context("Failed to update the pin")?;
-            pin.fetch().await.context("Failed to update the pin")?;
+            pin.fetch(None).await.context("Failed to update the pin")?;
             npins.pins.insert(name.to_string(), pin);
 
             Ok(())
@@ -973,7 +985,7 @@ impl Opts {
                 .context("Could not convert pin to npins format")?;
 
             pin.update().await?;
-            pin.fetch().await.context("Failed to update the pin")?;
+            pin.fetch(None).await.context("Failed to update the pin")?;
             npins.pins.insert(name.to_string(), pin);
 
             Ok(())
@@ -1033,7 +1045,7 @@ impl Opts {
             Command::Init(o) => self.init(o).await?,
             Command::Show => self.show()?,
             Command::Add(a) => self.add(a).await?,
-            Command::Update(o) => self.update(o).await?,
+            Command::Update(o) => self.update(o, self.verbose).await?,
             Command::Upgrade => self.upgrade()?,
             Command::Remove(r) => self.remove(r)?,
             Command::ImportNiv(o) => self.import_niv(o).await?,
@@ -1044,87 +1056,6 @@ impl Opts {
         };
 
         Ok(())
-    }
-}
-
-/// Helper struct for the CLI animation used by `npins update`
-struct Animation<'a, F> {
-    in_progress: RefCell<BTreeSet<&'a str>>,
-    finished: Cell<i32>,
-    write_bottom_line: F,
-}
-
-impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
-    pub fn new(write_bottom_line: F) -> Self {
-        Self {
-            in_progress: Default::default(),
-            finished: Default::default(),
-            write_bottom_line,
-        }
-    }
-
-    /// Update the set of in_progress pins, redrawing it in the process.
-    /// The closure passed may also print information, which will then be displayed above the
-    /// list of in-progress pins.
-    fn update_in_progress(
-        &'a self,
-        stderr: &mut std::io::StderrLock,
-        updater: impl for<'b> FnOnce(&'b mut BTreeSet<&'a str>, &mut std::io::StderrLock),
-    ) {
-        let mut in_progress = self.in_progress.borrow_mut();
-        if !in_progress.is_empty() {
-            crossterm::queue!(
-                stderr,
-                MoveToPreviousLine(in_progress.len() as u16),
-                Clear(ClearType::FromCursorDown)
-            )
-            .unwrap();
-        }
-
-        updater(&mut *in_progress, stderr);
-        for n in in_progress.iter() {
-            stderr.queue(Print(n.dark_yellow())).unwrap();
-            stderr.write_all(b"\n").unwrap();
-        }
-
-        (self.write_bottom_line)(stderr, self.finished.get());
-    }
-
-    /// Write something above the animation of in-progress pins
-    pub fn write(&'a self, writer: impl FnOnce(&mut std::io::StderrLock)) {
-        if !stderr().is_terminal() {
-            writer(&mut stderr().lock());
-        } else {
-            self.update_in_progress(&mut stderr().lock(), |_, stderr| writer(stderr));
-        }
-    }
-
-    /// To be called every time a pin starts processing
-    pub fn on_pin_start(&'a self, name: &'a str) {
-        /* No animations outside a terminal */
-        if !stderr().is_terminal() {
-            return;
-        }
-
-        let mut stderr = stderr().lock();
-        self.update_in_progress(&mut stderr, |in_progress, _| {
-            in_progress.insert(name);
-        });
-        stderr.flush().unwrap();
-    }
-
-    pub fn on_pin_finish(&'a self, name: &str) {
-        let mut stderr = stderr().lock();
-
-        if !stderr.is_terminal() {
-            return;
-        }
-
-        self.finished.set(self.finished.get() + 1);
-        self.update_in_progress(&mut stderr, |in_progress, _| {
-            in_progress.remove(name);
-        });
-        stderr.flush().unwrap();
     }
 }
 
