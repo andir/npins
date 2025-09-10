@@ -4,7 +4,10 @@
 //! Reference: <https://github.com/nixos/nix/blob/56763ff918eb308db23080e560ed2ea3e00c80a7/doc/manual/src/protocols/tarball-fetcher.md>
 
 use anyhow::{Context, Result};
-use reqwest::header::HeaderName;
+use reqwest::{
+    header::{HeaderName, LOCATION},
+    redirect::Policy,
+};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -50,43 +53,73 @@ impl Updatable for TarballPin {
         // Attempt to use the Lockable HTTP Tarball Protocol, if that fails (the
         // expected Link header is missing) we fail back to using whatever was
         // the input.
-        let headers = build_client()?
-            .head(self.url.clone())
-            .send()
-            .await?
-            .headers()
-            .clone();
-        let flakerefs = headers
-            .get_all(LINK)
-            .into_iter()
-            .filter_map(|header| header.to_str().ok())
-            .filter_map(|link| {
-                // Naive parsing of the `Link: <flakeref>; rel="immutable"` header
-                link.strip_suffix(r#">; rel="immutable""#)?
-                    .strip_prefix("<")
-            })
-            .collect::<Vec<_>>();
-        let locked_url = if let [flakeref] = flakerefs[..] {
-            Some(
-                flakeref
-                    .parse::<Url>()
-                    .context("immutable link contained an invalid URL")?,
-            )
-        } else {
-            if matches!(old, Some(old) if old.locked_url.is_some()) {
-                log::warn!(
+
+        // FIXME: The client is built without the helper function as it currently cannot be
+        // configured
+        let client = reqwest::Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                " v",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .redirect(Policy::none())
+            .build()?;
+
+        let mut target = self.url.as_str();
+        let mut res;
+
+        loop {
+            res = client.head(target).send().await?;
+
+            let flakerefs = res
+                .headers()
+                .get_all(LINK)
+                .into_iter()
+                .filter_map(|header| header.to_str().ok())
+                .filter_map(|link| {
+                    // Naive parsing of the `Link: <flakeref>; rel="immutable"` header
+                    link.strip_suffix(r#">; rel="immutable""#)?
+                        .strip_prefix("<")
+                })
+                .collect::<Vec<_>>();
+
+            if let [flakeref] = flakerefs[..] {
+                let locked_url = Some(
+                    flakeref
+                        .parse::<Url>()
+                        .context("immutable link contained an invalid URL")?,
+                );
+
+                return Ok(LockedTarball { locked_url });
+            }
+
+            if res.status().is_redirection() {
+                let error = &format!(
+                    "no location given in the redirection response from {}",
+                    res.url()
+                );
+
+                target = res
+                    .headers()
+                    .get(LOCATION)
+                    .expect(error)
+                    .to_str()
+                    .expect(error);
+            } else {
+                break;
+            }
+        }
+
+        if matches!(old, Some(old) if old.locked_url.is_some()) {
+            log::warn!(
                     "url `{url}` of a locked tarball pin did not respond with the expected `Link` header. \
                      if you changed the `url` manually to one that doesn't support this protocol make sure to also remove the `locked_url` field. \
                      https://docs.lix.systems/manual/lix/nightly/protocols/tarball-fetcher.html",
                     url = &self.url,
                 );
-                return Ok(old.unwrap().clone());
-            } else {
-                // This is a no-op since we started with `old.locked_url.is_none()`
-                None
-            }
-        };
-        Ok(LockedTarball { locked_url })
+        }
+
+        Ok(old.unwrap().clone())
     }
 
     async fn fetch(&self, version: &LockedTarball) -> Result<GenericHash> {
