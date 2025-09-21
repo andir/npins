@@ -113,6 +113,7 @@ Commands:
   import-flake  Try to import entries from flake.lock
   freeze        Freeze a pin entry
   unfreeze      Thaw a pin entry
+  get-path      Evaluates the store path to a pin, fetching it if necessary. Don't forget to add a GC root
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -357,6 +358,53 @@ If your `sources.json` contains a source named `abc`, you can e.g. develop from 
 Please note, that only alphanumerical characters and _ are allow characters in overriden sources.
 All other characters are converted to _.
 Also check, that you are building impure, if you are wondering, why these overrides are maybe not becoming active.
+
+### Using the Nixpkgs fetchers
+
+By default, all pins are fetched through `builtins` fetchers.
+These fetch at eval time and do not produce a derivation, like with IFD.
+This is necessary for bootstrapping purposes (the first Nixpkgs can only be fetched through a builtins), but may be undesirable for other pins.
+All pins optionally take a `pkgs` argument, which will use the Nixpkgs fetchers instead and produce a derivation.
+
+```nix
+let
+  sources = import ./npins;
+  pkgs = import sources.nixpkgs { };
+in
+sources.mySource { inherit pkgs; }
+```
+
+### Running the latest unreleased `npins`
+
+The recommended way is to use our packaging [in the repository](./npins.nix) by pinning npins itself with npins:
+
+```
+npins add github andir npins -b master
+```
+
+```nix
+let
+  sources = import ./npins;
+  npinsSources = import (sources.npins + "/npins");
+  npinsPkgs = import npinsSources.nixpkgs { };
+in
+npinsPkgs.callPackage (sources.npins + "/npins.nix") {}
+```
+
+Alternatively, a good old package override can do the same:
+
+```nix
+pkgs.npins.overrideAttrs (final: old: {
+  version = …;
+  src = (import ./npins).npins;
+
+  cargoHash = null;
+  cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+    src = final.src;
+    hash = …;
+  };
+})
+```
 
 ## Contributing
 
