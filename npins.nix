@@ -51,7 +51,7 @@ let
       lockFile = src + "/Cargo.lock";
 
       outputHashes = {
-        "nix-compat-0.1.0" = "sha256-U9pAde6R2yoP8ivnoNX/1rve+ALrDk8+4R2BKoGzg24=";
+        "nix-compat-0.1.0" = "sha256-SKoNo5dJaCWr61lFKUldYfEYSXZp1gDax3pizdGdXLM=";
       };
     };
 

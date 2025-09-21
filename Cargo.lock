@@ -978,7 +978,7 @@ dependencies = [
 [[package]]
 name = "nix-compat"
 version = "0.1.0"
-source = "git+https://git.snix.dev/snix/snix#4749964f06a7aa20ee19c5f7b3c97079e5c67911"
+source = "git+https://git.snix.dev/snix/snix#97f215aef28921f10fe165b10cf973695b10ff27"
 dependencies = [
  "bitflags",
  "bstr",
@@ -1006,7 +1006,7 @@ dependencies = [
 [[package]]
 name = "nix-compat-derive"
 version = "0.1.0"
-source = "git+https://git.snix.dev/snix/snix#4749964f06a7aa20ee19c5f7b3c97079e5c67911"
+source = "git+https://git.snix.dev/snix/snix#97f215aef28921f10fe165b10cf973695b10ff27"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1030,7 +1030,6 @@ dependencies = [
  "async-trait",
  "clap",
  "crossterm",
- "data-encoding",
  "env_logger",
  "futures",
  "lenient_semver_parser",

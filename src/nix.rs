@@ -1,6 +1,5 @@
 use crate::{check_git_url, check_url};
 use anyhow::{Context, Result};
-use data_encoding::BASE64;
 use std::path::Path;
 
 #[allow(unused)]
@@ -12,11 +11,7 @@ pub struct PrefetchInfo {
 pub fn hash_to_sri(s: &str, algo: &str) -> Result<String> {
     let hash = nix_compat::nixhash::from_str(s, Some(algo))?;
 
-    Ok(format!(
-        "{}-{}",
-        hash.algo(),
-        BASE64.encode(hash.digest_as_bytes())
-    ))
+    Ok(hash.to_sri_string())
 }
 
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<String> {
