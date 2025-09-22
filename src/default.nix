@@ -206,7 +206,7 @@ let
       ...
     }:
     if pkgs == null then
-      builtins.throw "container sources requires nixpkgs"
+      builtins.throw "container sources require passing in a Nixpkgs value: https://github.com/andir/npins/blob/master/README.md#using-the-nixpkgs-fetchers"
     else
       pkgs.dockerTools.pullImage {
         imageName = image_name;
