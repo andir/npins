@@ -387,8 +387,8 @@ let
         http:
             addr: :5000
             tls:
-                certificate: ${./test_artifacts/cert.pem}
-                key: ${./test_artifacts/key.pem}
+                certificate: ${./tests/assets/cert.pem}
+                key: ${./tests/assets/key.pem}
       '';
     in
     pkgs.runCommand name
@@ -406,7 +406,7 @@ let
       ''
         set -euo pipefail
         source ${prelude}
-        export SSL_CERT_FILE=${./test_artifacts/cert.pem}
+        export SSL_CERT_FILE=${./tests/assets/cert.pem}
 
         echo "Running test ${name}"
         cd $(mktemp -d)
@@ -722,7 +722,7 @@ in
 
   container = mkContainerTest {
     name = "container";
-    images."hello-world" = ./test_artifacts/hello-world-image;
+    images."hello-world" = ./tests/assets/hello-world-image;
     commands = ''
       npins init --bare
       npins add container --name hello_world localhost:5000/hello-world latest

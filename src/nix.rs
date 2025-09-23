@@ -158,7 +158,6 @@ pub async fn nix_prefetch_docker(
             None => "".into(),
         }
     );
-    println!("{} {}", image_name, image_tag);
     let mut output = tokio::process::Command::new("nix-prefetch-docker");
     let output = output
         .arg(image_name)
