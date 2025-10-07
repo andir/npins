@@ -1,8 +1,9 @@
 //! Pin a PyPi package
 
-use crate::{nix::hash_to_sri, *};
+use crate::*;
 use anyhow::{Context, Result};
 use lenient_version::Version;
+use nix_compat::nixhash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -125,18 +126,17 @@ impl Updatable for Pin {
                 anyhow::format_err!("Unsupported package: must contain some \"source\" download",)
             })?;
 
-        let hash = latest_source
-            .digests
-            .remove("sha256")
-            .ok_or_else(|| {
-                anyhow::format_err!(
-                    "JSON metadata is invalid: must contain a `sha256` entry within `digests`",
-                )
-            })
-            .and_then(|s| hash_to_sri(&s, "sha256"))?;
+        let hash_str = latest_source.digests.remove("sha256").ok_or_else(|| {
+            anyhow::format_err!(
+                "JSON metadata is invalid: must contain a `sha256` entry within `digests`",
+            )
+        })?;
+
+        let hash = NixHash::from_str(&hash_str, Some(nixhash::HashAlgo::Sha256))
+            .with_context(|| "failed to convert to NixHash")?;
 
         Ok(GenericUrlHashes {
-            hash,
+            hash: hash.into(),
             url: latest_source.url.parse()?,
         })
     }
@@ -194,7 +194,7 @@ mod test {
         assert_eq!(
             pin.fetch(&version).await?,
             GenericUrlHashes {
-                hash: "sha256-OVOxWLe2kGQtaM1r6x1Z9uEFJvLuEKb7RjapE8yV5xg=".into(),
+                hash: NixHash::from_sri("sha256-OVOxWLe2kGQtaM1r6x1Z9uEFJvLuEKb7RjapE8yV5xg=").unwrap(),
                 url: "https://files.pythonhosted.org/packages/d1/d5/0c270c22d61ff6b883d0f24956f13e904b131b5ac2829e0af1cda99d70b1/gaiatest-0.34.tar.gz".parse().unwrap(),
             }
         );
@@ -220,7 +220,8 @@ mod test {
         assert_eq!(
             pin.fetch(&version).await?,
             GenericUrlHashes {
-                hash: "sha256-OdCcZiclX885yTiTeZVmW2N3eZxPoUH2tIG8teamiKw=".into(),
+
+                hash: NixHash::from_sri("sha256-OdCcZiclX885yTiTeZVmW2N3eZxPoUH2tIG8teamiKw=").unwrap(),
                 url: "https://files.pythonhosted.org/packages/fd/75/6e72889c3b154a179040b94963a50901966ff30b68600271df374b2ded7a/streamlit-0.89.0.tar.gz".parse().unwrap(),
             }
         );

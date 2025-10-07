@@ -3,6 +3,7 @@
 //! This should be preferred over pinning the equivaleng `nixpkgs` git branch.
 
 use crate::*;
+use nix_compat::nixhash::NixHash;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Pin {
@@ -34,12 +35,12 @@ impl diff::Diff for ChannelVersion {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct ChannelHash {
-    pub hash: String,
+    pub hash: NixHash,
 }
 
 impl diff::Diff for ChannelHash {
     fn properties(&self) -> Vec<(String, String)> {
-        vec![("hash".into(), self.hash.clone())]
+        vec![("hash".into(), self.hash.to_string())]
     }
 }
 
@@ -53,7 +54,7 @@ impl Updatable for Pin {
          * to https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f/nixexprs.tar.xz
          */
         let url = build_client()?
-            .head(&format!(
+            .head(format!(
                 "https://channels.nixos.org/{}/nixexprs.tar.xz",
                 self.name
             ))
@@ -65,12 +66,11 @@ impl Updatable for Pin {
         Ok(ChannelVersion { url })
     }
 
-    async fn fetch(&self, version: &ChannelVersion) -> Result<ChannelHash> {
+    async fn fetch(&self, version: &ChannelVersion) -> Result<Self::Hashes> {
         /* Prefetch an URL that looks like
          * https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f
          */
         let hash = nix::nix_prefetch_tarball(&version.url).await?;
-
-        Ok(ChannelHash { hash })
+        Ok(Self::Hashes { hash })
     }
 }

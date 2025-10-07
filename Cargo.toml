@@ -32,7 +32,7 @@ futures = "0.3.31"
 clap = { version = "4.5", features = [ "derive", "env" ], optional = true }
 crossterm = { version = "0.28.1", default-features = false, optional = true }
 env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false, optional = true }
-nix-compat = { git = "https://git.snix.dev/snix/snix", version = "0.1.0" }
+nix-compat = { git = "https://git.snix.dev/snix/snix", version = "0.1.0", features = ["serde"] }
 
 [dev-dependencies]
 env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false }
