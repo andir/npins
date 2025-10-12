@@ -126,6 +126,70 @@ pub async fn nix_prefetch_git(
     check_git_url(result.await, url).await
 }
 
+#[allow(unused)]
+#[derive(Debug, serde::Deserialize)]
+pub struct NixPrefetchDockerResponse {
+    pub hash: String,
+    #[serde(rename = "imageName")]
+    pub image_name: String,
+    #[serde(rename = "imageDigest")]
+    pub image_digest: String,
+    #[serde(rename = "finalImageName")]
+    pub final_image_name: String,
+    #[serde(rename = "finalImageTag")]
+    pub final_image_tag: String,
+}
+
+pub async fn nix_prefetch_docker(
+    image_name: impl AsRef<str>,
+    image_tag: impl AsRef<str>,
+    image_digest: Option<&str>,
+) -> Result<NixPrefetchDockerResponse> {
+    let image_name = image_name.as_ref();
+    let image_tag = image_tag.as_ref();
+
+    log::debug!(
+        "Executing: `nix-prefetch-docker {} {}{}`",
+        image_name,
+        image_tag,
+        match image_digest {
+            Some(x) => format!(" --image-digest {}", x),
+            None => "".into(),
+        }
+    );
+    let mut output = tokio::process::Command::new("nix-prefetch-docker");
+    let output = output
+        .arg(image_name)
+        .arg(image_tag)
+        .arg("--json")
+        .arg("--quiet");
+    let output = match image_digest {
+        Some(x) => output.arg("--image-digest").arg(x),
+        None => output,
+    };
+    let output = output.output().await.with_context(|| {
+        format!(
+            "Failed to spawn nix-prefetch-docker for {}:{}",
+            image_name, image_tag
+        )
+    })?;
+
+    // FIXME: handle errors and pipe stderr through
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(format!(
+            "failed to prefetch docker: {}\n{}",
+            image_name,
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+
+    log::debug!(
+        "nix-prefetch-git output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    Ok(serde_json::from_slice(&output.stdout)
+        .context("Failed to deserialize nix-pfetch-git JSON response.")?)
+}
 pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::PathBuf> {
     const DEFAULT_NIX: &'static str = include_str!("default.nix");
 

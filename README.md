@@ -201,14 +201,15 @@ Adds a new pin entry
 Usage: npins add [OPTIONS] <COMMAND>
 
 Commands:
-  channel  Track a Nix channel
-  github   Track a GitHub repository
-  forgejo  Track a Forgejo repository
-  gitlab   Track a GitLab repository
-  git      Track a git repository
-  pypi     Track a package on PyPi
-  tarball  Track a tarball
-  help     Print this message or the help of the given subcommand(s)
+  channel    Track a Nix channel
+  github     Track a GitHub repository
+  forgejo    Track a Forgejo repository
+  gitlab     Track a GitLab repository
+  git        Track a git repository
+  pypi       Track a package on PyPi
+  container  Track an OCI container
+  tarball    Track a tarball
+  help       Print this message or the help of the given subcommand(s)
 
 Options:
       --name <NAME>  Add the pin with a custom name. If a pin with that name already exists, it will be overwritten

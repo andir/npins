@@ -3,8 +3,8 @@
     "nixos-21.11": {
       "type": "Channel",
       "name": "nixos-21.11",
-      "url": "https://releases.nixos.org/nixos/21.11/nixos-21.11.335820.521e4d7d13b/nixexprs.tar.xz",
-      "hash": "sha256-0FPBbTngbMsDbPO3RnkDOw2yGWhNqCT2NbJx+m9n5Jo="
+      "url": "https://releases.nixos.org/nixos/21.11/nixos-21.11.337975.eabc3821918/nixexprs.tar.xz",
+      "hash": "sha256-des9OUzC+IcCqisK3ReEAwfz4NGWxY1X03Mrh8//A7s="
     },
     "nixos-mailserver": {
       "type": "Git",
@@ -27,17 +27,24 @@
       },
       "branch": "nixpkgs-unstable",
       "submodules": false,
-      "revision": "5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2",
-      "url": "https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz",
-      "hash": "sha256-a8GGtxn2iL3WAkY5H+4E0s3Q7XJt6bTOvos9qqxT5OQ="
+      "revision": "6afe187897bef7933475e6af374c893f4c84a293",
+      "url": "https://github.com/nixos/nixpkgs/archive/6afe187897bef7933475e6af374c893f4c84a293.tar.gz",
+      "hash": "sha256-K9yBph93OLTNw02Q6e9CYFGrUhvEXnh45vrZqIRWfvQ="
     },
     "streamlit": {
       "type": "PyPi",
       "name": "streamlit",
       "version_upper_bound": null,
-      "version": "1.3.1",
-      "url": "https://files.pythonhosted.org/packages/c3/9d/ac871992617220442832af12c3808716f4349ab05ff939d695fe8b542f00/streamlit-1.3.1.tar.gz",
-      "hash": "sha256-rex5NcnPd0uRFbJFbPL0jE9JufZxWal9sP4ig1fBr98="
+      "version": "1.45.1",
+      "url": "https://files.pythonhosted.org/packages/f0/46/9b3f73886f82d27849ce1e7a74ae7c39f5323e46da0b6e8847ad4c25f44c/streamlit-1.45.1.tar.gz",
+      "hash": "sha256-431WwK9SQNvCQJdogOgTZmicKQpVk3ZBckb5s/UbQhc="
+    },
+    "ubuntu": {
+      "type": "Container",
+      "image_name": "ubuntu",
+      "image_tag": "latest",
+      "image_digest": "sha256:b59d21599a2b151e23eea5f6602f4af4d7d31c4e236d22bf0b62b86d2e386b8f",
+      "hash": "sha256-YdbJusA6R6SRxpoMZzQI/F0XoIw2cQKlz4FMvbAHGoA="
     },
     "youtube-dl": {
       "type": "GitRelease",
@@ -56,5 +63,5 @@
       "hash": "sha256-hwtdYYyCxDEs5OrTo0BbAuww3hjzEaQ+R/ABfEyXFCg="
     }
   },
-  "version": 6
+  "version": 7
 }

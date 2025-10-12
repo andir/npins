@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub mod channel;
+pub mod container;
 pub mod diff;
 pub mod flake;
 pub mod git;
@@ -288,6 +289,7 @@ mkPin! {
     (PyPi, pypi, "pypi package", pypi::Pin),
     (Channel, channel, "Nix channel", channel::Pin),
     (Tarball, tarball, "tarball", tarball::TarballPin),
+    (Container, container, "OCI Container", container::Pin),
 }
 
 /// The main struct the CLI operates on

@@ -6,7 +6,7 @@ use nix_compat::nixhash::HashAlgo;
 use serde_json::{json, Map, Value};
 
 /// The current format version
-pub const LATEST: u64 = 6;
+pub const LATEST: u64 = 7;
 
 /// Custom manual deserialize wrapper that checks the version
 pub fn from_value_versioned(value: Value) -> Result<NixPins> {

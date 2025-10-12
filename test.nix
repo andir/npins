@@ -368,6 +368,65 @@ let
         touch $out
       '';
 
+  mkContainerTest =
+    {
+      name,
+      images,
+      commands,
+    }:
+    let
+      distributionConfig = pkgs.writeText "config.yaml" ''
+        version: 0.1
+        storage:
+            delete:
+              enabled: true
+            cache:
+                blobdescriptor: inmemory
+            filesystem:
+                rootdirectory: "./store/"
+        http:
+            addr: :5000
+            tls:
+                certificate: ${./tests/assets/cert.pem}
+                key: ${./tests/assets/key.pem}
+      '';
+    in
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = with pkgs; [
+          npins
+          netcat
+          lix
+          gitMinimal
+          jq
+          distribution
+          crane
+        ];
+      }
+      ''
+        set -euo pipefail
+        source ${prelude}
+        export SSL_CERT_FILE=${./tests/assets/cert.pem}
+
+        echo "Running test ${name}"
+        cd $(mktemp -d)
+
+        registry serve ${distributionConfig} &
+        timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 5000; do sleep 1; done' || exit 1
+        ${lib.pipe images [
+          (lib.mapAttrsToList (
+            imageName: imagePath: ''
+              crane push --insecure ${imagePath} localhost:5000/${imageName}
+            ''
+          ))
+          (lib.concatStringsSep "\n")
+        ]}
+
+        ${commands}
+
+        touch $out
+      '';
+
   mkPrefetchGitTest =
     name: npinsArgs:
     mkGitTest {
@@ -658,6 +717,20 @@ in
 
       nix-instantiate --eval npins -A foo.outPath
       nix-instantiate --eval npins -A foo2.outPath
+    '';
+  };
+
+  container = mkContainerTest {
+    name = "container";
+    images."hello-world" = ./tests/assets/hello-world-image;
+    commands = ''
+      npins init --bare
+      npins add container --name hello_world localhost:5000/hello-world latest
+
+      eq "$(jq -r .pins.hello_world.image_name npins/sources.json)" "localhost:5000/hello-world"
+      eq "$(jq -r .pins.hello_world.image_tag npins/sources.json)" "latest"
+
+      nix-instantiate --eval --expr "((import ./npins).hello_world)"
     '';
   };
 
