@@ -3,3 +3,6 @@
 .direnv
 /result*
 /test
+.idea
+# symlink to nix store
+readme
