@@ -12,7 +12,9 @@ Simple and convenient dependency pinning for Nix
 
 ## About
 
-`npins` is a simple tool for handling different types of dependencies in a Nix project. It is inspired by and comparable to [Niv](https://github.com/nmattia/niv).
+`npins` is a simple tool for handling different types of dependencies in a Nix project.
+It is inspired by and comparable to [Niv](https://github.com/nmattia/niv).
+You should use `npins` instead of `niv` because the `niv` author [moved over to flakes](https://github.com/nmattia/niv/issues/374#issuecomment-1649338813).
 
 ### Features
 
