@@ -145,6 +145,8 @@ let
             "https://github.com/${repository.owner}/${repository.repo}.git"
           else if repository.type == "GitLab" then
             "${repository.server}/${repository.repo_path}.git"
+          else if repository.type == "Forgejo" then
+            "${repository.server}/${repository.owner}/${repository.repo}.git"
           else
             throw "Unrecognized repository type ${repository.type}";
         urlToName =
