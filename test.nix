@@ -602,6 +602,10 @@ in
       eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
       eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/owner/foo/archive/$(resolveGitCommit ${repositories."owner/foo"}).tar.gz"
       eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
+
+      # Try to load the pins
+      nix-instantiate --eval npins -A foo.outPath
+      nix-instantiate --eval npins -A foo2.outPath
     '';
   };
 
