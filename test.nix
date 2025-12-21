@@ -276,12 +276,10 @@ let
 
           PORT = 8000
           LINK_MAP = {
-            ${
-              lib.pipe immutableLinks [
-                (lib.mapAttrsToList (path: flakeref: ''"${path}": "${flakeref}",''))
-                (lib.concatStringsSep "\n")
-              ]
-            }
+            ${lib.pipe immutableLinks [
+              (lib.mapAttrsToList (path: flakeref: ''"${path}": "${flakeref}",''))
+              (lib.concatStringsSep "\n")
+            ]}
           }
 
           class Handler(http.server.SimpleHTTPRequestHandler):
