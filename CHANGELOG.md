@@ -2,11 +2,15 @@
 
 ## Unreleased
 
-- Changed the hashes to use the SRI format
-- Added support for locking `git` pins by passing the hash to `fetchGit` (https://github.com/andir/npins/pull/139)
+## 0.4.0
+
+- Changed the hashes to use the SRI format (https://github.com/andir/npins/pull/139)
 - Added Nixpkgs support for fetching pins as proper derivations (https://github.com/andir/npins/pull/153)
-- Added `npins get-path`, which is a convenience wrapper around `nix-instantiate --eval -E '(import ./npins).$pin.outPath'` and especially useful for scripting and in lockfile mode.
-- Added `npins verify`, which will check that all pins still properly work
+- Added `npins get-path`, which is a convenience wrapper around `nix-instantiate --eval -E '(import ./npins).$pin.outPath'` and especially useful for scripting and in lockfile mode. (https://github.com/andir/npins/pull/153)
+- Added `npins verify`, which will check that all pins still properly work (https://github.com/andir/npins/pull/182)
+- Added `npins add container`, which allows pinning OCI containers (https://github.com/andir/npins/pull/145)
+- `npins add git` now automatically detects GitHub, GitLab and Forgejo repositories, including self-hosted ones (https://github.com/andir/npins/pull/179)
+- Many many bugfixes
 
 ## 0.3.1
 
