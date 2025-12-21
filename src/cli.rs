@@ -943,7 +943,7 @@ impl Opts {
         let pins_raw: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(fh)
             .context("lock file must be a valid JSON file with an object as top level")?;
 
-        let pins_raw_new = versions::upgrade(pins_raw.clone()).context("Upgrading failed")?;
+        let pins_raw_new = versions::upgrade(pins_raw.clone(), path).context("Upgrading failed")?;
         let pins: NixPins = serde_json::from_value(pins_raw_new.clone())?;
         if pins_raw_new != serde_json::Value::Object(pins_raw) {
             log::info!(

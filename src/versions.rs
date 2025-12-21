@@ -4,6 +4,7 @@ use super::*;
 use anyhow::{Context, Result};
 use nix_compat::nixhash::HashAlgo;
 use serde_json::{json, Map, Value};
+use std::path::PathBuf;
 
 /// The current format version
 pub const LATEST: u64 = 7;
@@ -45,13 +46,14 @@ pub fn to_value_versioned(pins: &NixPins) -> serde_json::Value {
 /// Patch the sources.json file to the latest version
 ///
 /// This operates on a JSON value level
-pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
+pub fn upgrade(mut pins_raw: Map<String, Value>, path: &PathBuf) -> Result<Value> {
     let version = pins_raw
         .get("version")
         .and_then(Value::as_u64)
         .ok_or_else(|| {
             anyhow::format_err!(
-                "sources.json must contain a numeric version field at the top level"
+                "{} must contain a numeric version field at the top level",
+                path.display()
             )
         })?;
 
@@ -62,11 +64,14 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
     fn generic_upgrader(
         pins_raw: &mut Map<String, Value>,
         update_pin_fn: fn(&str, &mut Map<String, Value>) -> Result<()>,
+        path: &PathBuf,
     ) -> Result<()> {
         let pins = pins_raw
             .get_mut("pins")
             .and_then(Value::as_object_mut)
-            .ok_or_else(|| anyhow::format_err!("sources.json must contain a `pins` object"))?;
+            .ok_or_else(|| {
+                anyhow::format_err!("'{}' must contain a `pins` object", path.display())
+            })?;
         for (name, pin) in pins.iter_mut() {
             update_pin_fn(
                 name,
@@ -83,17 +88,19 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
      * Most version upgrades are handled by serde default fields and don't need any special treatment.
      * They are omitted here; Only non-trivial upgrades should be inserted.
      */
-    type Upgrader = Box<dyn Fn(&mut Map<String, Value>) -> Result<()>>;
+    type Upgrader<'a> = Box<dyn Fn(&mut Map<String, Value>) -> Result<()> + 'a>;
     let version_upgraders: BTreeMap<u64, Upgrader> = [
         (
             0,
-            Box::new(|pins_raw: &mut Map<String, Value>| generic_upgrader(pins_raw, upgrade_v0_pin))
-                as Upgrader,
+            Box::new(|pins_raw: &mut Map<String, Value>| {
+                generic_upgrader(pins_raw, upgrade_v0_pin, &*path)
+            }) as Upgrader<'_>,
         ),
         (
             5,
-            Box::new(|pins_raw: &mut Map<String, Value>| generic_upgrader(pins_raw, upgrade_v5_pin))
-                as Upgrader,
+            Box::new(|pins_raw: &mut Map<String, Value>| {
+                generic_upgrader(pins_raw, upgrade_v5_pin, &*path)
+            }) as Upgrader<'_>,
         ),
     ]
     .into_iter()
@@ -106,7 +113,7 @@ pub fn upgrade(mut pins_raw: Map<String, Value>) -> Result<Value> {
             version
         );
     } else if version == LATEST {
-        log::info!("sources.json is already up to date");
+        log::info!("{} is already up to date", path.display());
     } else {
         for (v, upgrader) in version_upgraders.range(version..) {
             log::info!("Upgrading to v{}", v + 1);
@@ -317,7 +324,8 @@ mod test {
             Value::Object(pins) => pins,
             _ => unreachable!(),
         };
-        let pins = upgrade(pins).expect("Failed to upgrade data");
+        let pins =
+            upgrade(pins, &PathBuf::from("in-memory-source.json")).expect("Failed to upgrade data");
         let pins = serde_json::from_value::<NixPins>(pins)
             .expect("Upgraded data failed to deserialize with newest code");
 
