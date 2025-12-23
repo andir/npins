@@ -18,6 +18,10 @@ let
     "^/src/.+$"
     "^/Cargo.lock$"
     "^/Cargo.toml$"
+    "^/libnpins$"
+    "^/libnpins/src$"
+    "^/libnpins/src/.+$"
+    "^/libnpins/Cargo.toml$"
   ];
 
   extractSource =
@@ -47,7 +51,7 @@ let
   ];
   self = rustPlatform.buildRustPackage {
     pname = cargoToml.package.name;
-    version = cargoToml.package.version;
+    version = cargoToml.workspace.package.version;
     cargoLock = {
       lockFile = src + "/Cargo.lock";
 
@@ -59,13 +63,6 @@ let
     inherit src;
 
     nativeBuildInputs = [ makeWrapper ];
-
-    cargoBuildFlags = [
-      "--bin"
-      "npins"
-      "--features"
-      "clap,crossterm,env_logger"
-    ];
 
     # (Almost) all tests require internet
     doCheck = false;
