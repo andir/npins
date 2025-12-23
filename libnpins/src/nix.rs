@@ -1,4 +1,4 @@
-use crate::{check_git_url, check_url};
+use crate::{check_git_url, check_url, DEFAULT_NIX};
 use anyhow::{Context, Result};
 use nix_compat::nixhash::{HashAlgo, NixHash};
 use std::path::Path;
@@ -191,8 +191,6 @@ pub async fn nix_prefetch_docker(
         .context("Failed to deserialize nix-pfetch-git JSON response.")?)
 }
 pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::PathBuf> {
-    const DEFAULT_NIX: &'static str = include_str!("default.nix");
-
     let lockfile_path = lockfile_path.canonicalize()?;
     let lockfile_path = lockfile_path
         .to_str()

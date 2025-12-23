@@ -21,6 +21,8 @@ pub mod pypi;
 pub mod tarball;
 pub mod versions;
 
+pub const DEFAULT_NIX: &'static str = include_str!("default.nix");
+
 /// Helper method to build you a client.
 // TODO make injectable via a configuration mechanism
 pub fn build_client() -> Result<reqwest::Client, reqwest::Error> {
