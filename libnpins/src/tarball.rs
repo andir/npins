@@ -8,7 +8,7 @@ use reqwest::header::HeaderName;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::*;
+use crate::{GenericHash, Updatable, build_client, diff, nix};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct TarballPin {
@@ -72,19 +72,19 @@ impl Updatable for TarballPin {
                     .parse::<Url>()
                     .context("immutable link contained an invalid URL")?,
             )
+        } else if let Some(old) = old
+            && old.locked_url.is_some()
+        {
+            log::warn!(
+                "url `{url}` of a locked tarball pin did not respond with the expected `Link` header. \
+                 if you changed the `url` manually to one that doesn't support this protocol make sure to also remove the `locked_url` field. \
+                 https://docs.lix.systems/manual/lix/nightly/protocols/tarball-fetcher.html",
+                url = &self.url,
+            );
+            return Ok(old.clone());
         } else {
-            if matches!(old, Some(old) if old.locked_url.is_some()) {
-                log::warn!(
-                    "url `{url}` of a locked tarball pin did not respond with the expected `Link` header. \
-                     if you changed the `url` manually to one that doesn't support this protocol make sure to also remove the `locked_url` field. \
-                     https://docs.lix.systems/manual/lix/nightly/protocols/tarball-fetcher.html",
-                    url = &self.url,
-                );
-                return Ok(old.unwrap().clone());
-            } else {
-                // This is a no-op since we started with `old.locked_url.is_none()`
-                None
-            }
+            // This is a no-op since we started with `old.locked_url.is_none()`
+            None
         };
         Ok(LockedTarball { locked_url })
     }

@@ -2,8 +2,10 @@
 //!
 //! This should be preferred over pinning the equivaleng `nixpkgs` git branch.
 
-use crate::*;
 use nix_compat::nixhash::NixHash;
+use serde::{Deserialize, Serialize};
+
+use crate::{Updatable, build_client, diff, nix};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Pin {
@@ -49,7 +51,7 @@ impl Updatable for Pin {
     type Version = ChannelVersion;
     type Hashes = ChannelHash;
 
-    async fn update(&self, _old: Option<&ChannelVersion>) -> Result<ChannelVersion> {
+    async fn update(&self, _old: Option<&ChannelVersion>) -> anyhow::Result<ChannelVersion> {
         /* We want to get from something like https://channels.nixos.org/nixos-21.11
          * to https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f/nixexprs.tar.xz
          */
@@ -66,7 +68,7 @@ impl Updatable for Pin {
         Ok(ChannelVersion { url })
     }
 
-    async fn fetch(&self, version: &ChannelVersion) -> Result<Self::Hashes> {
+    async fn fetch(&self, version: &ChannelVersion) -> anyhow::Result<Self::Hashes> {
         /* Prefetch an URL that looks like
          * https://releases.nixos.org/nixos/21.11/nixos-21.11.335807.df4f1f7cc3f
          */

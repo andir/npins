@@ -7,12 +7,14 @@
 //! instance. This should be preferred over the generic Git API if possible. See [`Repository`]
 //! for more on this.
 
-use crate::*;
 use anyhow::{Context, Result};
 use lenient_version::Version;
+use nix_compat::nixhash::NixHash;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use url::Url;
+
+use crate::{GenericVersion, Updatable, check_git_url, diff, get_and_deserialize, nix};
 
 fn get_github_url() -> String {
     std::env::var("NPINS_GITHUB_HOST").unwrap_or_else(|_| String::from("https://github.com"))
@@ -38,7 +40,7 @@ pub struct GitRevision {
 
 impl GitRevision {
     pub fn new(revision: String) -> Result<Self> {
-        if !revision.chars().all(|c| c.is_digit(16)) || revision.len() != 40 {
+        if !revision.chars().all(|c| c.is_ascii_hexdigit()) || revision.len() != 40 {
             anyhow::bail!("'{revision}' is not a valid git revision (sha1 hash)");
         }
         Ok(Self { revision })
@@ -166,9 +168,8 @@ impl Repository {
         ];
 
         for (path, func) in distinct_api_endpoints {
-            match probe(url.clone(), path).await {
-                Ok(_) => return func(url),
-                _ => {},
+            if probe(url.clone(), path).await.is_ok() {
+                return func(url);
             }
         }
         None
@@ -578,11 +579,9 @@ impl Updatable for GitReleasePin {
             match old_version {
                 Ok(old_version) => {
                     anyhow::ensure!(
-                       latest >= old_version,
-                       "Failed to ensure version monotonicity, latest found version is {} but current is {}",
-                       latest,
-                       old_version,
-                   );
+                        latest >= old_version,
+                        "Failed to ensure version monotonicity, latest found version is {latest} but current is {old_version}"
+                    );
                 },
                 Err(_) => {
                     log::warn!(
@@ -737,8 +736,7 @@ pub async fn fetch_default_branch(repo: &Url) -> Result<String> {
 
     let info = remotes
         .iter()
-        .filter(|info| info.revision.starts_with("ref: refs/heads/") && info.ref_ == "HEAD")
-        .next()
+        .find(|info| info.revision.starts_with("ref: refs/heads/") && info.ref_ == "HEAD")
         .with_context(|| format!("Failed to resolve HEAD to a ref for {}", repo))?;
 
     info.revision
@@ -1190,7 +1188,7 @@ mod test {
         let version = pin.update(None).await?;
         assert_eq!(
             version,
-            git::GitRevision {
+            GitRevision {
                 revision: "e7145078163692697b843915a665d4f41139a65c".into(),
             }
         );
@@ -1285,7 +1283,7 @@ mod test {
         let version = pin.update(None).await?;
         assert_eq!(
             version,
-            git::GitRevision {
+            GitRevision {
                 revision: "bca2071b6923d45d9aabac27b3ea1e40f5fa3006".into(),
             }
         );

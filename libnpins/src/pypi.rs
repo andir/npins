@@ -1,11 +1,12 @@
 //! Pin a PyPi package
 
-use crate::*;
 use anyhow::{Context, Result};
 use lenient_version::Version;
-use nix_compat::nixhash;
+use nix_compat::nixhash::{self, NixHash};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use crate::{GenericUrlHashes, GenericVersion, Updatable, diff, get_and_deserialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Pin {
@@ -95,7 +96,9 @@ impl Updatable for Pin {
                     );
                 },
                 _ => {
-                    log::warn!("This repository does not appear to be following SemVer, so no guarantees on monotonicity can be made.");
+                    log::warn!(
+                        "This repository does not appear to be following SemVer, so no guarantees on monotonicity can be made."
+                    );
                 },
             }
         }
@@ -136,7 +139,7 @@ impl Updatable for Pin {
             .with_context(|| "failed to convert to NixHash")?;
 
         Ok(GenericUrlHashes {
-            hash: hash.into(),
+            hash,
             url: latest_source.url.parse()?,
         })
     }

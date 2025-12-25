@@ -1,10 +1,12 @@
 //! Versioning support for the save format
 
-use super::*;
 use anyhow::{Context, Result};
-use nix_compat::nixhash::HashAlgo;
-use serde_json::{json, Map, Value};
-use std::path::PathBuf;
+use nix_compat::nixhash::{HashAlgo, NixHash};
+use serde::Deserialize;
+use serde_json::{Map, Value, json};
+use std::{collections::BTreeMap, path::Path};
+
+use crate::NixPins;
 
 /// The current format version
 pub const LATEST: u64 = 7;
@@ -46,7 +48,7 @@ pub fn to_value_versioned(pins: &NixPins) -> serde_json::Value {
 /// Patch the sources.json file to the latest version
 ///
 /// This operates on a JSON value level
-pub fn upgrade(mut pins_raw: Map<String, Value>, path: &PathBuf) -> Result<Value> {
+pub fn upgrade(mut pins_raw: Map<String, Value>, path: &Path) -> Result<Value> {
     let version = pins_raw
         .get("version")
         .and_then(Value::as_u64)
@@ -64,7 +66,7 @@ pub fn upgrade(mut pins_raw: Map<String, Value>, path: &PathBuf) -> Result<Value
     fn generic_upgrader(
         pins_raw: &mut Map<String, Value>,
         update_pin_fn: fn(&str, &mut Map<String, Value>) -> Result<()>,
-        path: &PathBuf,
+        path: &Path,
     ) -> Result<()> {
         let pins = pins_raw
             .get_mut("pins")
@@ -93,13 +95,13 @@ pub fn upgrade(mut pins_raw: Map<String, Value>, path: &PathBuf) -> Result<Value
         (
             0,
             Box::new(|pins_raw: &mut Map<String, Value>| {
-                generic_upgrader(pins_raw, upgrade_v0_pin, &*path)
+                generic_upgrader(pins_raw, upgrade_v0_pin, path)
             }) as Upgrader<'_>,
         ),
         (
             5,
             Box::new(|pins_raw: &mut Map<String, Value>| {
-                generic_upgrader(pins_raw, upgrade_v5_pin, &*path)
+                generic_upgrader(pins_raw, upgrade_v5_pin, path)
             }) as Upgrader<'_>,
         ),
     ]
@@ -202,7 +204,9 @@ fn upgrade_v0_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
             owner, repository, ..
         } => {
             /* Our version parsing has changed between versions. */
-            log::warn!("Upgrading pin {} might induce small semantic changes. Please check the diff afterwards and run `update`!", name);
+            log::warn!(
+                "Upgrading pin {name} might induce small semantic changes. Please check the diff afterwards and run `update`!"
+            );
 
             raw_pin.insert("type".into(), json!("GitRelease"));
             raw_pin.remove("repository");
@@ -261,7 +265,7 @@ fn upgrade_v5_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::BTreeMap;
+    use crate::{Frozen, GenericUrlHashes, GenericVersion, Pin, git, pypi};
 
     macro_rules! btreemap {
         ( $($key:expr => $val:expr),* $(,)? ) => {{
@@ -325,7 +329,7 @@ mod test {
             _ => unreachable!(),
         };
         let pins =
-            upgrade(pins, &PathBuf::from("in-memory-source.json")).expect("Failed to upgrade data");
+            upgrade(pins, Path::new("in-memory-source.json")).expect("Failed to upgrade data");
         let pins = serde_json::from_value::<NixPins>(pins)
             .expect("Upgraded data failed to deserialize with newest code");
 

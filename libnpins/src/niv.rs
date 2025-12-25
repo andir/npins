@@ -1,9 +1,9 @@
 //! Convert+Import Niv files
 
-use crate::*;
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+
+use crate::{Pin, git};
 
 /// Pin entry from Niv's sources.json
 ///
@@ -21,7 +21,7 @@ pub struct NivPin {
 impl TryFrom<NivPin> for Pin {
     type Error = anyhow::Error;
 
-    fn try_from(niv: NivPin) -> Result<Self> {
+    fn try_from(niv: NivPin) -> anyhow::Result<Self> {
         Ok(match niv.owner {
             None => {
                 git::GitPin::new(git::Repository::git(niv.repo.parse()?), niv.branch, false).into()
