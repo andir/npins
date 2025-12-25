@@ -1,28 +1,28 @@
 //! The main CLI application
 
-use libnpins::*;
-
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use crossterm::{
+    QueueableCommand,
     cursor::MoveToPreviousLine,
     style::{Print, Stylize},
     terminal::{Clear, ClearType},
-    QueueableCommand,
 };
 use futures_util::{
-    future,
-    stream::{self, StreamExt},
     TryStreamExt,
+    stream::{self, StreamExt},
 };
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
-    io::{stderr, IsTerminal, Write},
+    fs::File,
+    future,
+    io::{BufReader, IsTerminal, Write, stderr},
     path::PathBuf,
 };
-
 use url::{ParseError, Url};
+
+use libnpins::*;
 
 /// How to handle updates
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -263,11 +263,18 @@ impl GitAddOpts {
             .context("Failed to parse repository URL")?;
 
         if url.scheme().contains('.') {
-            log::warn!("Your URL scheme ('{}:') contains a '.', which is unusual. Please double-check its correctness.", url.scheme());
-            log::warn!("Very likely you forgot to specify the scheme, and the host name parsed as such instead.");
+            log::warn!(
+                "Your URL scheme ('{}:') contains a '.', which is unusual. Please double-check its correctness.",
+                url.scheme()
+            );
+            log::warn!(
+                "Very likely you forgot to specify the scheme, and the host name parsed as such instead."
+            );
         }
         let name = match url.path_segments().and_then(|mut x| x.next_back()) {
-            None => anyhow::bail!("Path of URL must start with a '/'. Also make sure that the URL starts with a scheme."),
+            None => anyhow::bail!(
+                "Path of URL must start with a '/'. Also make sure that the URL starts with a scheme."
+            ),
             Some(seg) => seg.to_owned(),
         };
         let name = name.strip_suffix(".git").unwrap_or(&name);
@@ -600,7 +607,7 @@ impl Opts {
         } else {
             self.folder.join("sources.json")
         };
-        let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
+        let fh = BufReader::new(File::open(&path).with_context(move || {
             format!(
                 "Failed to open {}. You must initialize npins before you can show current pins.",
                 path.display()
@@ -619,7 +626,7 @@ impl Opts {
             }
             self.folder.join("sources.json")
         };
-        let mut fh = std::fs::File::create(&path)
+        let mut fh = File::create(&path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
         serde_json::to_writer_pretty(&mut fh, &pins.to_value_versioned())?;
         fh.write_all(b"\n")?;
@@ -638,7 +645,7 @@ impl Opts {
             }
             log::info!("Writing default.nix");
             let p = self.folder.join("default.nix");
-            let mut fh = std::fs::File::create(&p).context("Failed to create npins default.nix")?;
+            let mut fh = File::create(&p).context("Failed to create npins default.nix")?;
             fh.write_all(default_nix.as_bytes())?;
         }
 
@@ -690,7 +697,7 @@ impl Opts {
         match &opts.names[..] {
             [] => {
                 for (name, pin) in pins.pins.iter() {
-                    print_pin(&name, pin);
+                    print_pin(name, pin);
                 }
             },
             names => {
@@ -700,7 +707,7 @@ impl Opts {
                             errors.push(name.clone());
                         },
                         Some(pin) => {
-                            print_pin(&name, pin);
+                            print_pin(name, pin);
                         },
                     }
                 }
@@ -786,7 +793,7 @@ impl Opts {
         let length = if opts.names.is_empty() {
             pins.pins
                 .iter()
-                .filter(|(_, pin)| (opts.update_frozen || !pin.is_frozen()))
+                .filter(|(_, pin)| opts.update_frozen || !pin.is_frozen())
                 .count()
         } else {
             selected_pins.len()
@@ -816,9 +823,9 @@ impl Opts {
                     || (opts.names.is_empty() && (opts.update_frozen || !pin.is_frozen()))
             })
             .map(|(name, pin)| async move {
-                animation.on_pin_start(&*name);
+                animation.on_pin_start(name);
                 let diff = Self::update_one(pin, strategy).await?;
-                animation.on_pin_finish(&*name, |stderr| write_diff(stderr, name, &diff));
+                animation.on_pin_finish(name, |stderr| write_diff(stderr, name, &diff));
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
@@ -889,10 +896,10 @@ impl Opts {
             .iter_mut()
             .filter(|(name, _pin)| selected_pins.contains(name) || opts.names.is_empty())
             .map(|(name, pin)| async move {
-                animation.on_pin_start(&*name);
+                animation.on_pin_start(name);
                 let diff_result = Self::update_one(pin, STRATEGY).await;
-                animation.on_pin_finish(&*name, |stderr| match &diff_result {
-                    Ok(diff) => write_diff(stderr, name, &diff),
+                animation.on_pin_finish(name, |stderr| match &diff_result {
+                    Ok(diff) => write_diff(stderr, name, diff),
                     Err(err) => {
                         writeln!(stderr, "[{name}] Failed download").unwrap();
                         writeln!(stderr, "{err:?}").unwrap();
@@ -933,14 +940,14 @@ impl Opts {
             log::info!("Verification passed.");
             Ok(())
         } else {
-            if differences.len() > 0 {
+            if !differences.is_empty() {
                 log::error!(
                     "The {} pins failed verification: {:?}",
                     differences.len(),
                     differences
                 );
             }
-            if failed.len() > 0 {
+            if !failed.is_empty() {
                 log::error!("The {} pins failed to download: {:?}", failed.len(), failed);
             }
             anyhow::bail!("Verification failed.")
@@ -969,7 +976,7 @@ impl Opts {
         log::info!("Upgrading lock file to the newest format version");
         let sources_json = self.folder.join("sources.json");
         let path = self.lock_file.as_ref().unwrap_or(&sources_json);
-        let fh = std::io::BufReader::new(std::fs::File::open(&path).with_context(move || {
+        let fh = BufReader::new(File::open(path).with_context(move || {
             format!(
                 "Failed to open {}. You must initialize npins first.",
                 path.display()
@@ -1045,12 +1052,14 @@ impl Opts {
         let mut pins = self.read_pins()?;
 
         let niv: BTreeMap<String, serde_json::Value> =
-            serde_json::from_reader(std::fs::File::open(&o.path).context(anyhow::format_err!(
+            serde_json::from_reader(File::open(&o.path).context(anyhow::format_err!(
                 "Could not open sources.json at '{}'",
                 o.path.canonicalize().unwrap_or_else(|_| o.path.clone()).display()
             ))?)
             .context("Niv file is not a valid JSON dict")?;
-        log::info!("Note that all the imported entries will be updated so they won't necessarily point to the same commits as before!");
+        log::info!(
+            "Note that all the imported entries will be updated so they won't necessarily point to the same commits as before!"
+        );
 
         async fn import(
             name: &str,
@@ -1103,12 +1112,14 @@ impl Opts {
         let mut pins = self.read_pins()?;
 
         let flake: serde_json::Value =
-            serde_json::from_reader(std::fs::File::open(&o.path).context(anyhow::format_err!(
+            serde_json::from_reader(File::open(&o.path).context(anyhow::format_err!(
                 "Could not open flake.lock at '{}'",
                 o.path.canonicalize().unwrap_or_else(|_| o.path.clone()).display()
             ))?)
             .context("Nix lock file is not a valid JSON object")?;
-        log::info!("Note that all the imported entries will be updated so they won't necessarily point to the same commits as before!");
+        log::info!(
+            "Note that all the imported entries will be updated so they won't necessarily point to the same commits as before!"
+        );
 
         let nodes: &serde_json::Map<String, serde_json::Value> = flake
             .get("nodes")
@@ -1219,7 +1230,9 @@ impl Opts {
 
     pub async fn run(&self) -> Result<()> {
         if self.lock_file.is_some() && &*self.folder != std::path::Path::new("npins") {
-            anyhow::bail!("If --lock-file is set, --directory will be ignored and thus should not be set to a non-default value (which is \"npins\")");
+            anyhow::bail!(
+                "If --lock-file is set, --directory will be ignored and thus should not be set to a non-default value (which is \"npins\")"
+            );
         }
         match &self.command {
             Command::Init(o) => self.init(o).await?,
@@ -1266,7 +1279,7 @@ impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
     ) {
         let mut in_progress = self.in_progress.borrow_mut();
 
-        updater(&mut *in_progress, stderr);
+        updater(&mut in_progress, stderr);
         for n in in_progress.iter() {
             stderr.queue(Print(n.dark_yellow())).unwrap();
             stderr.write_all(b"\n").unwrap();
