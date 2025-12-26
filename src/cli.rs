@@ -780,8 +780,7 @@ impl Opts {
             .map(|(name, pin)| async move {
                 animation.on_pin_start(&*name);
                 let diff = Self::update_one(pin, strategy).await?;
-                animation.on_pin_finish(&*name);
-                animation.write(|stderr| write_diff(stderr, name, &diff));
+                animation.on_pin_finish(&*name, |stderr| write_diff(stderr, name, &diff));
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
@@ -854,8 +853,7 @@ impl Opts {
             .map(|(name, pin)| async move {
                 animation.on_pin_start(&*name);
                 let diff_result = Self::update_one(pin, STRATEGY).await;
-                animation.on_pin_finish(&*name);
-                animation.write(|stderr| match &diff_result {
+                animation.on_pin_finish(&*name, |stderr| match &diff_result {
                     Ok(diff) => write_diff(stderr, name, &diff),
                     Err(err) => {
                         writeln!(stderr, "[{name}] Failed download").unwrap();
@@ -1229,14 +1227,6 @@ impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
         updater: impl for<'b> FnOnce(&'b mut BTreeSet<&'a str>, &mut std::io::StderrLock),
     ) {
         let mut in_progress = self.in_progress.borrow_mut();
-        if !in_progress.is_empty() {
-            crossterm::queue!(
-                stderr,
-                MoveToPreviousLine(in_progress.len() as u16),
-                Clear(ClearType::FromCursorDown)
-            )
-            .unwrap();
-        }
 
         updater(&mut *in_progress, stderr);
         for n in in_progress.iter() {
@@ -1247,15 +1237,6 @@ impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
         (self.write_bottom_line)(stderr, self.finished.get());
     }
 
-    /// Write something above the animation of in-progress pins
-    pub fn write(&'a self, writer: impl FnOnce(&mut std::io::StderrLock)) {
-        if !stderr().is_terminal() {
-            writer(&mut stderr().lock());
-        } else {
-            self.update_in_progress(&mut stderr().lock(), |_, stderr| writer(stderr));
-        }
-    }
-
     /// To be called every time a pin starts processing
     pub fn on_pin_start(&'a self, name: &'a str) {
         /* No animations outside a terminal */
@@ -1264,13 +1245,27 @@ impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
         }
 
         let mut stderr = stderr().lock();
-        self.update_in_progress(&mut stderr, |in_progress, _| {
+        self.update_in_progress(&mut stderr, |in_progress, stderr| {
+            if !in_progress.is_empty() {
+                crossterm::queue!(
+                    stderr,
+                    MoveToPreviousLine(in_progress.len() as u16),
+                    Clear(ClearType::FromCursorDown)
+                )
+                .unwrap();
+            }
+
             in_progress.insert(name);
         });
         stderr.flush().unwrap();
     }
 
-    pub fn on_pin_finish(&'a self, name: &str) {
+    /// Removes the pin from being progressed and provide writer to print result
+    pub fn on_pin_finish(
+        &'a self,
+        name: &str,
+        result_writer: impl FnOnce(&mut std::io::StderrLock),
+    ) {
         let mut stderr = stderr().lock();
 
         if !stderr.is_terminal() {
@@ -1278,7 +1273,16 @@ impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
         }
 
         self.finished.set(self.finished.get() + 1);
-        self.update_in_progress(&mut stderr, |in_progress, _| {
+        self.update_in_progress(&mut stderr, |in_progress, stderr| {
+            crossterm::queue!(
+                stderr,
+                MoveToPreviousLine(in_progress.len() as u16),
+                Clear(ClearType::FromCursorDown)
+            )
+            .unwrap();
+
+            result_writer(stderr);
+
             in_progress.remove(name);
         });
         stderr.flush().unwrap();
