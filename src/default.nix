@@ -112,7 +112,12 @@ let
         else
           builtins.throw "Unknown source type ${spec.type}";
     in
-    spec // { outPath = mayOverride name path; };
+    spec
+    // {
+      outPath =
+        # Override logic won't do anything if we're in pure eval
+        if builtins ? currentSystem then mayOverride name path else path;
+    };
 
   mkGitSource =
     {
