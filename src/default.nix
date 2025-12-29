@@ -225,6 +225,7 @@ in
 mkFunctor (
   {
     input ? ./sources.json,
+    pkgs ? null,
   }:
   let
     data =
@@ -243,7 +244,14 @@ mkFunctor (
     version = data.version;
   in
   if version == 7 then
-    builtins.mapAttrs (name: spec: mkFunctor (mkSource name spec)) data.pins
+    builtins.mapAttrs (
+      name: spec:
+      if pkgs == null then
+        # really annoying to read without this comment
+        mkFunctor (mkSource name spec)
+      else
+        mkSource name spec { inherit pkgs; }
+    ) data.pins
   else
     throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"
 )
