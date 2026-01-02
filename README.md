@@ -298,7 +298,10 @@ This will print the currently pinned dependencies in a human readable format. Th
 $ npins help show
 Lists the current pin entries
 
-Usage: npins show [OPTIONS]
+Usage: npins show [OPTIONS] [NAMES]...
+
+Arguments:
+  [NAMES]...  Name of the pin to show
 
 Options:
   -v, --verbose  Print debug messages

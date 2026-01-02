@@ -429,6 +429,12 @@ impl AddOpts {
 }
 
 #[derive(Debug, Parser)]
+pub struct ShowOpts {
+    /// Name of the pin to show
+    pub names: Vec<String>,
+}
+
+#[derive(Debug, Parser)]
 pub struct RemoveOpts {
     pub name: String,
 }
@@ -515,7 +521,7 @@ pub enum Command {
     Add(Box<AddOpts>),
 
     /// Lists the current pin entries.
-    Show,
+    Show(ShowOpts),
 
     /// Updates all or the given pins to the latest version.
     Update(UpdateOpts),
@@ -673,11 +679,41 @@ impl Opts {
         Ok(())
     }
 
-    fn show(&self) -> Result<()> {
+    fn show(&self, opts: &ShowOpts) -> Result<()> {
         let pins = self.read_pins()?;
-        for (name, pin) in pins.pins.iter() {
+
+        let print_pin = |name: &str, pin: &Pin| {
             println!("{}: ({})", name, pin.pin_type());
             println!("{}", pin);
+        };
+
+        let mut errors = vec![];
+
+        match &opts.names[..] {
+            [] => {
+                for (name, pin) in pins.pins.iter() {
+                    print_pin(&name, pin);
+                }
+            },
+            names => {
+                for name in names {
+                    match pins.pins.get(name) {
+                        None => {
+                            errors.push(name.clone());
+                        },
+                        Some(pin) => {
+                            print_pin(&name, pin);
+                        },
+                    }
+                }
+            },
+        }
+
+        if !errors.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Couldn't find the following pins: {:?}",
+                errors
+            ));
         }
 
         Ok(())
@@ -1185,7 +1221,7 @@ impl Opts {
         }
         match &self.command {
             Command::Init(o) => self.init(o).await?,
-            Command::Show => self.show()?,
+            Command::Show(o) => self.show(o)?,
             Command::Add(a) => self.add(a).await?,
             Command::Update(o) => self.update(o).await?,
             Command::Verify(o) => self.verify(o).await?,

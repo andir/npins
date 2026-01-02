@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `npins show` now accepts a list of pin entries to show instead of always showing the complete list (https://github.com/andir/npins/pull/190)
+
 ## 0.4.0
 
 - Changed the hashes to use the SRI format (https://github.com/andir/npins/pull/139)
