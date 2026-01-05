@@ -758,6 +758,10 @@ impl Opts {
             selected_pins.len()
         };
 
+        if length == 0 {
+            return Err(anyhow::anyhow!("no valid pin selected for update"));
+        }
+
         let strategy = match (opts.partial, opts.full) {
             (false, false) => UpdateStrategy::Normal,
             (false, true) => UpdateStrategy::Full,
