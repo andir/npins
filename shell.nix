@@ -46,7 +46,6 @@ pkgs.mkShell {
     ]
     ++ (lib.optionals stdenv.isDarwin [
       pkgs.libiconv
-      pkgs.darwin.apple_sdk.frameworks.Security
     ]);
 
   inherit (pre-commit) shellHook;
