@@ -58,7 +58,6 @@ let
 
     inherit src;
 
-    buildInputs = lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Security ]);
     nativeBuildInputs = [ makeWrapper ];
 
     cargoBuildFlags = [
