@@ -19,17 +19,6 @@ let
     in
     (if e.success then e.value else { error = fn { }; }) // { __functor = _self: fn; };
 
-  # https://github.com/NixOS/nixpkgs/blob/0258808f5744ca980b9a1f24fe0b1e6f0fecee9c/lib/lists.nix#L295
-  range =
-    first: last: if first > last then [ ] else builtins.genList (n: first + n) (last - first + 1);
-
-  # https://github.com/NixOS/nixpkgs/blob/0258808f5744ca980b9a1f24fe0b1e6f0fecee9c/lib/strings.nix#L257
-  stringToCharacters = s: map (p: builtins.substring p 1 s) (range 0 (builtins.stringLength s - 1));
-
-  # https://github.com/NixOS/nixpkgs/blob/0258808f5744ca980b9a1f24fe0b1e6f0fecee9c/lib/strings.nix#L269
-  stringAsChars = f: s: concatStrings (map f (stringToCharacters s));
-  concatStrings = builtins.concatStringsSep "";
-
   # If the environment variable NPINS_OVERRIDE_${name} is set, then use
   # the path directly as opposed to the fetched source.
   # (Taken from Niv for compatibility)
@@ -37,7 +26,11 @@ let
     name: path:
     let
       envVarName = "NPINS_OVERRIDE_${saneName}";
-      saneName = stringAsChars (c: if (builtins.match "[a-zA-Z0-9]" c) == null then "_" else c) name;
+      saneName = builtins.concatStringsSep "_" (
+        builtins.concatLists (
+          (builtins.filter (x: builtins.isList x && x != [ "" ]) (builtins.split "([a-zA-Z0-9]*)" name))
+        )
+      );
       ersatz = builtins.getEnv envVarName;
     in
     if ersatz == "" then
@@ -113,7 +106,12 @@ let
         else
           builtins.throw "Unknown source type ${spec.type}";
     in
-    spec // { outPath = mayOverride name path; };
+    spec
+    // {
+      outPath =
+        # Override logic won't do anything if we're in pure eval
+        if builtins ? currentSystem then mayOverride name path else path;
+    };
 
   mkGitSource =
     {
@@ -226,6 +224,7 @@ in
 mkFunctor (
   {
     input ? ./sources.json,
+    pkgs ? null,
   }:
   let
     data =
@@ -244,7 +243,14 @@ mkFunctor (
     version = data.version;
   in
   if version == 7 then
-    builtins.mapAttrs (name: spec: mkFunctor (mkSource name spec)) data.pins
+    builtins.mapAttrs (
+      name: spec:
+      if pkgs == null then
+        # really annoying to read without this comment
+        mkFunctor (mkSource name spec)
+      else
+        mkSource name spec { inherit pkgs; }
+    ) data.pins
   else
     throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"
 )
