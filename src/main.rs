@@ -280,15 +280,19 @@ impl GitAddOpts {
         let name = name.strip_suffix(".git").unwrap_or(&name);
 
         use git::Repository;
-        let url2 = url.clone();
         let repository = match self.forge {
-            GitForgeOpts::Auto => Some(Repository::git_auto(url).await),
-            GitForgeOpts::None => Some(Repository::git(url)),
-            GitForgeOpts::Github => Repository::github_from_url(url),
-            GitForgeOpts::Gitlab => Repository::gitlab_from_url(url),
-            GitForgeOpts::Forgejo => Repository::forgejo_from_url(url),
-        }
-        .unwrap_or(Repository::git(url2));
+            GitForgeOpts::Auto => Repository::git_auto(url).await,
+            GitForgeOpts::None => Repository::git(url),
+            GitForgeOpts::Github => Repository::github_from_url(url).ok_or_else(|| {
+                anyhow::format_err!("Could not parse the URL as GitHub repository")
+            })?,
+            GitForgeOpts::Gitlab => Repository::gitlab_from_url(url).ok_or_else(|| {
+                anyhow::format_err!("Could not parse the URL as GitLab repository")
+            })?,
+            GitForgeOpts::Forgejo => Repository::forgejo_from_url(url).ok_or_else(|| {
+                anyhow::format_err!("Could not parse the URL as Forgejo repository")
+            })?,
+        };
 
         Ok((Some(name.to_owned()), self.more.add(repository)?))
     }
