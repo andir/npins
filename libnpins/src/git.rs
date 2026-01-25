@@ -136,40 +136,65 @@ impl Repository {
     pub async fn git_auto(url: Url) -> Self {
         let url2 = url.clone();
         match (url.scheme(), url.domain()) {
-            ("http" | "https", Some("github.com")) => Self::github_from_url(url),
-            ("http" | "https", Some("gitlab.com")) => Self::gitlab_from_url(url),
-            ("http" | "https", Some("codeberg.org")) => Self::forgejo_from_url(url),
+            ("http" | "https", Some("github.com")) => {
+                log::debug!("Trying to parse URL as GitHub repository based on the domain name (github.com)");
+                Self::github_from_url(url)
+                    .inspect(|_| log::info!("Auto-detected GitHub repository (github.com)"))
+            },
+            ("http" | "https", Some("gitlab.com")) => {
+                log::debug!("Trying to parse URL as GitLab repository based on the domain name (gitlab.com)");
+                Self::gitlab_from_url(url)
+                    .inspect(|_| log::info!("Auto-detected GitLab repository (gitlab.com)"))
+            },
+            ("http" | "https", Some("codeberg.org")) => {
+                log::debug!("Trying to parse URL as Forgejo repository based on the domain name (codeberg.org)");
+                Self::forgejo_from_url(url)
+                    .inspect(|_| log::info!("Auto-detected Forgejo repository (codeberg.org)"))
+            },
             ("http" | "https", _) => Self::probe_forge(url).await,
             _ => None,
         }
-        .unwrap_or(Self::git(url2))
+        .unwrap_or_else(|| {
+            log::info!("No forge was auto-detected, treating as plain git repository");
+            Self::git(url2)
+        })
     }
 
     ///
     /// Takes in a URL of unknown forge and tries to determine which forge the hoster is
     /// And then parse the url into the according Repository Variant
     async fn probe_forge(url: Url) -> Option<Self> {
-        async fn probe(mut test_url: Url, path: &str) -> Result<()> {
-            test_url.set_path(path);
-            let _: serde_json::Value = get_and_deserialize(test_url).await?;
-            Ok(())
-        }
+        log::debug!("Probing {url} for Forgejo and GitLab API endpoints");
 
         /* We probe some known endpoints unique to the respective GitLab and Forgejo APIs to determine if a corresponding server is running */
         let distinct_api_endpoints = [
             (
+                "GitLab",
                 "/api/v4/projects",
                 Self::gitlab_from_url as fn(Url) -> Option<Self>,
             ),
             (
+                "Forgejo",
                 "/api/v1/settings/api",
                 Self::forgejo_from_url as fn(Url) -> Option<Self>,
             ),
         ];
 
-        for (path, func) in distinct_api_endpoints {
-            if probe(url.clone(), path).await.is_ok() {
-                return func(url);
+        for (forge_type, path, func) in distinct_api_endpoints {
+            let probe = |mut test_url: Url| async {
+                test_url.set_path(path);
+                log::debug!("Probing {test_url} to check for {forge_type}");
+                let _: serde_json::Value = get_and_deserialize(test_url).await?;
+                Ok::<(), anyhow::Error>(())
+            };
+
+            if probe(url.clone()).await.is_ok() {
+                return func(url.clone()).inspect(|_| {
+                    log::info!(
+                        "Auto-detected {forge_type} repository ({})",
+                        url.domain().unwrap()
+                    )
+                });
             }
         }
         None
