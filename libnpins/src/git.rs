@@ -196,10 +196,12 @@ impl Repository {
                 .map(|split| split.collect::<Vec<_>>())
                 .as_deref(),
         ) {
-            ("http" | "https", Some("github.com"), Some([owner, repo])) => Some(Self::github(
-                owner.to_string(),
-                repo.strip_suffix(".git").unwrap_or(repo).to_string(),
-            )),
+            ("http" | "https", Some("github.com"), Some([owner, repo] | [owner, repo, ""])) => {
+                Some(Self::github(
+                    owner.to_string(),
+                    repo.strip_suffix(".git").unwrap_or(repo).to_string(),
+                ))
+            },
             _ => None,
         }
     }
@@ -220,11 +222,13 @@ impl Repository {
                 .map(|split| split.collect::<Vec<_>>())
                 .as_deref(),
         ) {
-            ("http" | "https", Some(_domain), Some([owner, repo])) => Some(Self::forgejo(
-                strip_url(url.clone()),
-                owner.to_string(),
-                repo.to_string(),
-            )),
+            ("http" | "https", Some(_domain), Some([owner, repo] | [owner, repo, ""])) => {
+                Some(Self::forgejo(
+                    strip_url(url.clone()),
+                    owner.to_string(),
+                    repo.strip_suffix(".git").unwrap_or(repo).to_string(),
+                ))
+            },
             _ => None,
         }
     }
@@ -243,11 +247,12 @@ impl Repository {
     pub fn gitlab_from_url(url: Url) -> Option<Self> {
         let authority = strip_url(url.clone());
         match (url.scheme(), url.domain(), url.path()) {
-            ("http" | "https", Some(_domain), repo_path) => Some(Self::gitlab(
-                repo_path
-                    .strip_suffix(".git")
-                    .unwrap_or(repo_path)
-                    .to_string(),
+            ("http" | "https", Some(_domain), mut repo_path) => Some(Self::gitlab(
+                {
+                    repo_path = repo_path.strip_suffix("/").unwrap_or(repo_path);
+                    repo_path = repo_path.strip_suffix(".git").unwrap_or(repo_path);
+                    repo_path.to_string()
+                },
                 Some(authority),
                 None,
             )),
@@ -1338,6 +1343,13 @@ mod test {
             },
         );
         assert_eq!(
+            Repository::git_auto("https://github.com/NixOS/Nixpkgs/".parse().unwrap()).await,
+            Repository::GitHub {
+                owner: "NixOS".into(),
+                repo: "Nixpkgs".into()
+            },
+        );
+        assert_eq!(
             Repository::git_auto("https://github.com/NixOS/Nixpkgs.git".parse().unwrap()).await,
             Repository::GitHub {
                 owner: "NixOS".into(),
@@ -1366,7 +1378,20 @@ mod test {
             .await,
             Repository::GitLab {
                 server: "https://gitlab.gnome.org".parse().unwrap(),
-                repo_path: "/GNOME/gnome-control-center/".to_string(),
+                repo_path: "/GNOME/gnome-control-center".to_string(),
+                private_token: None
+            },
+        );
+        assert_eq!(
+            Repository::git_auto(
+                "https://gitlab.gnome.org/GNOME/gnome-control-center.git"
+                    .parse()
+                    .unwrap()
+            )
+            .await,
+            Repository::GitLab {
+                server: "https://gitlab.gnome.org".parse().unwrap(),
+                repo_path: "/GNOME/gnome-control-center".to_string(),
                 private_token: None
             },
         );
@@ -1378,6 +1403,27 @@ mod test {
         );
         assert_eq!(
             Repository::git_auto("https://git.lix.systems/lix-project/lix".parse().unwrap()).await,
+            Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".to_string(),
+                repo: "lix".to_string()
+            },
+        );
+        assert_eq!(
+            Repository::git_auto("https://git.lix.systems/lix-project/lix/".parse().unwrap()).await,
+            Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".to_string(),
+                repo: "lix".to_string()
+            },
+        );
+        assert_eq!(
+            Repository::git_auto(
+                "https://git.lix.systems/lix-project/lix.git"
+                    .parse()
+                    .unwrap()
+            )
+            .await,
             Repository::Forgejo {
                 server: "https://git.lix.systems".parse().unwrap(),
                 owner: "lix-project".to_string(),
