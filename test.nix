@@ -260,6 +260,7 @@ let
 
         echo -e "\n\nRunning test ${name}\n"
         cd $(mktemp -d)
+        export SSL_CERT_FILE=${./tests/assets/cert.pem}
 
         # Create tarballs
         ${lib.pipe tarballs [
