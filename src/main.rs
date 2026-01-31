@@ -1,6 +1,6 @@
 //! The main CLI application
 
-use npins::*;
+use libnpins::*;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -10,7 +10,7 @@ use crossterm::{
     terminal::{Clear, ClearType},
     QueueableCommand,
 };
-use futures::{
+use futures_util::{
     future,
     stream::{self, StreamExt},
     TryStreamExt,
@@ -23,8 +23,6 @@ use std::{
 };
 
 use url::{ParseError, Url};
-
-const DEFAULT_NIX: &'static str = include_str!("default.nix");
 
 /// How to handle updates
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -907,7 +905,7 @@ impl Opts {
             .buffer_unordered(opts.max_concurrent_downloads)
             /* Filter out empty diffs */
             .filter(|(_, diff_result)| {
-                futures::future::ready(
+                future::ready(
                     diff_result
                         .as_ref()
                         .map(|diff| !diff.is_empty())

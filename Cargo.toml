@@ -1,39 +1,36 @@
-[package]
-name = "npins"
+[workspace]
+resolver = "3"
+members = ["libnpins"]
+
+[workspace.dependencies]
+serde_json = { version = "^1.0", features = ["preserve_order"] }
+url = "^2.5"
+anyhow = "^1.0"
+log = "^0.4"
+tokio = "^1.0"
+
+[workspace.package]
 version = "0.4.0"
 edition = "2021"
 license = "EUPL-1.2"
 
-[lib]
+[package]
 name = "npins"
-path = "src/lib.rs"
-
-[[bin]]
-name = "npins"
-path = "src/cli.rs"
-required-features = [ "clap", "crossterm", "env_logger" ]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "^1.0", features = [ "derive" ] }
-serde_json = { version = "^1.0", features = ["preserve_order"] }
-url = { version = "^2.5", features = [ "serde" ] }
-anyhow = "^1.0"
-tokio = { version = "^1.0", features = ["macros", "rt-multi-thread", "process"] }
-log = "^0.4"
-reqwest = { version = "0.13.1", features = [ "rustls" ], default-features = false }
-async-trait = "0.1"
-lenient_semver_parser = { version = "0.4.2", default-features = false }
-lenient_version = { version = "0.4.2" }
-futures = "0.3.31"
+serde_json.workspace = true
+url.workspace = true
+anyhow.workspace = true
+log.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
-# CLI dependencies
-# Pin clap because the latest patch has a regression in the help output
-clap = { version = "=4.5.36", features = [ "derive", "env" ], optional = true }
-crossterm = { version = "0.29", default-features = false, optional = true }
-env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false, optional = true }
-nix-compat = { git = "https://git.snix.dev/snix/snix", version = "0.1.0", features = ["serde"] }
-
-[dev-dependencies]
+libnpins = { path = "libnpins" }
+futures-util = { version = "0.3.31", default-features = false }
+clap = { version = "=4.5.36", features = [ "derive", "env" ] }
+crossterm = { version = "0.29", default-features = false }
 env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false }
