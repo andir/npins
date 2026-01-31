@@ -28,7 +28,7 @@ serde_json.workspace = true
 url.workspace = true
 anyhow.workspace = true
 log.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 libnpins = { path = "libnpins" }
 # Pin clap because the latest patch has a regression in the help output
