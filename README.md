@@ -280,10 +280,10 @@ Options:
 $ npins help remove
 Removes one pin entry
 
-Usage: npins remove [OPTIONS] <NAME>
+Usage: npins remove [OPTIONS] [NAMES]...
 
 Arguments:
-  <NAME>  
+  [NAMES]...  
 
 Options:
   -v, --verbose  Print debug messages
@@ -301,7 +301,7 @@ Lists the current pin entries
 Usage: npins show [OPTIONS] [NAMES]...
 
 Arguments:
-  [NAMES]...  Name of the pin to show
+  [NAMES]...  Names of the pins to show
 
 Options:
   -v, --verbose  Print debug messages
