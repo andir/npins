@@ -733,7 +733,7 @@ in
       eq "$(jq -r .pins.hello_world.image_name npins/sources.json)" "localhost:5000/hello-world"
       eq "$(jq -r .pins.hello_world.image_tag npins/sources.json)" "latest"
 
-      nix-instantiate --eval --expr "((import ./npins).hello_world)"
+      nix-instantiate --eval --expr "((import ./npins).hello_world { pkgs = import ${pins.nixpkgs} {}; }).outPath"
     '';
   };
 
