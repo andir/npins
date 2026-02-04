@@ -212,6 +212,7 @@ let
       image_name,
       image_tag,
       image_digest,
+      hash,
       ...
     }:
     if pkgs == null then
@@ -221,6 +222,7 @@ let
         imageName = image_name;
         imageDigest = image_digest;
         finalImageTag = image_tag;
+        hash = hash;
       };
 in
 mkFunctor (
