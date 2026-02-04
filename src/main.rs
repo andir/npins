@@ -436,13 +436,14 @@ impl AddOpts {
 
 #[derive(Debug, Parser)]
 pub struct ShowOpts {
-    /// Name of the pin to show
+    /// Names of the pins to show
     pub names: Vec<String>,
 }
 
 #[derive(Debug, Parser)]
 pub struct RemoveOpts {
-    pub name: String,
+    // Names of the pins to remove
+    pub names: Vec<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -1011,17 +1012,24 @@ impl Opts {
     }
 
     fn remove(&self, r: &RemoveOpts) -> Result<()> {
-        let pins = self.read_pins()?;
+        let mut pins = self.read_pins()?;
 
-        if !pins.pins.contains_key(&r.name) {
-            return Err(anyhow::anyhow!("Could not find the pin '{}'", r.name));
+        let mut errors = Vec::new();
+
+        for name in &r.names {
+            if pins.pins.remove(name).is_none() {
+                errors.push(name);
+            }
         }
 
-        let mut new_pins = pins.clone();
-        new_pins.pins.remove(&r.name);
+        anyhow::ensure!(
+            errors.is_empty(),
+            "Couldn't find the following pins: {:?}",
+            errors
+        );
 
-        self.write_pins(&new_pins)?;
-        log::info!("Successfully removed pin '{}'.", r.name);
+        self.write_pins(&pins)?;
+        log::info!("Successfully removed pins.");
         Ok(())
     }
 
