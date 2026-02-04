@@ -438,6 +438,12 @@ impl AddOpts {
 pub struct ShowOpts {
     /// Names of the pins to show
     pub names: Vec<String>,
+    /// Prints only pin names
+    #[arg(short = 'p', long)]
+    pub plain: bool,
+    /// Invert [NAMES] to exclude specified pins
+    #[arg(short = 'e', long)]
+    pub exclude: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -693,17 +699,28 @@ impl Opts {
     fn show(&self, opts: &ShowOpts) -> Result<()> {
         let pins = self.read_pins()?;
 
-        let print_pin = |name: &str, pin: &Pin| {
-            println!("{}: ({})", name, pin.pin_type());
-            println!("{}", pin);
+        let print_pin = if opts.plain {
+            |name: &str, _: _| println!("{name}")
+        } else {
+            |name: &str, pin: &Pin| {
+                println!("{name}: ({})", pin.pin_type());
+                println!("{pin}");
+            }
         };
 
-        let mut errors = vec![];
+        let mut errors = Vec::new();
 
         match &opts.names[..] {
             [] => {
                 for (name, pin) in pins.pins.iter() {
                     print_pin(name, pin);
+                }
+            },
+            names if opts.exclude => {
+                for (name, pin) in pins.pins.iter() {
+                    if !names.contains(name) {
+                        print_pin(name, pin);
+                    }
                 }
             },
             names => {
@@ -720,12 +737,11 @@ impl Opts {
             },
         }
 
-        if !errors.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Couldn't find the following pins: {:?}",
-                errors
-            ));
-        }
+        anyhow::ensure!(
+            errors.is_empty(),
+            "Couldn't find the following pins: {:?}",
+            errors
+        );
 
         Ok(())
     }
