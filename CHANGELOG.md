@@ -5,6 +5,8 @@
 - `npins show` now accepts a list of pin entries to show instead of always showing the complete list (https://github.com/andir/npins/pull/190)
 - Tweaked forge auto-detection for `add git` (https://github.com/andir/npins/pull/202)
 - `npins remove` now accepts a list of pin entries to remove (https://github.com/andir/npins/pull/203)
+- Added `--plain` to `npins show` display a newline delimated list of pin names (https://github.com/andir/npins/pull/203)
+- Added `--exclude` to `npins show` to invert the provided entries to exclude from the complete list (https://github.com/andir/npins/pull/203)
 
 ## 0.4.0
 

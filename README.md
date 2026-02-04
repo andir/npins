@@ -304,6 +304,8 @@ Arguments:
   [NAMES]...  Names of the pins to show
 
 Options:
+  -p, --plain    Prints only pin names
+  -e, --exclude  Invert [NAMES] to exclude specified pins
   -v, --verbose  Print debug messages
   -h, --help     Print help
 ```
