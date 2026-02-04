@@ -1,7 +1,7 @@
 //! The main CLI application
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum, ValueHint};
 use crossterm::{
     QueueableCommand,
     cursor::MoveToPreviousLine,
@@ -57,6 +57,7 @@ impl UpdateStrategy {
 
 #[derive(Debug, Parser)]
 pub struct ChannelAddOpts {
+    #[arg(value_hint = ValueHint::Other)]
     channel_name: String,
 }
 
@@ -75,12 +76,12 @@ impl ChannelAddOpts {
 #[derive(Debug, Parser)]
 pub struct GenericGitAddOpts {
     /// Track a branch instead of a release
-    #[arg(short, long)]
+    #[arg(short, long, value_hint = ValueHint::Other)]
     pub branch: Option<String>,
 
     /// Use a specific commit/release instead of the latest.
     /// This may be a tag name, or a git revision when --branch is set.
-    #[arg(long, value_name = "tag or rev")]
+    #[arg(long, value_name = "tag or rev", value_hint = ValueHint::Other)]
     pub at: Option<String>,
 
     /// Also track pre-releases.
@@ -93,14 +94,15 @@ pub struct GenericGitAddOpts {
     #[arg(
         long = "upper-bound",
         value_name = "version",
-        conflicts_with_all = &["branch", "at"]
+        conflicts_with_all = &["branch", "at"],
+        value_hint = ValueHint::Other
     )]
     pub version_upper_bound: Option<String>,
 
     /// Optional prefix required for each release name / tag. For
     /// example, setting this to "release/" will only consider those
     /// that start with that string.
-    #[arg(long = "release-prefix")]
+    #[arg(long = "release-prefix", value_hint = ValueHint::Other)]
     pub release_prefix: Option<String>,
 
     /// Also fetch submodules
@@ -139,7 +141,9 @@ impl GenericGitAddOpts {
 
 #[derive(Debug, Parser)]
 pub struct GitHubAddOpts {
+    #[arg(value_hint = ValueHint::Other)]
     pub owner: String,
+    #[arg(value_hint = ValueHint::Other)]
     pub repository: String,
 
     #[command(flatten)]
@@ -156,13 +160,17 @@ impl GitHubAddOpts {
 
 #[derive(Debug, Parser)]
 pub struct ForgejoAddOpts {
+    #[arg(value_hint = ValueHint::Url)]
     pub server: String,
+    #[arg(value_hint = ValueHint::Other)]
     pub owner: String,
+    #[arg(value_hint = ValueHint::Other)]
     pub repository: String,
 
     #[command(flatten)]
     pub more: GenericGitAddOpts,
 }
+
 impl ForgejoAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
         let server_url = Url::parse(&self.server).or_else(|err| match err {
@@ -180,21 +188,24 @@ impl ForgejoAddOpts {
 #[derive(Debug, Parser)]
 pub struct GitLabAddOpts {
     /// Usually just `"owner" "repository"`, but GitLab allows arbitrary folder-like structures.
-    #[arg(required = true)] // TODO set min number of values to 2 again
+    // TODO set min number of values to 2 again
+    #[arg(required = true, value_hint = ValueHint::Other)]
     pub repo_path: Vec<String>,
 
     #[arg(
         long,
         default_value = "https://gitlab.com/",
         help = "Use a self-hosted GitLab instance instead",
-        value_name = "url"
+        value_name = "url",
+        value_hint = ValueHint::Url
     )]
     pub server: url::Url,
 
     #[arg(
         long,
         help = "Use a private token to access the repository.",
-        value_name = "token"
+        value_name = "token",
+        value_hint = ValueHint::Other
     )]
     pub private_token: Option<String>,
 
@@ -237,6 +248,7 @@ pub enum GitForgeOpts {
 #[derive(Debug, Parser)]
 pub struct GitAddOpts {
     /// The git remote URL. For example <https://github.com/andir/ate.git>
+    #[arg(value_hint = ValueHint::Url)]
     pub url: String,
 
     #[arg(long, value_enum, default_value = "auto")]
@@ -298,15 +310,16 @@ impl GitAddOpts {
 #[derive(Debug, Parser)]
 pub struct PyPiAddOpts {
     /// Name of the package at PyPi.org
+    #[arg(value_hint = ValueHint::Other)]
     pub package_name: String,
 
     /// Use a specific release instead of the latest.
-    #[arg(long, value_name = "version")]
+    #[arg(long, value_name = "version", value_hint = ValueHint::Other)]
     pub at: Option<String>,
 
     /// Bound the version resolution. For example, setting this to "2" will
     /// restrict updates to 1.X versions. Conflicts with the --branch option.
-    #[arg(long = "upper-bound", value_name = "version", conflicts_with = "at")]
+    #[arg(long = "upper-bound", value_name = "version", conflicts_with = "at", value_hint = ValueHint::Other)]
     pub version_upper_bound: Option<String>,
 }
 
@@ -327,7 +340,9 @@ impl PyPiAddOpts {
 
 #[derive(Debug, Parser)]
 pub struct ContainerAddOpts {
+    #[arg(value_hint = ValueHint::Other)]
     pub image_name: String,
+    #[arg(value_hint = ValueHint::Other)]
     pub image_tag: String,
 }
 
@@ -347,6 +362,7 @@ impl ContainerAddOpts {
 #[derive(Debug, Parser)]
 pub struct TarballAddOpts {
     /// Tarball URL
+    #[arg(value_hint = ValueHint::Url)]
     pub url: Url,
 }
 
@@ -392,7 +408,7 @@ pub enum AddCommands {
 pub struct AddOpts {
     /// Add the pin with a custom name.
     /// If a pin with that name already exists, it will be overwritten
-    #[arg(long, global = true)]
+    #[arg(long, global = true, value_hint = ValueHint::Other)]
     pub name: Option<String>,
     /// Add the pin as frozen, meaning that it will be ignored by `npins update` by default.
     #[arg(long, global = true)]
@@ -437,6 +453,7 @@ impl AddOpts {
 #[derive(Debug, Parser)]
 pub struct ShowOpts {
     /// Names of the pins to show
+    #[arg(value_hint = ValueHint::Other)]
     pub names: Vec<String>,
     /// Prints only pin names
     #[arg(short = 'p', long)]
@@ -449,12 +466,14 @@ pub struct ShowOpts {
 #[derive(Debug, Parser)]
 pub struct RemoveOpts {
     // Names of the pins to remove
+    #[arg(value_hint = ValueHint::Other)]
     pub names: Vec<String>,
 }
 
 #[derive(Debug, Parser)]
 pub struct UpdateOpts {
     /// Updates only the specified pins.
+    #[arg(value_hint = ValueHint::Other)]
     pub names: Vec<String>,
     /// Don't update versions, only re-fetch hashes
     #[arg(short, long, conflicts_with = "full")]
@@ -470,16 +489,17 @@ pub struct UpdateOpts {
     #[arg(long = "frozen")]
     pub update_frozen: bool,
     /// Maximum number of simultaneous downloads
-    #[structopt(default_value = "5", long)]
+    #[structopt(default_value = "5", long, value_hint = ValueHint::Other)]
     pub max_concurrent_downloads: usize,
 }
 
 #[derive(Debug, Parser)]
 pub struct VerifyOpts {
     /// Verifies only the specified pins.
+    #[arg(value_hint = ValueHint::Other)]
     pub names: Vec<String>,
     /// Maximum number of simultaneous downloads
-    #[structopt(default_value = "5", long)]
+    #[structopt(default_value = "5", long, value_hint = ValueHint::Other)]
     pub max_concurrent_downloads: usize,
 }
 
@@ -492,33 +512,33 @@ pub struct InitOpts {
 
 #[derive(Debug, Parser)]
 pub struct ImportOpts {
-    #[arg(default_value = "nix/sources.json")]
+    #[arg(default_value = "nix/sources.json", value_hint = ValueHint::FilePath)]
     pub path: PathBuf,
     /// Only import one entry from Niv
-    #[arg(short, long)]
+    #[arg(short, long, value_hint = ValueHint::Other)]
     pub name: Option<String>,
 }
 
 #[derive(Debug, Parser)]
 pub struct ImportFlakeOpts {
-    #[arg(default_value = "flake.lock")]
+    #[arg(default_value = "flake.lock", value_hint = ValueHint::FilePath)]
     pub path: PathBuf,
     /// Only import one entry from the flake
-    #[arg(short, long)]
+    #[arg(short, long, value_hint = ValueHint::Other)]
     pub name: Option<String>,
 }
 
 #[derive(Debug, Parser)]
 pub struct FreezeOpts {
     /// Names of the pin(s)
-    #[structopt(required = true)]
+    #[structopt(required = true, value_hint = ValueHint::Other)]
     pub names: Vec<String>,
 }
 
 #[derive(Debug, Parser)]
 pub struct GetPathOpts {
     /// Name of the pin
-    #[structopt(required = true)]
+    #[structopt(required = true, value_hint = ValueHint::Other)]
     pub name: String,
 }
 
@@ -580,13 +600,14 @@ pub struct Opts {
         short = 'd',
         long = "directory",
         default_value = "npins",
-        env = "NPINS_DIRECTORY"
+        env = "NPINS_DIRECTORY",
+        value_hint = ValueHint::DirPath
     )]
     folder: std::path::PathBuf,
 
     /// Specifies the path to the sources.json and activates lockfile mode.
     /// In lockfile mode, no default.nix will be generated and --directory will be ignored.
-    #[arg(long)]
+    #[arg(long, value_hint = ValueHint::FilePath)]
     lock_file: Option<std::path::PathBuf>,
 
     /// Print debug messages.
