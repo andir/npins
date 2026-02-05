@@ -27,6 +27,7 @@ let
     "^/completions/src$"
     "^/completions/src/.+$"
     "^/completions/Cargo.toml$"
+    "^/completions/npins.fish$"
     "^/completions/generated$"
     "^/completions/generated/.+$"
   ];
@@ -82,7 +83,7 @@ let
 
       installShellCompletion --cmd npins \
         --bash $src/completions/generated/npins.bash \
-        --fish $src/completions/generated/npins.fish \
+        --fish $src/completions/npins.fish \
         --zsh $src/completions/generated/npins.zsh
     '';
 
