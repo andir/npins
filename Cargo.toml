@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["libnpins"]
+members = ["libnpins", "completions"]
 
 [workspace.dependencies]
 serde_json = { version = "^1.0", features = ["preserve_order"] }
@@ -8,6 +8,7 @@ url = "^2.5"
 anyhow = "^1.0"
 log = "^0.4"
 tokio = "^1.0"
+clap = { version = "=4.5.36", features = [ "derive", "env" ] }
 
 [workspace.package]
 version = "0.4.0"
@@ -31,7 +32,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 libnpins = { path = "libnpins" }
 # Pin clap because the latest patch has a regression in the help output
-clap = { version = "=4.5.36", features = [ "derive", "env" ] }
+clap.workspace = true
 futures-util = { version = "0.3.31", default-features = false }
 crossterm = { version = "0.29", default-features = false }
 env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false }
