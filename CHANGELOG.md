@@ -8,6 +8,7 @@
 - Added `--plain` to `npins show` display a newline delimated list of pin names (https://github.com/andir/npins/pull/203)
 - Added `--exclude` to `npins show` to invert the provided entries to exclude from the complete list (https://github.com/andir/npins/pull/203)
 - Basic completions for bash, fish and zsh are now included (https://github.com/andir/npins/pull/203)
+- Fish completions will complete pin names where applicable (https://github.com/andir/npins/pull/203)
 
 ## 0.4.0
 
