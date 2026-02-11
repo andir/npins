@@ -3,7 +3,6 @@
 //! Currently, it pretty much exposes the internals of the CLI 1:1, but in the future
 //! this is supposed to evolve into a more standalone library.
 
-use anyhow::Result;
 use diff::{Diff, OptionExt};
 use nix_compat::nixhash::NixHash;
 use reqwest::IntoUrl;
@@ -21,7 +20,7 @@ pub mod pypi;
 pub mod tarball;
 pub mod versions;
 
-pub const DEFAULT_NIX: &'static str = include_str!("default.nix");
+pub const DEFAULT_NIX: &str = include_str!("default.nix");
 
 /// Helper method to build you a client.
 // TODO make injectable via a configuration mechanism
@@ -129,10 +128,10 @@ pub trait Updatable:
     /// Fetch the latest applicable commit data
     ///
     /// The old version may be passed to help guarantee monotonicity of the versions.
-    async fn update(&self, old: Option<&Self::Version>) -> Result<Self::Version>;
+    async fn update(&self, old: Option<&Self::Version>) -> anyhow::Result<Self::Version>;
 
     /// Fetch hashes for a given version
-    async fn fetch(&self, version: &Self::Version) -> Result<Self::Hashes>;
+    async fn fetch(&self, version: &Self::Version) -> anyhow::Result<Self::Hashes>;
 }
 
 /// Create the `Pin` type
@@ -178,7 +177,7 @@ macro_rules! mkPin {
             })*
 
             /* If an error is returned, `self` remains unchanged */
-            pub async fn update(&mut self) -> Result<Vec<diff::DiffEntry>> {
+            pub async fn update(&mut self) -> ::anyhow::Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, .. } => {
                         /* Use very explicit syntax to force the correct types and get good compile errors */
@@ -191,7 +190,7 @@ macro_rules! mkPin {
             /* If an error is returned, `self` remains unchanged. This returns a double result: the outer one
              * indicates that `update` should be called first, the inner is from the actual operation.
              */
-            pub async fn fetch(&mut self) -> Result<Vec<diff::DiffEntry>> {
+            pub async fn fetch(&mut self) -> ::anyhow::Result<Vec<diff::DiffEntry>> {
                 Ok(match self {
                     $(Self::$name { input, version, hashes, .. } => {
                         let version = version.as_ref()
@@ -225,14 +224,14 @@ macro_rules! mkPin {
             /// Unfreeze a pin
             pub fn unfreeze(&mut self) {
                 match self {
-                    $(Self::$name { ref mut frozen, .. } => frozen.unfreeze()),*
+                    $(Self::$name { frozen, .. } => frozen.unfreeze()),*
                 }
             }
 
             /// Freeze a pin
             pub fn freeze(&mut self) {
                 match self {
-                    $(Self::$name { ref mut frozen, .. } => frozen.freeze()),*
+                    $(Self::$name { frozen, .. } => frozen.freeze()),*
                 }
             }
 
@@ -314,7 +313,7 @@ impl NixPins {
     }
 
     /// Custom manual deserialize wrapper that checks the version
-    pub fn from_json_versioned(value: serde_json::Value) -> Result<Self> {
+    pub fn from_json_versioned(value: serde_json::Value) -> anyhow::Result<Self> {
         versions::from_value_versioned(value)
     }
 
@@ -350,7 +349,7 @@ impl diff::Diff for GenericHash {
 }
 
 /// The Frozen field in a Pin
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Frozen(pub bool);
 
 impl Frozen {
@@ -377,12 +376,6 @@ impl diff::Diff for Frozen {
     }
 }
 
-impl std::default::Default for Frozen {
-    fn default() -> Self {
-        Frozen(false)
-    }
-}
-
 /// An URL and its hash
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct GenericUrlHashes {
@@ -404,6 +397,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[rustfmt::skip]
     fn test_frozen() {
         assert!(!Frozen::default().is_frozen());
         assert!(!{

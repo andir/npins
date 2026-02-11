@@ -1,7 +1,8 @@
-use crate::{check_git_url, check_url, DEFAULT_NIX};
 use anyhow::{Context, Result};
 use nix_compat::nixhash::{HashAlgo, NixHash};
 use std::path::Path;
+
+use crate::{DEFAULT_NIX, check_git_url, check_url};
 
 #[allow(unused)]
 pub struct PrefetchInfo {
@@ -187,8 +188,8 @@ pub async fn nix_prefetch_docker(
         "nix-prefetch-git output: {}",
         String::from_utf8_lossy(&output.stdout)
     );
-    Ok(serde_json::from_slice(&output.stdout)
-        .context("Failed to deserialize nix-pfetch-git JSON response.")?)
+    serde_json::from_slice(&output.stdout)
+        .context("Failed to deserialize nix-pfetch-git JSON response.")
 }
 pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::PathBuf> {
     let lockfile_path = lockfile_path.canonicalize()?;

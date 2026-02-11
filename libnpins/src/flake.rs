@@ -1,10 +1,11 @@
 //! Convert+Import Nix flake lock files
 
-use crate::*;
 use anyhow::{Context, Result};
 use git::fetch_default_branch;
 use serde::{Deserialize, Serialize};
 use url::Url;
+
+use crate::{Pin, git, tarball};
 
 /// Pin entry from a nix flake's lock file
 ///

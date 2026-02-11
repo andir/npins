@@ -1,9 +1,8 @@
 //! Pin an OCI container
 
-use crate::nix::nix_prefetch_docker;
-use crate::*;
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
+
+use crate::{Updatable, diff, nix::nix_prefetch_docker};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Pin {
@@ -47,7 +46,7 @@ impl Updatable for Pin {
     type Version = ContainerVersion;
     type Hashes = ContainerHash;
 
-    async fn update(&self, _old: Option<&ContainerVersion>) -> Result<ContainerVersion> {
+    async fn update(&self, _old: Option<&ContainerVersion>) -> anyhow::Result<ContainerVersion> {
         Ok(ContainerVersion {
             image_digest: nix_prefetch_docker(&self.image_name, &self.image_tag, None)
                 .await?
@@ -55,7 +54,7 @@ impl Updatable for Pin {
         })
     }
 
-    async fn fetch(&self, version: &ContainerVersion) -> Result<ContainerHash> {
+    async fn fetch(&self, version: &ContainerVersion) -> anyhow::Result<ContainerHash> {
         Ok(ContainerHash {
             hash: nix_prefetch_docker(
                 &self.image_name,
@@ -72,7 +71,7 @@ impl Updatable for Pin {
 mod test {
     use super::*;
 
-    const DEAD_TEST_CONTAINER: &'static str = "docker.io/dperson/torproxy";
+    const DEAD_TEST_CONTAINER: &str = "docker.io/dperson/torproxy";
 
     #[tokio::test]
     async fn update_and_fetch_container() {
