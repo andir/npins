@@ -136,40 +136,65 @@ impl Repository {
     pub async fn git_auto(url: Url) -> Self {
         let url2 = url.clone();
         match (url.scheme(), url.domain()) {
-            ("http" | "https", Some("github.com")) => Self::github_from_url(url),
-            ("http" | "https", Some("gitlab.com")) => Self::gitlab_from_url(url),
-            ("http" | "https", Some("codeberg.org")) => Self::forgejo_from_url(url),
+            ("http" | "https", Some("github.com")) => {
+                log::debug!("Trying to parse URL as GitHub repository based on the domain name (github.com)");
+                Self::github_from_url(url)
+                    .inspect(|_| log::info!("Auto-detected GitHub repository (github.com)"))
+            },
+            ("http" | "https", Some("gitlab.com")) => {
+                log::debug!("Trying to parse URL as GitLab repository based on the domain name (gitlab.com)");
+                Self::gitlab_from_url(url)
+                    .inspect(|_| log::info!("Auto-detected GitLab repository (gitlab.com)"))
+            },
+            ("http" | "https", Some("codeberg.org")) => {
+                log::debug!("Trying to parse URL as Forgejo repository based on the domain name (codeberg.org)");
+                Self::forgejo_from_url(url)
+                    .inspect(|_| log::info!("Auto-detected Forgejo repository (codeberg.org)"))
+            },
             ("http" | "https", _) => Self::probe_forge(url).await,
             _ => None,
         }
-        .unwrap_or(Self::git(url2))
+        .unwrap_or_else(|| {
+            log::info!("No forge was auto-detected, treating as plain git repository");
+            Self::git(url2)
+        })
     }
 
     ///
     /// Takes in a URL of unknown forge and tries to determine which forge the hoster is
     /// And then parse the url into the according Repository Variant
     async fn probe_forge(url: Url) -> Option<Self> {
-        async fn probe(mut test_url: Url, path: &str) -> Result<()> {
-            test_url.set_path(path);
-            let _: serde_json::Value = get_and_deserialize(test_url).await?;
-            Ok(())
-        }
+        log::debug!("Probing {url} for Forgejo and GitLab API endpoints");
 
         /* We probe some known endpoints unique to the respective GitLab and Forgejo APIs to determine if a corresponding server is running */
         let distinct_api_endpoints = [
             (
+                "GitLab",
                 "/api/v4/projects",
                 Self::gitlab_from_url as fn(Url) -> Option<Self>,
             ),
             (
+                "Forgejo",
                 "/api/v1/settings/api",
                 Self::forgejo_from_url as fn(Url) -> Option<Self>,
             ),
         ];
 
-        for (path, func) in distinct_api_endpoints {
-            if probe(url.clone(), path).await.is_ok() {
-                return func(url);
+        for (forge_type, path, func) in distinct_api_endpoints {
+            let probe = |mut test_url: Url| async {
+                test_url.set_path(path);
+                log::debug!("Probing {test_url} to check for {forge_type}");
+                let _: serde_json::Value = get_and_deserialize(test_url).await?;
+                Ok::<(), anyhow::Error>(())
+            };
+
+            if probe(url.clone()).await.is_ok() {
+                return func(url.clone()).inspect(|_| {
+                    log::info!(
+                        "Auto-detected {forge_type} repository ({})",
+                        url.domain().unwrap()
+                    )
+                });
             }
         }
         None
@@ -196,10 +221,12 @@ impl Repository {
                 .map(|split| split.collect::<Vec<_>>())
                 .as_deref(),
         ) {
-            ("http" | "https", Some("github.com"), Some([owner, repo])) => Some(Self::github(
-                owner.to_string(),
-                repo.strip_suffix(".git").unwrap_or(repo).to_string(),
-            )),
+            ("http" | "https", Some("github.com"), Some([owner, repo] | [owner, repo, ""])) => {
+                Some(Self::github(
+                    owner.to_string(),
+                    repo.strip_suffix(".git").unwrap_or(repo).to_string(),
+                ))
+            },
             _ => None,
         }
     }
@@ -220,11 +247,13 @@ impl Repository {
                 .map(|split| split.collect::<Vec<_>>())
                 .as_deref(),
         ) {
-            ("http" | "https", Some(_domain), Some([owner, repo])) => Some(Self::forgejo(
-                strip_url(url.clone()),
-                owner.to_string(),
-                repo.to_string(),
-            )),
+            ("http" | "https", Some(_domain), Some([owner, repo] | [owner, repo, ""])) => {
+                Some(Self::forgejo(
+                    strip_url(url.clone()),
+                    owner.to_string(),
+                    repo.strip_suffix(".git").unwrap_or(repo).to_string(),
+                ))
+            },
             _ => None,
         }
     }
@@ -243,11 +272,12 @@ impl Repository {
     pub fn gitlab_from_url(url: Url) -> Option<Self> {
         let authority = strip_url(url.clone());
         match (url.scheme(), url.domain(), url.path()) {
-            ("http" | "https", Some(_domain), repo_path) => Some(Self::gitlab(
-                repo_path
-                    .strip_suffix(".git")
-                    .unwrap_or(repo_path)
-                    .to_string(),
+            ("http" | "https", Some(_domain), mut repo_path) => Some(Self::gitlab(
+                {
+                    repo_path = repo_path.strip_suffix("/").unwrap_or(repo_path);
+                    repo_path = repo_path.strip_suffix(".git").unwrap_or(repo_path);
+                    repo_path.to_string()
+                },
                 Some(authority),
                 None,
             )),
@@ -554,8 +584,7 @@ impl Updatable for GitReleasePin {
             self.pre_releases,
             version_upper_bound.as_ref(),
             self.release_prefix.as_deref(),
-        )
-            .ok_or_else(|| anyhow::format_err!("Repository has no matching release tags"))?;
+        ).context("Repository has no matching release tags")?;
 
         // If we have a release prefix strip it from the previous version for semver comparison.
         // If the old version didn't have a prefix we keep it as is.
@@ -677,7 +706,7 @@ async fn fetch_remote(url: &str, args: &[&str]) -> Result<Vec<RemoteInfo>> {
             .map(|line| {
                 let (revision, ref_) = line
                     .split_once('\t')
-                    .ok_or_else(|| anyhow::format_err!("Output line contains no '\\t'"))?;
+                    .context("Output line contains no '\\t'")?;
                 anyhow::ensure!(
                     !ref_.contains('\t'),
                     "Output line contains more than one '\\t'"
@@ -710,9 +739,8 @@ pub async fn fetch_ref(repo: &Url, ref_: impl AsRef<str>) -> Result<RemoteInfo> 
     /* git ls-remote always postfix-matches the ref like a glob, but we want an exact match.
      * See https://github.com/andir/npins/issues/142
      */
-    remotes.into_iter().find(|r| r.ref_ == ref_).ok_or_else(
-        || anyhow::format_err!("git ls-remote output does not contain the requested remote '{}'. This should not have happened!", ref_)
-    )
+    remotes.into_iter().find(|r| r.ref_ == ref_)
+        .with_context(|| "git ls-remote output does not contain the requested remote '{ref_}'. This should not have happened!")
 }
 
 /// Get the revision for a branch
@@ -1338,6 +1366,13 @@ mod test {
             },
         );
         assert_eq!(
+            Repository::git_auto("https://github.com/NixOS/Nixpkgs/".parse().unwrap()).await,
+            Repository::GitHub {
+                owner: "NixOS".into(),
+                repo: "Nixpkgs".into()
+            },
+        );
+        assert_eq!(
             Repository::git_auto("https://github.com/NixOS/Nixpkgs.git".parse().unwrap()).await,
             Repository::GitHub {
                 owner: "NixOS".into(),
@@ -1366,7 +1401,20 @@ mod test {
             .await,
             Repository::GitLab {
                 server: "https://gitlab.gnome.org".parse().unwrap(),
-                repo_path: "/GNOME/gnome-control-center/".to_string(),
+                repo_path: "/GNOME/gnome-control-center".to_string(),
+                private_token: None
+            },
+        );
+        assert_eq!(
+            Repository::git_auto(
+                "https://gitlab.gnome.org/GNOME/gnome-control-center.git"
+                    .parse()
+                    .unwrap()
+            )
+            .await,
+            Repository::GitLab {
+                server: "https://gitlab.gnome.org".parse().unwrap(),
+                repo_path: "/GNOME/gnome-control-center".to_string(),
                 private_token: None
             },
         );
@@ -1378,6 +1426,27 @@ mod test {
         );
         assert_eq!(
             Repository::git_auto("https://git.lix.systems/lix-project/lix".parse().unwrap()).await,
+            Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".to_string(),
+                repo: "lix".to_string()
+            },
+        );
+        assert_eq!(
+            Repository::git_auto("https://git.lix.systems/lix-project/lix/".parse().unwrap()).await,
+            Repository::Forgejo {
+                server: "https://git.lix.systems".parse().unwrap(),
+                owner: "lix-project".to_string(),
+                repo: "lix".to_string()
+            },
+        );
+        assert_eq!(
+            Repository::git_auto(
+                "https://git.lix.systems/lix-project/lix.git"
+                    .parse()
+                    .unwrap()
+            )
+            .await,
             Repository::Forgejo {
                 server: "https://git.lix.systems".parse().unwrap(),
                 owner: "lix-project".to_string(),

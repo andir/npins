@@ -212,7 +212,7 @@ impl GitLabAddOpts {
         Ok((
             Some(self.repo_path
                 .last()
-                .ok_or_else(|| anyhow::format_err!("GitLab repository path must at least have one element (usually two: owner, repo)"))?
+                .context("GitLab repository path must at least have one element (usually two: owner, repo)")?
                 .clone()),
             self.more.add(repository)?,
         ))
@@ -280,15 +280,16 @@ impl GitAddOpts {
         let name = name.strip_suffix(".git").unwrap_or(&name);
 
         use git::Repository;
-        let url2 = url.clone();
         let repository = match self.forge {
-            GitForgeOpts::Auto => Some(Repository::git_auto(url).await),
-            GitForgeOpts::None => Some(Repository::git(url)),
-            GitForgeOpts::Github => Repository::github_from_url(url),
-            GitForgeOpts::Gitlab => Repository::gitlab_from_url(url),
-            GitForgeOpts::Forgejo => Repository::forgejo_from_url(url),
-        }
-        .unwrap_or(Repository::git(url2));
+            GitForgeOpts::Auto => Repository::git_auto(url).await,
+            GitForgeOpts::None => Repository::git(url),
+            GitForgeOpts::Github => Repository::github_from_url(url)
+                .context("Could not parse the URL as GitHub repository")?,
+            GitForgeOpts::Gitlab => Repository::gitlab_from_url(url)
+                .context("Could not parse the URL as GitLab repository")?,
+            GitForgeOpts::Forgejo => Repository::forgejo_from_url(url)
+                .context("Could not parse the URL as Forgejo repository")?,
+        };
 
         Ok((Some(name.to_owned()), self.more.add(repository)?))
     }
@@ -1069,7 +1070,7 @@ impl Opts {
         ) -> Result<()> {
             let pin = pin
                 .or_else(|| niv.get(name))
-                .ok_or_else(|| anyhow::format_err!("Pin '{}' not found in sources.json", name))?;
+                .with_context(|| anyhow::format_err!("Pin '{name}' not found in sources.json"))?;
             anyhow::ensure!(
                 !npins.pins.contains_key(name),
                 "Pin '{}' exists in both files, this is a collision. Please delete the entry in one of the files.",
@@ -1155,7 +1156,7 @@ impl Opts {
         ) -> Result<()> {
             let pin = nodes
                 .get(name)
-                .ok_or_else(|| anyhow::format_err!("Pin '{}' not found in flake.lock", name))?;
+                .with_context(|| anyhow::format_err!("Pin '{name}' not found in flake.lock"))?;
             anyhow::ensure!(
                 !npins.pins.contains_key(name),
                 "Pin '{}' exists in both files, this is a collision. Please delete the entry in one of the files.",
