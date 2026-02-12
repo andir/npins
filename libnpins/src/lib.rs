@@ -3,6 +3,7 @@
 //! Currently, it pretty much exposes the internals of the CLI 1:1, but in the future
 //! this is supposed to evolve into a more standalone library.
 
+use anyhow::Context;
 use diff::{Diff, OptionExt};
 use nix_compat::nixhash::NixHash;
 use reqwest::IntoUrl;
@@ -194,7 +195,7 @@ macro_rules! mkPin {
                 Ok(match self {
                     $(Self::$name { input, version, hashes, .. } => {
                         let version = version.as_ref()
-                            .ok_or_else(|| anyhow::format_err!("No version information available, call `update` first or manually set one"))?;
+                            .context("No version information available, call `update` first or manually set one")?;
                         /* Use very explicit syntax to force the correct types and get good compile errors */
                         let new_hashes = <$input_name as Updatable>::fetch(input, &version).await?;
                         hashes.insert_diffed(new_hashes)

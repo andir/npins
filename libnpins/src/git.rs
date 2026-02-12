@@ -584,8 +584,7 @@ impl Updatable for GitReleasePin {
             self.pre_releases,
             version_upper_bound.as_ref(),
             self.release_prefix.as_deref(),
-        )
-            .ok_or_else(|| anyhow::format_err!("Repository has no matching release tags"))?;
+        ).context("Repository has no matching release tags")?;
 
         // If we have a release prefix strip it from the previous version for semver comparison.
         // If the old version didn't have a prefix we keep it as is.
@@ -707,7 +706,7 @@ async fn fetch_remote(url: &str, args: &[&str]) -> Result<Vec<RemoteInfo>> {
             .map(|line| {
                 let (revision, ref_) = line
                     .split_once('\t')
-                    .ok_or_else(|| anyhow::format_err!("Output line contains no '\\t'"))?;
+                    .context("Output line contains no '\\t'")?;
                 anyhow::ensure!(
                     !ref_.contains('\t'),
                     "Output line contains more than one '\\t'"
@@ -740,9 +739,8 @@ pub async fn fetch_ref(repo: &Url, ref_: impl AsRef<str>) -> Result<RemoteInfo> 
     /* git ls-remote always postfix-matches the ref like a glob, but we want an exact match.
      * See https://github.com/andir/npins/issues/142
      */
-    remotes.into_iter().find(|r| r.ref_ == ref_).ok_or_else(
-        || anyhow::format_err!("git ls-remote output does not contain the requested remote '{}'. This should not have happened!", ref_)
-    )
+    remotes.into_iter().find(|r| r.ref_ == ref_)
+        .with_context(|| "git ls-remote output does not contain the requested remote '{ref_}'. This should not have happened!")
 }
 
 /// Get the revision for a branch

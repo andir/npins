@@ -75,7 +75,7 @@ impl Updatable for Pin {
                     .filter(|version| version < &version_upper_bound)
                     /* Get the latest version */
                     .max()
-                    .ok_or_else(|| anyhow::format_err!("No matching versions found"))?
+                    .context("No matching versions found")?
                     .to_string()
             },
             /* Simply take latest */
@@ -119,24 +119,21 @@ impl Updatable for Pin {
         let mut latest_source: PyPiUrlMetadata = metadata
             .releases
             .remove(&version.version)
-            .ok_or_else(|| {
+            .with_context(|| {
                 anyhow::format_err!("Could not find requested version {}", version.version)
             })?
             .into_iter()
             /* Of all files for the latest release, we only care about source tarballs */
             .find(|file_meta| file_meta.python_version == "source")
-            .ok_or_else(|| {
-                anyhow::format_err!("Unsupported package: must contain some \"source\" download",)
-            })?;
+            .context("Unsupported package: must contain some \"source\" download")?;
 
-        let hash_str = latest_source.digests.remove("sha256").ok_or_else(|| {
-            anyhow::format_err!(
-                "JSON metadata is invalid: must contain a `sha256` entry within `digests`",
-            )
-        })?;
+        let hash_str = latest_source
+            .digests
+            .remove("sha256")
+            .context("JSON metadata is invalid: must contain a `sha256` entry within `digests`")?;
 
         let hash = NixHash::from_str(&hash_str, Some(nixhash::HashAlgo::Sha256))
-            .with_context(|| "failed to convert to NixHash")?;
+            .context("failed to convert to NixHash")?;
 
         Ok(GenericUrlHashes {
             hash,

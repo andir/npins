@@ -52,7 +52,7 @@ pub fn upgrade(mut pins_raw: Map<String, Value>, path: &Path) -> Result<Value> {
     let version = pins_raw
         .get("version")
         .and_then(Value::as_u64)
-        .ok_or_else(|| {
+        .with_context(|| {
             anyhow::format_err!(
                 "{} must contain a numeric version field at the top level",
                 path.display()
@@ -71,14 +71,14 @@ pub fn upgrade(mut pins_raw: Map<String, Value>, path: &Path) -> Result<Value> {
         let pins = pins_raw
             .get_mut("pins")
             .and_then(Value::as_object_mut)
-            .ok_or_else(|| {
+            .with_context(|| {
                 anyhow::format_err!("'{}' must contain a `pins` object", path.display())
             })?;
         for (name, pin) in pins.iter_mut() {
             update_pin_fn(
                 name,
                 pin.as_object_mut()
-                    .ok_or_else(|| anyhow::format_err!("Pin {} must be an object", name))?,
+                    .with_context(|| anyhow::format_err!("Pin {} must be an object", name))?,
             )
             .context(anyhow::format_err!("Pin {} could not be upgraded", name))?;
         }
