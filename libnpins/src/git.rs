@@ -296,7 +296,11 @@ impl Repository {
                 server,
                 owner,
                 repo,
-            } => format!("{}/{}/{}.git", server, owner, repo).parse()?,
+            } => {
+                let mut server = server.clone();
+                server.set_path(&format!("{owner}/{repo}.git"));
+                server
+            },
             Repository::GitLab {
                 repo_path,
                 server,
