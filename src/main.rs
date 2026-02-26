@@ -669,9 +669,13 @@ impl Opts {
                 "Writing initial lock file with nixpkgs entry (need to fetch latest commit first)"
             );
             let mut pin = NixPins::new_with_nixpkgs();
-            Self::update_one(pin.pins.get_mut("nixpkgs").unwrap(), UpdateStrategy::Full)
-                .await
-                .context("Failed to fetch initial nixpkgs entry")?;
+            Self::update_one(
+                "nixpkgs",
+                pin.pins.get_mut("nixpkgs").unwrap(),
+                UpdateStrategy::Full,
+            )
+            .await
+            .context("Failed to fetch initial nixpkgs entry")?;
             pin
         };
         self.write_pins(&initial_pins)?;
@@ -739,7 +743,7 @@ impl Opts {
         } else {
             UpdateStrategy::Full
         };
-        Self::update_one(&mut pin, strategy)
+        Self::update_one(&name, &mut pin, strategy)
             .await
             .context("Failed to fully initialize the pin")?;
         pins.pins.insert(name.clone(), pin.clone());
@@ -751,17 +755,26 @@ impl Opts {
         Ok(())
     }
 
-    async fn update_one(pin: &mut Pin, strategy: UpdateStrategy) -> Result<Vec<diff::DiffEntry>> {
+    async fn update_one(
+        name: &str,
+        pin: &mut Pin,
+        strategy: UpdateStrategy,
+    ) -> Result<Vec<diff::DiffEntry>> {
         /* Skip this for partial updates */
         let diff1 = if strategy.should_update() {
-            pin.update().await?
+            pin.update()
+                .await
+                .with_context(|| format!("Updating {}", name))?
         } else {
             vec![]
         };
 
         /* We only need to fetch the hashes if the version changed, or if the flags indicate that we should */
         let diff = if !diff1.is_empty() || strategy.must_fetch() {
-            let diff2 = pin.fetch().await?;
+            let diff2 = pin
+                .fetch()
+                .await
+                .with_context(|| format!("Fetching {}", name))?;
             diff1.into_iter().chain(diff2.into_iter()).collect()
         } else {
             diff1
@@ -825,7 +838,7 @@ impl Opts {
             })
             .map(|(name, pin)| async move {
                 animation.on_pin_start(name);
-                let diff = Self::update_one(pin, strategy).await?;
+                let diff = Self::update_one(name, pin, strategy).await?;
                 animation.on_pin_finish(name, |stderr| write_diff(stderr, name, &diff));
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
@@ -898,7 +911,7 @@ impl Opts {
             .filter(|(name, _pin)| selected_pins.contains(name) || opts.names.is_empty())
             .map(|(name, pin)| async move {
                 animation.on_pin_start(name);
-                let diff_result = Self::update_one(pin, STRATEGY).await;
+                let diff_result = Self::update_one(name, pin, STRATEGY).await;
                 animation.on_pin_finish(name, |stderr| match &diff_result {
                     Ok(diff) => write_diff(stderr, name, diff),
                     Err(err) => {
@@ -1191,7 +1204,8 @@ impl Opts {
                 &mut pins,
                 nodes,
             )
-            .await?;
+            .await
+            .with_context(|| format!("Importing flake input {name}"))?;
         } else {
             for (name, input_name) in inputs.iter() {
                 log::info!("Importing {}", name);
