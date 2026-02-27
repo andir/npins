@@ -29,7 +29,8 @@ fn get_github_api_url() -> String {
 fn strip_url(mut url: Url) -> Url {
     url.set_query(None);
     url.set_fragment(None);
-    url.set_path("");
+    // Special URLs like http will always have a slash and not be empty
+    url.set_path("/");
     url
 }
 
@@ -296,7 +297,11 @@ impl Repository {
                 server,
                 owner,
                 repo,
-            } => format!("{}/{}/{}.git", server, owner, repo).parse()?,
+            } => {
+                let mut server = server.clone();
+                server.set_path(&format!("/{owner}/{repo}.git"));
+                server
+            },
             Repository::GitLab {
                 repo_path,
                 server,
@@ -333,7 +338,11 @@ impl Repository {
                 server,
                 owner,
                 repo,
-            } => Some(format!("{server}{owner}/{repo}/archive/{revision}.tar.gz",).parse()?),
+            } => {
+                let mut server = server.clone();
+                server.set_path(&format!("/{owner}/{repo}/archive/{revision}.tar.gz"));
+                Some(server)
+            },
             Repository::GitLab {
                 repo_path,
                 server,
