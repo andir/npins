@@ -24,6 +24,18 @@ let
           ''
         );
       };
+      update-completions = {
+        enable = true;
+        files = "((^Cargo\\.toml)|\\.rs)$";
+        entry = toString (
+          pkgs.writeShellScript "update-completions" ''
+            ${pkgs.cargo}/bin/cargo run -p npins-completions -- bash > completions/generated/npins.bash
+            ${pkgs.cargo}/bin/cargo run -p npins-completions -- fish > completions/generated/npins.fish
+            ${pkgs.cargo}/bin/cargo run -p npins-completions -- zsh > completions/generated/npins.zsh
+            exec ${pkgs.git}/bin/git diff --quiet --exit-code -- completions/generated/*
+          ''
+        );
+      };
     };
   };
 in

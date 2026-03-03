@@ -1,0 +1,10 @@
+[package]
+name = "npins-completions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+url.workspace = true
+clap_complete = "4.5.65"
