@@ -547,10 +547,10 @@ pub enum Command {
     /// Try to import entries from flake.lock
     ImportFlake(ImportFlakeOpts),
 
-    /// Freeze a pin entry
+    /// Freezes a pin entry, preventing it from being changed during an update
     Freeze(FreezeOpts),
 
-    /// Thaw a pin entry
+    /// Thaws a pin entry, allowing it to be changed during an update like a normal pin
     Unfreeze(FreezeOpts),
 
     /// Evaluates the store path to a pin, fetching it if necessary. Don't forget to add a GC root

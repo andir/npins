@@ -112,8 +112,8 @@ Commands:
   remove        Removes one pin entry
   import-niv    Try to import entries from Niv
   import-flake  Try to import entries from flake.lock
-  freeze        Freeze a pin entry
-  unfreeze      Thaw a pin entry
+  freeze        Freezes a pin entry, preventing it from being changed during an update
+  unfreeze      Thaws a pin entry, allowing it to be changed during an update like a normal pin
   get-path      Evaluates the store path to a pin, fetching it if necessary. Don't forget to add a GC root
   help          Print this message or the help of the given subcommand(s)
 
