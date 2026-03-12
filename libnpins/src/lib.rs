@@ -3,11 +3,13 @@
 //! Currently, it pretty much exposes the internals of the CLI 1:1, but in the future
 //! this is supposed to evolve into a more standalone library.
 
+use anyhow::Context;
 use diff::{Diff, OptionExt};
 use nix_compat::nixhash::NixHash;
 use reqwest::IntoUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use url::Url;
 
 pub mod pins;
 pub use pins::*;
@@ -57,16 +59,26 @@ where
 /// If `result` is `Ok`, it is passed on unchanged and nothing is done.
 /// If `result` is `Err`, the check will be executed and the error replaced in case of failure.
 async fn check_url<T>(result: anyhow::Result<T>, url: &str) -> anyhow::Result<T> {
-    if result.is_err() {
-        log::debug!("Checking {url}");
-        /* Note that *in theory* we should be able to use a HEAD request instead of GET, however
-         * several HTTP servers don't comply with that so we have to GET and then throw away the content instead.
-         * Some return 405 Method Not Allowed which would be fine, however GitLab for example simply returns
-         * 403 Forbidden on HEAD for an URL that is 200 on GET.
-         */
-        build_client()?.get(url).send().await?.error_for_status()?;
+    if result.is_ok() {
+        return result;
     }
-    result
+
+    let url: Url = url.parse()?;
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return result;
+    }
+
+    log::debug!("Checking {url}");
+    /* Note that *in theory* we should be able to use a HEAD request instead of GET, however
+     * several HTTP servers don't comply with that so we have to GET and then throw away the content instead.
+     * Some return 405 Method Not Allowed which would be fine, however GitLab for example simply returns
+     * 403 Forbidden on HEAD for an URL that is 200 on GET.
+     */
+    let Err(response_error) = build_client()?.get(url).send().await?.error_for_status() else {
+        return result;
+    };
+
+    result.context(response_error)
 }
 
 /// The git url to a repo has no defined endpoint in the protocol, and thus
