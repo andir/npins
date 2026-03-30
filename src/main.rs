@@ -230,7 +230,7 @@ pub enum GitForgeOpts {
     Gitlab,
     /// A Github forge, i.e. github.com
     Github,
-    /// A Forgejo forge, e.g. forgejo.org
+    /// A Forgejo forge, e.g. codeberg.org
     Forgejo,
 }
 
