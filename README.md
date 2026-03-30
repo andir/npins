@@ -241,7 +241,7 @@ Options:
           - auto:    Try to determine the Forge from the given url, potentially by probing the server
           - gitlab:  A Gitlab forge, e.g. gitlab.com
           - github:  A Github forge, i.e. github.com
-          - forgejo: A Forgejo forge, e.g. forgejo.org
+          - forgejo: A Forgejo forge, e.g. codeberg.org
 
       --name <NAME>
           Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
