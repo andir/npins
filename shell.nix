@@ -37,7 +37,7 @@ pkgs.mkShell {
       rustc
       rust-analyzer
       rustfmt
-      nixfmt-rfc-style
+      nixfmt
       lix
       nix-prefetch-git
       nix-prefetch-docker
