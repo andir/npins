@@ -357,6 +357,19 @@ impl TarballAddOpts {
     }
 }
 
+#[derive(Debug, Parser)]
+pub struct FileAddOpts {
+    /// File URL
+    pub url: Url,
+}
+
+impl FileAddOpts {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
+        let url = self.url.clone();
+        Ok((None, file::FilePin { url }.into()))
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub enum AddCommands {
     /// Track a Nix channel
@@ -386,6 +399,12 @@ pub enum AddCommands {
     /// URL which supports flakes "Lockable HTTP Tarball" API.
     #[command(name = "tarball")]
     Tarball(TarballAddOpts),
+    /// Track a file download
+    ///
+    /// Tracks a plain file URL. Unlike tarball, this fetches a single file
+    /// without unpacking. Useful for e.g. ISO images or individual files.
+    #[command(name = "file")]
+    File(FileAddOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -414,6 +433,7 @@ impl AddOpts {
             AddCommands::GitLab(gl) => gl.add()?,
             AddCommands::PyPi(p) => p.add()?,
             AddCommands::Tarball(p) => p.add()?,
+            AddCommands::File(p) => p.add()?,
             AddCommands::Container(p) => p.add()?,
         };
 

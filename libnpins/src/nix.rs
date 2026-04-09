@@ -10,6 +10,41 @@ pub struct PrefetchInfo {
     hash: String,
 }
 
+pub async fn nix_prefetch_url(url: impl AsRef<str>) -> Result<NixHash> {
+    let url = url.as_ref();
+    let result = async {
+        log::debug!(
+            "Executing `nix-prefetch-url --name source --type sha256 {}`",
+            url
+        );
+        let output = tokio::process::Command::new("nix-prefetch-url")
+            .arg("--name")
+            .arg("source")
+            .arg("--type")
+            .arg("sha256")
+            .arg(url)
+            .output()
+            .await
+            .with_context(|| format!("Failed to spawn nix-prefetch-url for {}", url))?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!(format!(
+                "failed to prefetch url: {}\n{}",
+                url,
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+
+        let hash_str = std::str::from_utf8(&output.stdout)
+            .with_context(|| "nix-prefetch-url sent invalid utf8")?
+            .trim();
+        let annotated_nix32_hash = format!("sha256:{hash_str}");
+        NixHash::from_nix_nixbase32(&annotated_nix32_hash)
+            .with_context(|| format!("failed to convert {} to NixHash", hash_str))
+    };
+    check_url(result.await, url).await
+}
+
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<NixHash> {
     let url = url.as_ref();
     let result = async {

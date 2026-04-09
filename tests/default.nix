@@ -62,6 +62,8 @@ let
           mkChannelSource spec
         else if spec.type == "Tarball" then
           mkTarballSource spec
+        else if spec.type == "File" then
+          mkFileSource spec
         else if spec.type == "Container" then
           mkContainerSource spec
         else
@@ -148,6 +150,17 @@ let
     }:
     builtins.fetchTarball {
       url = locked_url;
+      sha256 = hash;
+    };
+
+  mkFileSource =
+    {
+      url,
+      hash,
+      ...
+    }:
+    builtins.fetchurl {
+      inherit url;
       sha256 = hash;
     };
 
