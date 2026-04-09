@@ -41,8 +41,10 @@ pub struct GitRevision {
 
 impl GitRevision {
     pub fn new(revision: String) -> Result<Self> {
-        if !revision.chars().all(|c| c.is_ascii_hexdigit()) || revision.len() != 40 {
-            anyhow::bail!("'{revision}' is not a valid git revision (sha1 hash)");
+        if !revision.chars().all(|c| c.is_ascii_hexdigit()) || !(7..=40).contains(&revision.len()) {
+            anyhow::bail!(
+                "'{revision}' is not a valid git revision (expected 7-40 hex characters)"
+            );
         }
         Ok(Self { revision })
     }
@@ -1462,5 +1464,30 @@ mod test {
                 repo: "lix".to_string()
             },
         );
+    }
+
+    #[test]
+    fn test_git_revision_validation() {
+        // Full SHA-1 hash (40 chars) should be accepted
+        assert!(GitRevision::new("6e3a7b2ea6f0d68b82027b988aa25d3423787303".into()).is_ok());
+
+        // Short hash (7 chars) should be accepted
+        assert!(GitRevision::new("6e3a7b2".into()).is_ok());
+
+        // Various valid lengths between 7 and 40
+        assert!(GitRevision::new("6e3a7b2e".into()).is_ok());
+        assert!(GitRevision::new("6e3a7b2ea6f0d68b82".into()).is_ok());
+
+        // Too short (< 7 chars) should be rejected
+        assert!(GitRevision::new("6e3a7b".into()).is_err());
+        assert!(GitRevision::new("abc".into()).is_err());
+        assert!(GitRevision::new("".into()).is_err());
+
+        // Non-hex characters should be rejected
+        assert!(GitRevision::new("6e3a7b2xyz".into()).is_err());
+        assert!(GitRevision::new("not-a-hash-at-all-but-it-is-40-chars!!!".into()).is_err());
+
+        // Too long (> 40 chars) should be rejected
+        assert!(GitRevision::new("6e3a7b2ea6f0d68b82027b988aa25d3423787303aa".into()).is_err());
     }
 }
