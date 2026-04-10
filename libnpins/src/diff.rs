@@ -10,6 +10,16 @@ pub enum Change {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiffEntry(String, Change);
 
+impl DiffEntry {
+    pub fn key(&self) -> &str {
+        &self.0
+    }
+
+    pub fn change(&self) -> &Change {
+        &self.1
+    }
+}
+
 impl std::fmt::Display for DiffEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let DiffEntry(property, change) = self;

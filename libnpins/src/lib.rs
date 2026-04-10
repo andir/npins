@@ -294,6 +294,35 @@ mkPin! {
     (Container, container, "OCI Container", container::Pin),
 }
 
+impl Pin {
+    /// Generate a forge compare URL from diff entries, if the pin is git-based
+    ///
+    /// For Git pins, compares revisions. For GitRelease pins, compares version tags.
+    pub fn compare_url(&self, diff: &[diff::DiffEntry]) -> Option<String> {
+        let repository = match self {
+            Pin::Git { input, .. } => &input.repository,
+            Pin::GitRelease { input, .. } => &input.repository,
+            _ => return None,
+        };
+
+        let key = match self {
+            Pin::Git { .. } => "revision",
+            Pin::GitRelease { .. } => "version",
+            _ => return None,
+        };
+
+        for entry in diff {
+            if entry.key() == key {
+                if let diff::Change::Changed(old, new) = entry.change() {
+                    return repository.compare_url(old, new);
+                }
+            }
+        }
+
+        None
+    }
+}
+
 /// The main struct the CLI operates on
 ///
 /// For serialization purposes, use the `NixPinsVersioned` wrapper instead.

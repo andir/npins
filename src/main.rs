@@ -590,13 +590,16 @@ pub struct Opts {
     command: Command,
 }
 
-fn write_diff(writer: &mut impl Write, name: &str, diff: &[diff::DiffEntry]) {
+fn write_diff(writer: &mut impl Write, name: &str, pin: &Pin, diff: &[diff::DiffEntry]) {
     if diff.is_empty() {
         writeln!(writer, "[{name}] No Changes").unwrap();
     } else {
         writeln!(writer, "[{name}] Changes:").unwrap();
         for entry in diff {
             write!(writer, "{entry}").unwrap();
+        }
+        if let Some(url) = pin.compare_url(diff) {
+            writeln!(writer, "     compare: {url}").unwrap();
         }
     }
 }
@@ -839,7 +842,7 @@ impl Opts {
             .map(|(name, pin)| async move {
                 animation.on_pin_start(name);
                 let diff = Self::update_one(name, pin, strategy).await?;
-                animation.on_pin_finish(name, |stderr| write_diff(stderr, name, &diff));
+                animation.on_pin_finish(name, |stderr| write_diff(stderr, name, pin, &diff));
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
 
@@ -913,7 +916,7 @@ impl Opts {
                 animation.on_pin_start(name);
                 let diff_result = Self::update_one(name, pin, STRATEGY).await;
                 animation.on_pin_finish(name, |stderr| match &diff_result {
-                    Ok(diff) => write_diff(stderr, name, diff),
+                    Ok(diff) => write_diff(stderr, name, pin, diff),
                     Err(err) => {
                         writeln!(stderr, "[{name}] Failed download").unwrap();
                         writeln!(stderr, "{err:?}").unwrap();

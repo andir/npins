@@ -419,6 +419,27 @@ impl Repository {
             },
         })
     }
+
+    /// Get a URL to compare two revisions on the forge's web UI
+    ///
+    /// Returns `None` for plain git repositories without a known forge.
+    pub fn compare_url(&self, old: &str, new: &str) -> Option<String> {
+        match self {
+            Repository::Git { .. } => None,
+            Repository::GitHub { owner, repo } => Some(format!(
+                "{github}/{owner}/{repo}/compare/{old}...{new}",
+                github = get_github_url(),
+            )),
+            Repository::Forgejo {
+                server,
+                owner,
+                repo,
+            } => Some(format!("{server}{owner}/{repo}/compare/{old}...{new}")),
+            Repository::GitLab {
+                repo_path, server, ..
+            } => Some(format!("{server}{repo_path}/-/compare?from={old}&to={new}")),
+        }
+    }
 }
 
 /// Track a given branch on a repository and always use the latest commit
