@@ -142,6 +142,7 @@ pub struct NixPrefetchDockerResponse {
 pub async fn nix_prefetch_docker(
     image_name: impl AsRef<str>,
     image_tag: impl AsRef<str>,
+    arch: &Option<String>,
     image_digest: Option<&str>,
 ) -> Result<NixPrefetchDockerResponse> {
     let image_name = image_name.as_ref();
@@ -156,6 +157,10 @@ pub async fn nix_prefetch_docker(
 
     if let Some(value) = image_digest {
         command.arg("--image-digest").arg(value);
+    }
+
+    if let Some(value) = arch {
+        command.arg("--arch").arg(value);
     }
 
     log::debug!("Executing: {}", format_command(&command)?);
