@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::Path};
 use crate::NixPins;
 
 /// The current format version
-pub const LATEST: u64 = 7;
+pub const LATEST: u64 = 8;
 
 /// Custom manual deserialize wrapper that checks the version
 pub fn from_value_versioned(value: Value) -> Result<NixPins> {

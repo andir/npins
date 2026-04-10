@@ -245,7 +245,7 @@ mkFunctor (
         throw "Unsupported input type ${builtins.typeOf input}, must be a path or an attrset";
     version = data.version;
   in
-  if version == 7 then
+  if version == 8 then
     builtins.mapAttrs (name: spec: mkFunctor (mkSource name spec)) data.pins
   else
     throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"

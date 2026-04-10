@@ -164,7 +164,7 @@ let
       finalImageTag = image_tag;
     };
 in
-if version == 7 then
+if version == 8 then
   builtins.mapAttrs mkSource data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"
