@@ -214,16 +214,19 @@ let
       image_digest,
       hash,
       ...
-    }:
+    }@args:
     if pkgs == null then
       builtins.throw "container sources require passing in a Nixpkgs value: https://github.com/andir/npins/blob/master/README.md#using-the-nixpkgs-fetchers"
     else
-      pkgs.dockerTools.pullImage {
-        imageName = image_name;
-        imageDigest = image_digest;
-        finalImageTag = image_tag;
-        hash = hash;
-      };
+      pkgs.dockerTools.pullImage (
+        {
+          imageName = image_name;
+          imageDigest = image_digest;
+          finalImageTag = image_tag;
+          hash = hash;
+        }
+        // (if args ? "arch" then { arch = args.arch; } else { })
+      );
 in
 mkFunctor (
   {
