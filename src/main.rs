@@ -329,6 +329,8 @@ impl PyPiAddOpts {
 pub struct ContainerAddOpts {
     pub image_name: String,
     pub image_tag: String,
+    #[arg(long)]
+    pub arch: Option<String>,
 }
 
 impl ContainerAddOpts {
@@ -338,6 +340,7 @@ impl ContainerAddOpts {
             container::Pin {
                 image_name: self.image_name.clone(),
                 image_tag: self.image_tag.clone(),
+                arch: self.arch.clone(),
             }
             .into(),
         ))

@@ -144,15 +144,20 @@ pub struct NixPrefetchDockerResponse {
 pub async fn nix_prefetch_docker(
     image_name: impl AsRef<str>,
     image_tag: impl AsRef<str>,
+    arch: &Option<String>,
     image_digest: Option<&str>,
 ) -> Result<NixPrefetchDockerResponse> {
     let image_name = image_name.as_ref();
     let image_tag = image_tag.as_ref();
 
     log::debug!(
-        "Executing: `nix-prefetch-docker {} {}{}`",
+        "Executing: `nix-prefetch-docker {} {}{}{}`",
         image_name,
         image_tag,
+        match arch {
+            Some(x) => format!(" --arch {}", x),
+            None => "".into(),
+        },
         match image_digest {
             Some(x) => format!(" --image-digest {}", x),
             None => "".into(),
@@ -166,6 +171,10 @@ pub async fn nix_prefetch_docker(
         .arg("--quiet");
     let output = match image_digest {
         Some(x) => output.arg("--image-digest").arg(x),
+        None => output,
+    };
+    let output = match arch {
+        Some(x) => output.arg("--arch").arg(x),
         None => output,
     };
     let output = output.output().await.with_context(|| {

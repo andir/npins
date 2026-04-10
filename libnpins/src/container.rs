@@ -8,14 +8,22 @@ use crate::{Updatable, diff, nix::nix_prefetch_docker};
 pub struct Pin {
     pub image_name: String,
     pub image_tag: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arch: Option<String>,
 }
 
 impl diff::Diff for Pin {
     fn properties(&self) -> Vec<(String, String)> {
-        vec![
+        let mut v = vec![
             ("image_name".into(), self.image_name.clone()),
             ("image_tag".into(), self.image_tag.clone()),
-        ]
+        ];
+
+        if let Some(arch) = &self.arch {
+            v.push(("arch".into(), arch.clone()));
+        }
+
+        v
     }
 }
 
@@ -48,7 +56,7 @@ impl Updatable for Pin {
 
     async fn update(&self, _old: Option<&ContainerVersion>) -> anyhow::Result<ContainerVersion> {
         Ok(ContainerVersion {
-            image_digest: nix_prefetch_docker(&self.image_name, &self.image_tag, None)
+            image_digest: nix_prefetch_docker(&self.image_name, &self.image_tag, &self.arch, None)
                 .await?
                 .image_digest,
         })
@@ -59,6 +67,7 @@ impl Updatable for Pin {
             hash: nix_prefetch_docker(
                 &self.image_name,
                 &self.image_tag,
+                &self.arch,
                 Some(&version.image_digest),
             )
             .await?
@@ -78,6 +87,7 @@ mod test {
         let pin = Pin {
             image_name: DEAD_TEST_CONTAINER.to_string(),
             image_tag: "latest".to_string(),
+            arch: None,
         };
         let version = pin.update(None).await.unwrap();
         assert_eq!(
