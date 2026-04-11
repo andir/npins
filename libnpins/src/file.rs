@@ -1,7 +1,8 @@
 //! Pin a plain file URL source
 //!
-//! Uses `builtins.fetchurl` (or `pkgs.fetchurl` when nixpkgs is provided)
-//! to fetch a single file by URL and hash.
+//! Prefetches a single file via `nix-prefetch-url` and stores the resulting
+//! hash. The Nix side of the lockfile (see `default.nix`) consumes this with
+//! `fetchurl` to materialize the file.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
