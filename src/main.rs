@@ -399,10 +399,14 @@ pub enum AddCommands {
     /// URL which supports flakes "Lockable HTTP Tarball" API.
     #[command(name = "tarball")]
     Tarball(TarballAddOpts),
-    /// Track a plain file download
+    /// Pin a file through a URL
     ///
-    /// Tracks a plain file URL. Unlike tarball, this fetches a single file
-    /// without unpacking. Useful for e.g. ISO images or individual files.
+    /// Pins a plain file through a URL. There is no additional processing
+    /// for the URL, redirects are followed at download time but not tracked.
+    /// There is no further processing of the downloaded artifact.
+    /// Unlike e.g. tarball, this fetches a single file without unpacking.
+    /// Useful for unchanging static assets e.g. ISO images or any other
+    /// individual files.
     #[command(name = "fetchurl")]
     Fetchurl(FetchurlAddOpts),
 }
