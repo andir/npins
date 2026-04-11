@@ -102,18 +102,20 @@ mod test {
 
     #[tokio::test]
     async fn test_file_update_and_fetch() {
-        // Use a small, stable file from the Nix cache
+        // A small, immutable file served from the Nix cache. Its contents
+        // (store dir, priority, ...) are part of the cache's public contract
+        // and are not expected to change.
         let pin = FilePin {
-            url: "https://raw.githubusercontent.com/NixOS/nixpkgs/master/README.md"
-                .parse()
-                .unwrap(),
+            url: "https://cache.nixos.org/nix-cache-info".parse().unwrap(),
         };
 
         let version = pin.update(None).await.unwrap();
         assert_eq!(version, FileVersion {});
 
         let hashes = pin.fetch(&version).await.unwrap();
-        // Just verify we got a sha256 hash back
-        assert_eq!(hashes.hash.algo(), nix_compat::nixhash::HashAlgo::Sha256);
+        assert_eq!(
+            hashes.hash,
+            NixHash::from_sri("sha256-LJ3jc651pScWN2NQNERaXNOmrjWsbDBtQMDgZ2R4WJc=").unwrap(),
+        );
     }
 }
