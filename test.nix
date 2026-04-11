@@ -299,6 +299,51 @@ let
         touch $out
       '';
 
+  mkFetchurlTest =
+    {
+      name,
+      commands,
+      files,
+    }:
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = with pkgs; [
+          npins
+          python3
+          netcat
+          lix
+          jq
+        ];
+      }
+      ''
+        set -euo pipefail
+        source ${prelude}
+
+        echo -e "\n\nRunning test ${name}\n"
+        cd $(mktemp -d)
+        export SSL_CERT_FILE=${./tests/assets/cert.pem}
+
+        # Create files to serve. Each attribute maps a served path to its
+        # contents so that `fetchurl` pins can be pointed at a known byte
+        # stream with a predictable hash.
+        ${lib.pipe files [
+          (lib.mapAttrsToList (
+            path: contents: ''
+              mkdir -p $(dirname ${path})
+              printf '%s' ${lib.escapeShellArg contents} > ${path}
+            ''
+          ))
+          (lib.concatStringsSep "\n")
+        ]}
+
+        python -m http.server 8000 &
+        timeout 30 sh -c 'set -e; until nc -z 127.0.0.1 8000; do sleep 1; done' || exit 1
+
+        ${commands}
+
+        touch $out
+      '';
+
   mkGithubTest =
     {
       name,
@@ -810,6 +855,31 @@ in
       eq "$(jq -r .pins.foo2.revision npins/sources.json)" "$(resolveGitCommit ${repositories."owner/foo"})"
       eq "$(jq -r .pins.foo.url npins/sources.json)" "http://localhost:8000/owner/foo/archive/$(resolveGitCommit ${repositories."owner/foo"}).tar.gz"
       eq "$(jq -r .pins.foo2.url npins/sources.json)" "null"
+    '';
+  };
+
+  fetchurl = mkFetchurlTest {
+    name = "fetchurl";
+    files."file.txt" = "hello npins\n";
+    commands = ''
+      npins init --bare
+      npins add --name file fetchurl http://localhost:8000/file.txt
+      npins show
+
+      # The lockfile records the URL and a non-null hash.
+      eq "$(jq -r .pins.file.type npins/sources.json)" "Fetchurl"
+      eq "$(jq -r .pins.file.url npins/sources.json)" "http://localhost:8000/file.txt"
+      neq "$(jq -r .pins.file.hash npins/sources.json)" "null"
+
+      # The Nix side can consume the pin and produce a store path.
+      nix-instantiate --eval npins -A file.outPath
+
+      # `update` is idempotent: url and hash stay the same.
+      url_before=$(jq -r .pins.file.url npins/sources.json)
+      hash_before=$(jq -r .pins.file.hash npins/sources.json)
+      npins update file
+      eq "$(jq -r .pins.file.url npins/sources.json)" "$url_before"
+      eq "$(jq -r .pins.file.hash npins/sources.json)" "$hash_before"
     '';
   };
 
