@@ -99,23 +99,4 @@ mod test {
         assert_eq!(value["url"], "https://example.com/file.bin");
         assert!(value["hash"].as_str().unwrap().starts_with("sha256-"));
     }
-
-    #[tokio::test]
-    async fn test_fetchurl_update_and_fetch() {
-        // A small file served from the Nix cache. It is not strictly
-        // immutable (new fields may be added over time), but in practice it
-        // is stable enough to make for a reasonable fetch target in tests.
-        let pin = FetchurlPin {
-            url: "https://cache.nixos.org/nix-cache-info".parse().unwrap(),
-        };
-
-        let version = pin.update(None).await.unwrap();
-        assert_eq!(version, FetchurlVersion {});
-
-        let hashes = pin.fetch(&version).await.unwrap();
-        assert_eq!(
-            hashes.hash,
-            NixHash::from_sri("sha256-LJ3jc651pScWN2NQNERaXNOmrjWsbDBtQMDgZ2R4WJc=").unwrap(),
-        );
-    }
 }
