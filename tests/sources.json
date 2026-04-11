@@ -39,6 +39,11 @@
       "url": "https://files.pythonhosted.org/packages/f0/46/9b3f73886f82d27849ce1e7a74ae7c39f5323e46da0b6e8847ad4c25f44c/streamlit-1.45.1.tar.gz",
       "hash": "sha256-431WwK9SQNvCQJdogOgTZmicKQpVk3ZBckb5s/UbQhc="
     },
+    "nixpkgs-license": {
+      "type": "Fetchurl",
+      "url": "https://raw.githubusercontent.com/NixOS/nixpkgs/6afe187897bef7933475e6af374c893f4c84a293/COPYING",
+      "hash": "sha256-sSacq4xzmkm0HH+JpnmAWyAPJoJG/p7gd8kdp4tgL54="
+    },
     "ubuntu": {
       "type": "Container",
       "image_name": "ubuntu",
@@ -63,5 +68,5 @@
       "hash": "sha256-hwtdYYyCxDEs5OrTo0BbAuww3hjzEaQ+R/ABfEyXFCg="
     }
   },
-  "version": 7
+  "version": 8
 }

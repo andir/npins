@@ -357,6 +357,19 @@ impl TarballAddOpts {
     }
 }
 
+#[derive(Debug, Parser)]
+pub struct FetchurlAddOpts {
+    /// File URL
+    pub url: Url,
+}
+
+impl FetchurlAddOpts {
+    pub fn add(&self) -> Result<(Option<String>, Pin)> {
+        let url = self.url.clone();
+        Ok((None, fetchurl::FetchurlPin { url }.into()))
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub enum AddCommands {
     /// Track a Nix channel
@@ -386,6 +399,16 @@ pub enum AddCommands {
     /// URL which supports flakes "Lockable HTTP Tarball" API.
     #[command(name = "tarball")]
     Tarball(TarballAddOpts),
+    /// Pin a file through a URL
+    ///
+    /// Pins a plain file through a URL. There is no additional processing
+    /// for the URL, redirects are followed at download time but not tracked.
+    /// There is no further processing of the downloaded artifact.
+    /// Unlike e.g. tarball, this fetches a single file without unpacking.
+    /// Useful for unchanging static assets e.g. ISO images or any other
+    /// individual files.
+    #[command(name = "fetchurl")]
+    Fetchurl(FetchurlAddOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -414,6 +437,7 @@ impl AddOpts {
             AddCommands::GitLab(gl) => gl.add()?,
             AddCommands::PyPi(p) => p.add()?,
             AddCommands::Tarball(p) => p.add()?,
+            AddCommands::Fetchurl(p) => p.add()?,
             AddCommands::Container(p) => p.add()?,
         };
 

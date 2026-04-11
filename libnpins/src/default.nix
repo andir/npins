@@ -108,6 +108,8 @@ let
           mkChannelSource fetchers spec
         else if spec.type == "Tarball" then
           mkTarballSource fetchers spec
+        else if spec.type == "Fetchurl" then
+          mkFetchurlSource fetchers spec
         else if spec.type == "Container" then
           mkContainerSource pkgs spec
         else
@@ -206,6 +208,18 @@ let
       sha256 = hash;
     };
 
+  mkFetchurlSource =
+    { fetchurl, ... }:
+    {
+      url,
+      hash,
+      ...
+    }:
+    fetchurl {
+      inherit url;
+      sha256 = hash;
+    };
+
   mkContainerSource =
     pkgs:
     {
@@ -245,7 +259,7 @@ mkFunctor (
         throw "Unsupported input type ${builtins.typeOf input}, must be a path or an attrset";
     version = data.version;
   in
-  if version == 7 then
+  if version == 8 then
     builtins.mapAttrs (name: spec: mkFunctor (mkSource name spec)) data.pins
   else
     throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"

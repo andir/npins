@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 pub mod channel;
 pub mod container;
 pub mod diff;
+pub mod fetchurl;
 pub mod flake;
 pub mod git;
 pub mod niv;
@@ -291,6 +292,7 @@ mkPin! {
     (PyPi, pypi, "pypi package", pypi::Pin),
     (Channel, channel, "Nix channel", channel::Pin),
     (Tarball, tarball, "tarball", tarball::TarballPin),
+    (Fetchurl, fetchurl, "fetchurl", fetchurl::FetchurlPin),
     (Container, container, "OCI Container", container::Pin),
 }
 

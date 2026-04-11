@@ -62,6 +62,8 @@ let
           mkChannelSource spec
         else if spec.type == "Tarball" then
           mkTarballSource spec
+        else if spec.type == "Fetchurl" then
+          mkFetchurlSource spec
         else if spec.type == "Container" then
           mkContainerSource spec
         else
@@ -151,6 +153,17 @@ let
       sha256 = hash;
     };
 
+  mkFetchurlSource =
+    {
+      url,
+      hash,
+      ...
+    }:
+    builtins.fetchurl {
+      inherit url;
+      sha256 = hash;
+    };
+
   mkContainerSource =
     {
       image_name,
@@ -164,7 +177,7 @@ let
       finalImageTag = image_tag;
     };
 in
-if version == 7 then
+if version == 8 then
   builtins.mapAttrs mkSource data.pins
 else
   throw "Unsupported format version ${toString version} in sources.json. Try running `npins upgrade`"
