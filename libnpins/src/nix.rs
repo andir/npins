@@ -27,6 +27,7 @@ pub async fn nix_prefetch_url(url: impl AsRef<str>) -> Result<NixHash> {
             .await
             .with_context(|| format!("Failed to spawn nix-prefetch-url for {}", url))?;
 
+        // FIXME: handle errors and pipe stderr through
         if !output.status.success() {
             return Err(anyhow::anyhow!(format!(
                 "failed to prefetch url: {}\n{}",
@@ -35,9 +36,13 @@ pub async fn nix_prefetch_url(url: impl AsRef<str>) -> Result<NixHash> {
             )));
         }
 
+        // try to parse the returned hash.
         let hash_str = std::str::from_utf8(&output.stdout)
             .with_context(|| "nix-prefetch-url sent invalid utf8")?
+            // Trim, otherwise the call to `from_nix_nixbase32` will fail due to newline
             .trim();
+        // FIXME: nix-compat expects nixbase32-encoded string in format "alg:digest", but
+        // `nix-prefetch-url` gives digest only. Gross way to do this is to specify alg manually
         let annotated_nix32_hash = format!("sha256:{hash_str}");
         NixHash::from_nix_nixbase32(&annotated_nix32_hash)
             .with_context(|| format!("failed to convert {} to NixHash", hash_str))
