@@ -13,13 +13,11 @@ pub struct PrefetchInfo {
 pub async fn nix_prefetch_url(url: impl AsRef<str>) -> Result<NixHash> {
     let url = url.as_ref();
     let result = async {
-        log::debug!(
-            "Executing `nix-prefetch-url --name source --type sha256 {}`",
-            url
-        );
+        log::debug!("Executing `nix-prefetch-url --type sha256 {}`", url);
+        // No `--name` is passed, so `nix-prefetch-url` derives the store path name from the URL's
+        // basename. This matches the default behavior of `builtins.fetchurl` / `pkgs.fetchurl`
+        // (as used by `mkFileSource`), so the file is not downloaded twice.
         let output = tokio::process::Command::new("nix-prefetch-url")
-            .arg("--name")
-            .arg("source")
             .arg("--type")
             .arg("sha256")
             .arg(url)
