@@ -102,9 +102,9 @@ mod test {
 
     #[tokio::test]
     async fn test_fetchurl_update_and_fetch() {
-        // A small, immutable file served from the Nix cache. Its contents
-        // (store dir, priority, ...) are part of the cache's public contract
-        // and are not expected to change.
+        // A small file served from the Nix cache. It is not strictly
+        // immutable (new fields may be added over time), but in practice it
+        // is stable enough to make for a reasonable fetch target in tests.
         let pin = FetchurlPin {
             url: "https://cache.nixos.org/nix-cache-info".parse().unwrap(),
         };
