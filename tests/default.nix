@@ -62,8 +62,8 @@ let
           mkChannelSource spec
         else if spec.type == "Tarball" then
           mkTarballSource spec
-        else if spec.type == "File" then
-          mkFileSource spec
+        else if spec.type == "Fetchurl" then
+          mkFetchurlSource spec
         else if spec.type == "Container" then
           mkContainerSource spec
         else
@@ -153,7 +153,7 @@ let
       sha256 = hash;
     };
 
-  mkFileSource =
+  mkFetchurlSource =
     {
       url,
       hash,

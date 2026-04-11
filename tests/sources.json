@@ -40,7 +40,7 @@
       "hash": "sha256-431WwK9SQNvCQJdogOgTZmicKQpVk3ZBckb5s/UbQhc="
     },
     "nixpkgs-license": {
-      "type": "File",
+      "type": "Fetchurl",
       "url": "https://raw.githubusercontent.com/NixOS/nixpkgs/6afe187897bef7933475e6af374c893f4c84a293/COPYING",
       "hash": "sha256-sSacq4xzmkm0HH+JpnmAWyAPJoJG/p7gd8kdp4tgL54="
     },

@@ -210,7 +210,7 @@ Commands:
   pypi       Track a package on PyPi
   container  Track an OCI container
   tarball    Track a tarball
-  file       Track a file download
+  fetchurl   Track a plain file download
   help       Print this message or the help of the given subcommand(s)
 
 Options:

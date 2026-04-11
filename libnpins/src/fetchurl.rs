@@ -11,36 +11,36 @@ use url::Url;
 use crate::{GenericHash, Updatable, diff, nix};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
-pub struct FilePin {
+pub struct FetchurlPin {
     pub url: Url,
 }
 
-impl diff::Diff for FilePin {
+impl diff::Diff for FetchurlPin {
     fn properties(&self) -> Vec<(String, String)> {
         vec![("url".into(), self.url.to_string())]
     }
 }
 
-/// File pins have no meaningful version; the URL is assumed to be static.
+/// Fetchurl pins have no meaningful version; the URL is assumed to be static.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct FileVersion {}
+pub struct FetchurlVersion {}
 
-impl diff::Diff for FileVersion {
+impl diff::Diff for FetchurlVersion {
     fn properties(&self) -> Vec<(String, String)> {
         vec![]
     }
 }
 
 #[async_trait::async_trait]
-impl Updatable for FilePin {
-    type Version = FileVersion;
+impl Updatable for FetchurlPin {
+    type Version = FetchurlVersion;
     type Hashes = GenericHash;
 
-    async fn update(&self, _old: Option<&FileVersion>) -> Result<FileVersion> {
-        Ok(FileVersion {})
+    async fn update(&self, _old: Option<&FetchurlVersion>) -> Result<FetchurlVersion> {
+        Ok(FetchurlVersion {})
     }
 
-    async fn fetch(&self, _version: &FileVersion) -> Result<Self::Hashes> {
+    async fn fetch(&self, _version: &FetchurlVersion) -> Result<Self::Hashes> {
         let hash = nix::nix_prefetch_url(&self.url).await?;
         Ok(Self::Hashes { hash })
     }
@@ -53,15 +53,15 @@ mod test {
     use nix_compat::nixhash::NixHash;
 
     #[test]
-    fn test_file_pin_roundtrip() {
+    fn test_fetchurl_pin_roundtrip() {
         let pins = NixPins {
             pins: [(
                 "test-file".into(),
-                Pin::File {
-                    input: FilePin {
+                Pin::Fetchurl {
+                    input: FetchurlPin {
                         url: "https://example.com/some-file.iso".parse().unwrap(),
                     },
-                    version: Some(FileVersion {}),
+                    version: Some(FetchurlVersion {}),
                     hashes: Some(GenericHash {
                         hash: NixHash::from_sri(
                             "sha256-K9yBph93OLTNw02Q6e9CYFGrUhvEXnh45vrZqIRWfvQ=",
@@ -81,12 +81,12 @@ mod test {
     }
 
     #[test]
-    fn test_file_pin_serialization_shape() {
-        let pin = Pin::File {
-            input: FilePin {
+    fn test_fetchurl_pin_serialization_shape() {
+        let pin = Pin::Fetchurl {
+            input: FetchurlPin {
                 url: "https://example.com/file.bin".parse().unwrap(),
             },
-            version: Some(FileVersion {}),
+            version: Some(FetchurlVersion {}),
             hashes: Some(GenericHash {
                 hash: NixHash::from_sri("sha256-K9yBph93OLTNw02Q6e9CYFGrUhvEXnh45vrZqIRWfvQ=")
                     .unwrap(),
@@ -95,22 +95,22 @@ mod test {
         };
 
         let value = serde_json::to_value(&pin).unwrap();
-        assert_eq!(value["type"], "File");
+        assert_eq!(value["type"], "Fetchurl");
         assert_eq!(value["url"], "https://example.com/file.bin");
         assert!(value["hash"].as_str().unwrap().starts_with("sha256-"));
     }
 
     #[tokio::test]
-    async fn test_file_update_and_fetch() {
+    async fn test_fetchurl_update_and_fetch() {
         // A small, immutable file served from the Nix cache. Its contents
         // (store dir, priority, ...) are part of the cache's public contract
         // and are not expected to change.
-        let pin = FilePin {
+        let pin = FetchurlPin {
             url: "https://cache.nixos.org/nix-cache-info".parse().unwrap(),
         };
 
         let version = pin.update(None).await.unwrap();
-        assert_eq!(version, FileVersion {});
+        assert_eq!(version, FetchurlVersion {});
 
         let hashes = pin.fetch(&version).await.unwrap();
         assert_eq!(
