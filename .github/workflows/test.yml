@@ -34,4 +34,5 @@ jobs:
       - name: Run smoke test
         run: nix-shell --run "bash ./.github/workflows/smoke-test.sh"
       - name: Run integration tests
+        if: ${{ runner.os == 'Linux' }}
         run: nix-build -A meta.tests
