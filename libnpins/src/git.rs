@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use url::Url;
 
-use crate::{GenericVersion, Updatable, check_git_url, diff, get_and_deserialize, nix};
+use crate::{
+    GenericVersion, Updatable, check_git_url, diff, format_command, get_and_deserialize, nix,
+};
 
 fn get_github_url() -> String {
     std::env::var("NPINS_GITHUB_HOST").unwrap_or_else(|_| String::from("https://github.com"))
@@ -683,13 +685,18 @@ impl RemoteInfo {
 /// Convenience wrapper around calling `git ls-remote`
 async fn fetch_remote(url: &str, args: &[&str]) -> Result<Vec<RemoteInfo>> {
     let result = async {
-        log::debug!("Executing `git ls-remote {}`", args.join(" "));
-        let process = Command::new("git")
+        let mut command = Command::new("git");
+        // FIXME: idiomatic way for this.
+        let command = command
             // Disable any interactive login attempts, failing gracefully instead
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
             .arg("ls-remote")
-            .args(args)
+            .args(args);
+
+        log::debug!("Executing: {}", format_command(command)?);
+
+        let process = command
             .output()
             .await
             .context("Failed waiting for git ls-remote subprocess")?;
