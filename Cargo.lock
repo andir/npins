@@ -938,6 +938,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "shlex",
  "tokio",
  "url",
 ]

@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use nix_compat::nixhash::{HashAlgo, NixHash};
 use std::path::Path;
 
-use crate::{DEFAULT_NIX, check_git_url, check_url};
+use crate::{DEFAULT_NIX, check_git_url, check_url, format_command};
 
 #[allow(unused)]
 pub struct PrefetchInfo {
@@ -13,17 +13,18 @@ pub struct PrefetchInfo {
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<NixHash> {
     let url = url.as_ref();
     let result = async {
-        log::debug!(
-            "Executing `nix-prefetch-url --unpack --name source --type sha256 {}`",
-            url
-        );
-        let output = tokio::process::Command::new("nix-prefetch-url")
+        let mut command = tokio::process::Command::new("nix-prefetch-url");
+        command
             .arg("--unpack") // force calculation of the unpacked NAR hash
             .arg("--name")
             .arg("source") // use the same symbolic store path name as `builtins.fetchTarball` to avoid downloading the source twice
             .arg("--type")
             .arg("sha256")
-            .arg(url)
+            .arg(url);
+
+        log::debug!("Executing: {}", format_command(&command)?);
+
+        let output = command
             .output()
             .await
             .with_context(|| format!("Failed to spawn nix-prefetch-url for {}", url))?;
@@ -59,35 +60,26 @@ pub async fn nix_prefetch_git(
     let url = url.as_ref();
 
     let result = async {
-        log::debug!(
-            "Executing: `nix-prefetch-git {}{} {}`",
-            if submodules {
-                "--fetch-submodules "
-            } else {
-                ""
-            },
-            url,
-            git_ref.as_ref()
-        );
-        let mut output = tokio::process::Command::new("nix-prefetch-git");
+        let mut command = tokio::process::Command::new("nix-prefetch-git");
         if submodules {
-            output.arg("--fetch-submodules");
+            command.arg("--fetch-submodules");
         }
-        let output = output
+        command
             // Disable any interactive login attempts, failing gracefully instead
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
             .arg(url)
-            .arg(git_ref.as_ref())
-            .output()
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to spawn nix-prefetch-git for {} @ {}",
-                    url,
-                    git_ref.as_ref()
-                )
-            })?;
+            .arg(git_ref.as_ref());
+
+        log::debug!("Executing: {}", format_command(&command)?);
+
+        let output = command.output().await.with_context(|| {
+            format!(
+                "Failed to spawn nix-prefetch-git for {} @ {}",
+                url,
+                git_ref.as_ref()
+            )
+        })?;
 
         // FIXME: handle errors and pipe stderr through
         if !output.status.success() {
@@ -149,26 +141,20 @@ pub async fn nix_prefetch_docker(
     let image_name = image_name.as_ref();
     let image_tag = image_tag.as_ref();
 
-    log::debug!(
-        "Executing: `nix-prefetch-docker {} {}{}`",
-        image_name,
-        image_tag,
-        match image_digest {
-            Some(x) => format!(" --image-digest {}", x),
-            None => "".into(),
-        }
-    );
-    let mut output = tokio::process::Command::new("nix-prefetch-docker");
-    let output = output
+    let mut command = tokio::process::Command::new("nix-prefetch-docker");
+    command
         .arg(image_name)
         .arg(image_tag)
         .arg("--json")
         .arg("--quiet");
-    let output = match image_digest {
-        Some(x) => output.arg("--image-digest").arg(x),
-        None => output,
-    };
-    let output = output.output().await.with_context(|| {
+
+    if let Some(value) = image_digest {
+        command.arg("--image-digest").arg(value);
+    }
+
+    log::debug!("Executing: {}", format_command(&command)?);
+
+    let output = command.output().await.with_context(|| {
         format!(
             "Failed to spawn nix-prefetch-docker for {}:{}",
             image_name, image_tag
@@ -211,10 +197,8 @@ pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::
     let nix_eval_code =
         format!("{{pin, path}}: (({DEFAULT_NIX}) {{ input = /. + path; }}).${{pin}}.outPath");
 
-    log::debug!(
-        "Executing: `nix-instantiate --eval --json --expr '{{pin}}: (import default.nix).${{pin}}.outPath' --argstr pin '{pin}' --argstr path '{{«snip»}}'`",
-    );
-    let output = tokio::process::Command::new("nix-instantiate")
+    let mut command = tokio::process::Command::new("nix-instantiate");
+    command
         .arg("--show-trace")
         .arg("--eval")
         .arg("--json")
@@ -225,7 +209,11 @@ pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::
         .arg(pin)
         .arg("--argstr")
         .arg("path")
-        .arg(lockfile_path)
+        .arg(lockfile_path);
+
+    log::debug!("Executing: {}", format_command(&command)?);
+
+    let output = command
         .stdout(std::process::Stdio::piped())
         .spawn()
         .context("Failed to spawn `nix-instantiate`")?
