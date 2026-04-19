@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use nix_compat::nixhash::{HashAlgo, NixHash};
 use std::path::Path;
 
-use crate::{DEFAULT_NIX, check_git_url, check_url};
+use crate::{DEFAULT_NIX, check_git_url, check_url, format_command};
 
 #[allow(unused)]
 pub struct PrefetchInfo {
@@ -13,17 +13,20 @@ pub struct PrefetchInfo {
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<NixHash> {
     let url = url.as_ref();
     let result = async {
-        log::debug!(
-            "Executing `nix-prefetch-url --unpack --name source --type sha256 {}`",
-            url
-        );
-        let output = tokio::process::Command::new("nix-prefetch-url")
+        let mut output = tokio::process::Command::new("nix-prefetch-url");
+
+        // FIXME: idiomatic way for this.
+        let command = output
             .arg("--unpack") // force calculation of the unpacked NAR hash
             .arg("--name")
             .arg("source") // use the same symbolic store path name as `builtins.fetchTarball` to avoid downloading the source twice
             .arg("--type")
             .arg("sha256")
-            .arg(url)
+            .arg(url);
+
+        log::debug!("Executing: {}", format_command(command)?);
+
+        let output = command
             .output()
             .await
             .with_context(|| format!("Failed to spawn nix-prefetch-url for {}", url))?;
