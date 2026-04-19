@@ -60,35 +60,26 @@ pub async fn nix_prefetch_git(
     let url = url.as_ref();
 
     let result = async {
-        log::debug!(
-            "Executing: `nix-prefetch-git {}{} {}`",
-            if submodules {
-                "--fetch-submodules "
-            } else {
-                ""
-            },
-            url,
-            git_ref.as_ref()
-        );
-        let mut output = tokio::process::Command::new("nix-prefetch-git");
+        let mut command = tokio::process::Command::new("nix-prefetch-git");
         if submodules {
-            output.arg("--fetch-submodules");
+            command.arg("--fetch-submodules");
         }
-        let output = output
+        command
             // Disable any interactive login attempts, failing gracefully instead
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=yes")
             .arg(url)
-            .arg(git_ref.as_ref())
-            .output()
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to spawn nix-prefetch-git for {} @ {}",
-                    url,
-                    git_ref.as_ref()
-                )
-            })?;
+            .arg(git_ref.as_ref());
+
+        log::debug!("Executing: {}", format_command(&command)?);
+
+        let output = command.output().await.with_context(|| {
+            format!(
+                "Failed to spawn nix-prefetch-git for {} @ {}",
+                url,
+                git_ref.as_ref()
+            )
+        })?;
 
         // FIXME: handle errors and pipe stderr through
         if !output.status.success() {
