@@ -201,10 +201,10 @@ pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::
     let nix_eval_code =
         format!("{{pin, path}}: (({DEFAULT_NIX}) {{ input = /. + path; }}).${{pin}}.outPath");
 
-    log::debug!(
-        "Executing: `nix-instantiate --eval --json --expr '{{pin}}: (import default.nix).${{pin}}.outPath' --argstr pin '{pin}' --argstr path '{{«snip»}}'`",
-    );
-    let output = tokio::process::Command::new("nix-instantiate")
+    let mut output = tokio::process::Command::new("nix-instantiate");
+
+    // FIXME: idiomatic way for this.
+    let command = output
         .arg("--show-trace")
         .arg("--eval")
         .arg("--json")
@@ -215,7 +215,11 @@ pub async fn nix_eval_pin(lockfile_path: &Path, pin: &str) -> Result<std::path::
         .arg(pin)
         .arg("--argstr")
         .arg("path")
-        .arg(lockfile_path)
+        .arg(lockfile_path);
+
+    log::debug!("Executing: {}", format_command(command)?);
+
+    let output = command
         .stdout(std::process::Stdio::piped())
         .spawn()
         .context("Failed to spawn `nix-instantiate`")?
