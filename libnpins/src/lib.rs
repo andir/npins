@@ -393,6 +393,82 @@ impl diff::Diff for GenericUrlHashes {
     }
 }
 
+fn elide_to_first_line(input_string: &str) -> String {
+    let mut lines = input_string.lines();
+    let value = lines.next().unwrap_or("(unknown)");
+
+    // Add the ellipsis at the end of the string if needed.
+    match lines.next() {
+        // Only one line.
+        None => value.to_string(),
+        // Multi-line
+        Some(_) => {
+            format!("{}…", value)
+        },
+    }
+}
+
+/// Formats a command in a shell-safe manner.
+///
+/// NOTE: Multi-line components will be elided to their first line!
+pub fn format_command(tokio_cmd: &tokio::process::Command) -> anyhow::Result<String> {
+    // `tokio::process`'s `Command` doesn't allow introspecting, so let's ignore that
+    // and use it as a `std::process::Command`.
+    let cmd = tokio_cmd.as_std();
+
+    let mut command_parts: Vec<String> = Vec::new();
+
+    // Format and escape environment
+    let envs: Vec<String> =
+        cmd.get_envs()
+            .map(|(name, value)| {
+                let value = elide_to_first_line(
+                value
+                .expect("Environment variable for command should have an environment variable name")
+                .to_str()
+                .unwrap_or("(unknown)")
+            );
+
+                // Escape the value only.
+                let value = shlex::try_quote(&value).unwrap_or("(invalid)".into());
+
+                // The escaping would produce 'NAME=VA LUE', which will not produce a strings that can
+                // be used for passing an environment variables to a command.
+                let name = name.to_str().unwrap_or("(unknown)");
+
+                format!("{}={}", name, value)
+            })
+            .collect();
+
+    // Add to the command
+    command_parts.extend(envs);
+
+    // Use the basename of the command.
+    let exe_name = std::path::Path::new(cmd.get_program())
+        .file_name()
+        .unwrap_or(std::ffi::OsStr::new("(unknown)"))
+        .to_str()
+        .unwrap_or("(unknown)");
+
+    command_parts.push(exe_name.into());
+
+    // Escape all args
+    let args: Vec<String> = cmd
+        .get_args()
+        .map(|s| {
+            let arg = s.to_str().unwrap_or("(unknown)");
+            shlex::try_quote(&elide_to_first_line(arg))
+                .unwrap_or("(invalid)".into())
+                .into()
+        })
+        .collect();
+
+    // Add to the command
+    command_parts.extend(args);
+
+    Ok(command_parts.join(" "))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
