@@ -144,25 +144,20 @@ pub async fn nix_prefetch_docker(
     let image_name = image_name.as_ref();
     let image_tag = image_tag.as_ref();
 
-    log::debug!(
-        "Executing: `nix-prefetch-docker {} {}{}`",
-        image_name,
-        image_tag,
-        match image_digest {
-            Some(x) => format!(" --image-digest {}", x),
-            None => "".into(),
-        }
-    );
     let mut output = tokio::process::Command::new("nix-prefetch-docker");
-    let output = output
+    // FIXME: idiomatic way for this.
+    let command = output
         .arg(image_name)
         .arg(image_tag)
         .arg("--json")
         .arg("--quiet");
-    let output = match image_digest {
-        Some(x) => output.arg("--image-digest").arg(x),
-        None => output,
+    match image_digest {
+        Some(x) => command.arg("--image-digest").arg(x),
+        None => command,
     };
+
+    log::debug!("Executing: {}", format_command(command)?);
+
     let output = output.output().await.with_context(|| {
         format!(
             "Failed to spawn nix-prefetch-docker for {}:{}",
