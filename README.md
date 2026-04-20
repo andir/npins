@@ -103,7 +103,7 @@ $ npins help
 Usage: npins [OPTIONS] <COMMAND>
 
 Commands:
-  init          Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your sources.json
+  init          Initializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your sources.json
   add           Adds a new pin entry
   show          Lists the current pin entries
   update        Updates all or the given pins to the latest version
@@ -137,7 +137,7 @@ This will create an `npins` folder with a `default.nix` and `sources.json` withi
 
 ```console
 $ npins help init
-Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your sources.json
+Initializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your sources.json
 
 Usage: npins init [OPTIONS]
 
