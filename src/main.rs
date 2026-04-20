@@ -517,7 +517,7 @@ pub struct GetPathOpts {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Intializes the npins directory. Running this multiple times will restore/upgrade the
+    /// Initializes the npins directory. Running this multiple times will restore/upgrade the
     /// `default.nix` and never touch your sources.json.
     Init(InitOpts),
 
