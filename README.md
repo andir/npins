@@ -439,6 +439,12 @@ Contributions to this project are welcome in the form of GitHub Issues or PRs. P
 - This readme is templated, edit [README.md.in](./README.md.in) instead (the commit hook will take care of the rest)
 - Consider discussing major features or changes in an issue first
 
+### AI Contributions
+
+Getting LLMs to produce any reasonable output requires expertise with the codebase, which drive-by contributors typically lack.
+At the same time, making easy contributions by hand is the only way to gather such expertise in the first place.
+Therefore, LLM contributions are poisoning our own supply of domain experts and our interest in reviewing LLM code is accordingly low.
+
 <!-- MARKDOWN LINKS & IMAGES -->
 
 [contributors-shield]: https://img.shields.io/github/contributors/andir/npins.svg?style=for-the-badge
