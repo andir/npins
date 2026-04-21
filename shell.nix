@@ -23,6 +23,7 @@ let
             exec ${pkgs.git}/bin/git diff --quiet --exit-code -- README.md
           ''
         );
+        stages = [ "pre-push" ];
       };
     };
   };
@@ -42,6 +43,7 @@ pkgs.mkShell {
       nix-prefetch-git
       nix-prefetch-docker
       git
+      just
       npins
     ]
     ++ (lib.optionals stdenv.isDarwin [
