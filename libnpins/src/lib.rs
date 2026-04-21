@@ -146,7 +146,7 @@ impl NixPins {
         let mut pins = BTreeMap::new();
         pins.insert(
             "nixpkgs".to_owned(),
-            channel::Pin::new("nixpkgs-unstable").into(),
+            channel::Pin::new("nixpkgs-unstable", channel::NIXPKGS_ARTIFACT).into(),
         );
         Self { pins }
     }

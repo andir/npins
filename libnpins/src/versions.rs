@@ -512,7 +512,7 @@ mod test {
                         frozen: Frozen::default(),
                     },
                     "nixpkgs".into() => Pin::Channel {
-                        input: channel::Pin { name: "nixpkgs-unstable".into() },
+                        input: channel::Pin { name: "nixpkgs-unstable".into(), artifact: channel::NIXPKGS_ARTIFACT.into() },
                         version: Some(channel::ChannelVersion {
                             url: "https://releases.nixos.org/nixpkgs/nixpkgs-24.05pre1234.abcdef/nixexprs.tar.xz".parse().unwrap(),
                         }),

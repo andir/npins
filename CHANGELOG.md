@@ -6,6 +6,7 @@
   Instead of checking some HTTP headers, the user must now explicitly specify `--mutable` when adding `tarball` pins.
   Existing locked tarball pins should remain functional just the same as before, no action required.
 - Added `npins add url` for pinning plain URLs (files that should not be unpacked as tarballs). Same semantics as `tarball` pins. (https://github.com/andir/npins/pull/223)
+- `npins add channel` now takes `--artifact` to pin something other than `nixexprs.tar.xz`, for example `latest-nixos-graphical-x86_64-linux.iso`. (https://github.com/andir/npins/pull/223)
 - `npins show` now accepts a list of pin entries to show instead of always showing the complete list (https://github.com/andir/npins/pull/190)
 - Tweaked forge auto-detection for `add git` (https://github.com/andir/npins/pull/202)
 

@@ -23,6 +23,7 @@ Simple and convenient dependency pinning for Nix
 - For git repositories hosted on GitHub or GitLab, `fetchTarball` is used instead of `fetchGit`
 - Track Nix channels
   - Unlike tracking a channel from its git branch, this gives you access to the `programs.sqlite` database
+  - Can also track Nix channel artifacts like live isos
 - Track PyPi packages
 
 ## Getting Started
@@ -181,6 +182,7 @@ Some common usage examples:
 
 ```sh
 npins add channel nixos-21.11
+npins add channel nixos-unstable latest-nixos-graphical-x86_64-linux.iso2
 # Remove -b to fetch the latest release
 npins add git https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git -b "nixos-21.11"
 npins add github ytdl-org youtube-dl
