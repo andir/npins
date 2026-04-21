@@ -5,7 +5,7 @@ use git::fetch_default_branch;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::{Pin, git, tarball};
+use crate::{Pin, git, urlpin};
 
 /// Pin entry from a nix flake's lock file
 ///
@@ -131,7 +131,7 @@ impl FlakePin {
                     .original
                     .url
                     .context("missing url on a tarball flake input")?;
-                tarball::TarballPin { url }.into()
+                urlpin::UrlPin { url, unpack: true }.into()
             },
             Path => anyhow::bail!("Path inputs are currently not supported by npins."),
         })

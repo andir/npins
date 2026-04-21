@@ -168,6 +168,16 @@ $ npins help add git
 {{npins help add git}}
 ```
 
+Npins can track plain old links to URL resources. They will never update.
+Alternatively, you can also add the `--mutable` flag to make them behave similarly to the
+[Lockable HTTP Tarball Protocol](https://docs.lix.systems/manual/lix/nightly/protocols/tarball-fetcher.html#lockable-http-tarball-protocol):
+Npins will follow any redirects and then pin that url as the actual version, while keeping the original url as "update" url.
+
+```console
+$ npins help add tarball
+{{npins help add tarball}}
+```
+
 ### Removing dependencies
 
 ```console

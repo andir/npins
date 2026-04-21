@@ -242,7 +242,7 @@ let
       name,
       commands,
       tarballs,
-      immutableLinks ? { },
+      redirects ? { },
     }:
     pkgs.runCommand name
       {
@@ -276,18 +276,29 @@ let
           import socketserver
 
           PORT = 8000
-          LINK_MAP = {
-            ${lib.pipe immutableLinks [
-              (lib.mapAttrsToList (path: flakeref: ''"${path}": "${flakeref}",''))
+          REDIRECT_MAP = {
+            ${lib.pipe redirects [
+              (lib.mapAttrsToList (path: target: ''"${path}": "${target}",''))
               (lib.concatStringsSep "\n")
             ]}
           }
 
           class Handler(http.server.SimpleHTTPRequestHandler):
-              def end_headers(self):
-                  if self.path in LINK_MAP:
-                    self.send_header("Link", f'<{LINK_MAP[self.path]}>; rel="immutable"')
-                  super().end_headers()
+              def do_HEAD(self):
+                  if self.path in REDIRECT_MAP:
+                      self.send_response(302)
+                      self.send_header("Location", REDIRECT_MAP[self.path])
+                      self.end_headers()
+                  else:
+                      super().do_HEAD()
+
+              def do_GET(self):
+                  if self.path in REDIRECT_MAP:
+                      self.send_response(302)
+                      self.send_header("Location", REDIRECT_MAP[self.path])
+                      self.end_headers()
+                  else:
+                      super().do_GET()
 
           with socketserver.TCPServer(("", PORT), Handler) as httpd:
               httpd.serve_forever()
@@ -441,6 +452,52 @@ let
         cat npins/sources.json
 
         [[ "$before" = "$after" ]]
+      '';
+    };
+
+  # More specific wrapper around `mkTarballTest`
+  mkUrlTest =
+    {
+      unpack,
+      mutable,
+    }:
+    let
+      subcommand = if unpack then "tarball" else "url";
+      inputUrl =
+        if mutable then
+          "http://localhost:8000/foo/bar/baz.tar.gz"
+        else
+          "http://localhost:8000/locked/baz.tar.gz";
+      mutableFlag = lib.optionalString mutable "--mutable";
+      pinType = if mutable then "MutableUrl" else "Url";
+    in
+    mkTarballTest {
+      name = subcommand + (if mutable then "-mutable" else "");
+      tarballs = [
+        "foo/bar/baz"
+        "locked/baz"
+      ];
+      redirects = {
+        "/foo/bar/baz.tar.gz" = "http://localhost:8000/locked/baz.tar.gz";
+      };
+      commands = ''
+        npins init --bare
+        npins add ${subcommand} ${mutableFlag} --name bar ${inputUrl}
+        nix-instantiate --eval npins -A bar.outPath
+
+        eq "$(jq -r .pins.bar.type npins/sources.json)" "${pinType}"
+        eq "$(jq -r .pins.bar.unpack npins/sources.json)" "${lib.boolToString unpack}"
+        eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/locked/baz.tar.gz"
+        ${lib.optionalString mutable ''
+          eq "$(jq -r .pins.bar.update_url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
+        ''}
+
+        # make sure update is idempotent
+        npins update bar
+
+        eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/locked/baz.tar.gz"
+        eq "$(jq -r .pins.bar.type npins/sources.json)" "${pinType}"
+        eq "$(jq -r .pins.bar.unpack npins/sources.json)" "${lib.boolToString unpack}"
       '';
     };
 in
@@ -608,50 +665,21 @@ in
     '';
   };
 
-  tarballLockable = mkTarballTest {
-    name = "tarball-lockable";
-    tarballs = [
-      "foo/bar/baz"
-      "locked/baz"
-    ];
-    immutableLinks = {
-      "/foo/bar/baz.tar.gz" = "http://localhost:8000/locked/baz.tar.gz";
-    };
-    commands = ''
-      npins init --bare
-      npins add tarball --name bar http://localhost:8000/foo/bar/baz.tar.gz
-      nix-instantiate --eval npins -A bar.outPath
-
-      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
-      eq "$(jq -r .pins.bar.locked_url npins/sources.json)" "http://localhost:8000/locked/baz.tar.gz"
-
-      # make sure update is idempotent
-      npins update bar
-
-      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
-      eq "$(jq -r .pins.bar.locked_url npins/sources.json)" "http://localhost:8000/locked/baz.tar.gz"
-    '';
+  tarballStatic = mkUrlTest {
+    unpack = true;
+    mutable = false;
   };
-
-  tarballNotLockable = mkTarballTest {
-    name = "tarball-not-lockable";
-    tarballs = [ "foo/bar/baz" ];
-    commands = ''
-      npins init --bare
-      npins add tarball --name bar http://localhost:8000/foo/bar/baz.tar.gz
-      nix-instantiate --eval npins -A bar.outPath
-      jq .pins.bar npins/sources.json
-
-      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
-      eq "$(jq -r .pins.bar.locked_url npins/sources.json)" "null"
-
-      # make sure update is idempotent
-      npins update bar
-      jq .pins.bar npins/sources.json
-
-      eq "$(jq -r .pins.bar.url npins/sources.json)" "http://localhost:8000/foo/bar/baz.tar.gz"
-      eq "$(jq -r .pins.bar.locked_url npins/sources.json)" "null"
-    '';
+  tarballMutable = mkUrlTest {
+    unpack = true;
+    mutable = true;
+  };
+  urlStatic = mkUrlTest {
+    unpack = false;
+    mutable = false;
+  };
+  urlMutable = mkUrlTest {
+    unpack = false;
+    mutable = true;
   };
 
   githubRelease = mkGithubTest {

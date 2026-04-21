@@ -344,16 +344,54 @@ impl ContainerAddOpts {
     }
 }
 
+// Same as `UrlAddOpts` below, but different struct to have different doc comments
+// (the CLI parser uses them to generate the argument descriptions)
 #[derive(Debug, Parser)]
 pub struct TarballAddOpts {
     /// Tarball URL
     pub url: Url,
+    /// Treat this URL as mutable, and assume it will redirect to an immutable version of the content to be pinned. For example, a HEAD URL redirecting to the currently latest commit
+    #[arg(long)]
+    pub mutable: bool,
 }
 
 impl TarballAddOpts {
-    pub fn add(&self) -> Result<(Option<String>, Pin)> {
-        let url = self.url.clone();
-        Ok((None, tarball::TarballPin { url }.into()))
+    pub async fn add(&self) -> Result<(Option<String>, Pin)> {
+        // Delegate to `UrlAddOpts`
+        UrlAddOpts {
+            url: self.url.clone(),
+            mutable: self.mutable,
+        }
+        .add(true)
+        .await
+    }
+}
+
+#[derive(Debug, Parser)]
+pub struct UrlAddOpts {
+    /// URL to pin
+    pub url: Url,
+    /// Treat this URL as mutable, and assume it will redirect to an immutable version of the content to be pinned. For example, a HEAD URL redirecting to the currently latest commit
+    #[arg(long)]
+    pub mutable: bool,
+}
+
+impl UrlAddOpts {
+    pub async fn add(&self, unpack: bool) -> Result<(Option<String>, Pin)> {
+        let pin: Pin = if self.mutable {
+            urlpin::MutableUrlPin {
+                update_url: self.url.clone(),
+                unpack,
+            }
+            .into()
+        } else {
+            urlpin::UrlPin {
+                url: self.url.clone(),
+                unpack,
+            }
+            .into()
+        };
+        Ok((None, pin))
     }
 }
 
@@ -383,9 +421,15 @@ pub enum AddCommands {
     /// Track a tarball
     ///
     /// This can be either a static URL that never changes its contents or a
-    /// URL which supports flakes "Lockable HTTP Tarball" API.
+    /// "mutable" URL that redirects to an immutable snapshot.
     #[command(name = "tarball")]
     Tarball(TarballAddOpts),
+    /// Track a URL
+    ///
+    /// This can be either a static URL that never changes its contents or a
+    /// "mutable" URL that redirects to an immutable snapshot.
+    #[command(name = "url")]
+    Url(UrlAddOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -413,7 +457,8 @@ impl AddOpts {
             AddCommands::Forgejo(fg) => fg.add()?,
             AddCommands::GitLab(gl) => gl.add()?,
             AddCommands::PyPi(p) => p.add()?,
-            AddCommands::Tarball(p) => p.add()?,
+            AddCommands::Tarball(p) => p.add().await?,
+            AddCommands::Url(p) => p.add(false).await?,
             AddCommands::Container(p) => p.add()?,
         };
 
