@@ -58,14 +58,28 @@ impl UpdateStrategy {
 #[derive(Debug, Parser)]
 pub struct ChannelAddOpts {
     channel_name: String,
+    /// Select a specific artifact from the channel, defaults to Nixpkgs if omitted.
+    ///
+    /// Find valid artifact names on <https://nixos.org/download/> or `nix-shell -p awscli2 --run 'aws s3 ls nix-channels/$CHANNEL'` (unfortunately requires an AWS account).
+    /// Common values: `latest-nixos-graphical-x86_64-linux.iso`, `latest-nixos-minimal-aarch64-linux.iso`
+    ///
+    ///
+    /* ↑ these two lines are intentionally left blank (for better help formatting) */
+    #[clap(default_value = channel::NIXPKGS_ARTIFACT)]
+    artifact: String,
 }
 
 impl ChannelAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
         Ok((
-            Some(self.channel_name.clone()),
+            Some(if self.artifact == channel::NIXPKGS_ARTIFACT {
+                self.channel_name.clone()
+            } else {
+                format!("{}-{}", self.channel_name, self.artifact)
+            }),
             channel::Pin {
                 name: self.channel_name.clone(),
+                artifact: self.artifact.clone(),
             }
             .into(),
         ))
