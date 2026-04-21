@@ -9,7 +9,7 @@ pub mod channel;
 pub mod container;
 pub mod git;
 pub mod pypi;
-pub mod tarball;
+pub mod urlpin;
 
 /// Create the `Pin` type
 ///
@@ -166,6 +166,7 @@ mk_pin! {
     (GitRelease, git_release, "git release tag", git::GitReleasePin),
     (PyPi, pypi, "pypi package", pypi::Pin),
     (Channel, channel, "Nix channel", channel::Pin),
-    (Tarball, tarball, "tarball", tarball::TarballPin),
+    (Url, url, "url", urlpin::UrlPin),
+    (MutableUrl, mutable_url, "mutable url", urlpin::MutableUrlPin),
     (Container, container, "OCI Container", container::Pin),
 }

@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::Path};
 use crate::NixPins;
 
 /// The current format version
-pub const LATEST: u64 = 7;
+pub const LATEST: u64 = 8;
 
 /// Custom manual deserialize wrapper that checks the version
 pub fn from_value_versioned(value: Value) -> Result<NixPins> {
@@ -102,6 +102,12 @@ pub fn upgrade(mut pins_raw: Map<String, Value>, path: &Path) -> Result<Value> {
             5,
             Box::new(|pins_raw: &mut Map<String, Value>| {
                 generic_upgrader(pins_raw, upgrade_v5_pin, path)
+            }) as Upgrader<'_>,
+        ),
+        (
+            7,
+            Box::new(|pins_raw: &mut Map<String, Value>| {
+                generic_upgrader(pins_raw, upgrade_v7_pin, path)
             }) as Upgrader<'_>,
         ),
     ]
@@ -262,10 +268,57 @@ fn upgrade_v5_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
     Ok(())
 }
 
+/* v7→v8. This upgrade splits Tarball pins into two types of generic url pins:
+ * - `Tarball { url }` → `UrlPin { url, unpack: true }`
+ * - `Tarball { url, locked_url }` → `MutableUrlPin { update_url: url, url: locked_url, unpack: true }`
+ */
+fn upgrade_v7_pin(name: &str, raw_pin: &mut Map<String, Value>) -> Result<()> {
+    log::debug!("Updating {} to v8", name);
+
+    /* Only the fields and variants we care about */
+    #[allow(dead_code)]
+    #[derive(Deserialize)]
+    #[serde(tag = "type")]
+    enum OldPin {
+        Tarball {
+            url: url::Url,
+            #[serde(default)]
+            locked_url: Option<url::Url>,
+        },
+        #[serde(other)]
+        DontCare,
+    }
+
+    let pin: OldPin = serde_json::from_value(serde_json::Value::Object(raw_pin.clone()))?;
+    match pin {
+        // Nothing to do for non-Tarball pins
+        OldPin::DontCare => return Ok(()),
+        OldPin::Tarball {
+            url: _,
+            locked_url: None,
+        } => {
+            raw_pin.insert("type".into(), json!("Url"));
+            raw_pin.insert("unpack".into(), json!(true));
+        },
+        OldPin::Tarball {
+            url: _,
+            locked_url: Some(_),
+        } => {
+            raw_pin.insert("type".into(), json!("MutableUrl"));
+            raw_pin.insert("unpack".into(), json!(true));
+            rename!(raw_pin, "url" => "update_url", "locked_url" => "url");
+        },
+    };
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Frozen, GenericUrlHashes, GenericVersion, Pin, git, pypi};
+    use crate::{
+        Frozen, GenericHash, GenericUrlHashes, GenericVersion, Pin, channel, git, pypi, urlpin,
+    };
 
     macro_rules! btreemap {
         ( $($key:expr => $val:expr),* $(,)? ) => {{
@@ -359,6 +412,86 @@ mod test {
                         input: git::GitReleasePin::new(git::Repository::github("ytdl-org", "youtube-dl"), false, None, None, false),
                         version: Some(GenericVersion { version: "youtube-dl 2021.12.17".into() }),
                         hashes: None,
+                        frozen: Frozen::default(),
+                    }
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_v7() {
+        init_logger();
+
+        let pins = match json!({
+            "pins": {
+                // Static tarball (no locked_url) -> Url
+                "static-tarball": {
+                    "type": "Tarball",
+                    "url": "https://example.com/static.tar.gz",
+                    "hash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                },
+                // Mutable tarball (with locked_url) -> MutableUrl
+                "mutable-tarball": {
+                    "type": "Tarball",
+                    "url": "https://example.com/latest.tar.gz",
+                    "locked_url": "https://example.com/v1.0.0.tar.gz",
+                    "hash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
+                },
+                // Non-tarball pin should be unchanged
+                "nixpkgs": {
+                    "type": "Channel",
+                    "name": "nixpkgs-unstable",
+                    "url": "https://releases.nixos.org/nixpkgs/nixpkgs-24.05pre1234.abcdef/nixexprs.tar.xz",
+                    "hash": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
+                }
+            },
+            "version": 7
+        }) {
+            Value::Object(pins) => pins,
+            _ => unreachable!(),
+        };
+        let pins =
+            upgrade(pins, Path::new("in-memory-source.json")).expect("Failed to upgrade data");
+        let pins = serde_json::from_value::<NixPins>(pins)
+            .expect("Upgraded data failed to deserialize with newest code");
+
+        assert_eq!(
+            pins,
+            NixPins {
+                pins: btreemap![
+                    "static-tarball".into() => Pin::Url {
+                        input: urlpin::UrlPin {
+                            url: "https://example.com/static.tar.gz".parse().unwrap(),
+                            unpack: true,
+                        },
+                        version: Some(()),
+                        hashes: Some(GenericHash {
+                            hash: NixHash::from_sri("sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=").unwrap()
+                        }),
+                        frozen: Frozen::default(),
+                    },
+                    "mutable-tarball".into() => Pin::MutableUrl {
+                        input: urlpin::MutableUrlPin {
+                            update_url: "https://example.com/latest.tar.gz".parse().unwrap(),
+                            unpack: true,
+                        },
+                        version: Some(urlpin::LockedTarballVersion {
+                            url: "https://example.com/v1.0.0.tar.gz".parse().unwrap(),
+                        }),
+                        hashes: Some(GenericHash {
+                            hash: NixHash::from_sri("sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=").unwrap()
+                        }),
+                        frozen: Frozen::default(),
+                    },
+                    "nixpkgs".into() => Pin::Channel {
+                        input: channel::Pin { name: "nixpkgs-unstable".into() },
+                        version: Some(channel::ChannelVersion {
+                            url: "https://releases.nixos.org/nixpkgs/nixpkgs-24.05pre1234.abcdef/nixexprs.tar.xz".parse().unwrap(),
+                        }),
+                        hashes: Some(channel::ChannelHash {
+                            hash: NixHash::from_sri("sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=").unwrap()
+                        }),
                         frozen: Frozen::default(),
                     }
                 ],

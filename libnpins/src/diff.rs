@@ -74,6 +74,12 @@ impl<T: Diff> Diff for Option<T> {
     }
 }
 
+impl Diff for () {
+    fn properties(&self) -> Vec<(String, String)> {
+        vec![]
+    }
+}
+
 pub trait OptionExt<T> {
     /// Like [`Option::insert`] but returns the diff between both values instead of a reference to the inserted value.
     ///
