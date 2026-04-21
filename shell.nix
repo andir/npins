@@ -23,6 +23,7 @@ let
             exec ${pkgs.git}/bin/git diff --quiet --exit-code -- README.md
           ''
         );
+        stages = [ "pre-push" ];
       };
     };
   };
