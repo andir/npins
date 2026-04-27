@@ -11,11 +11,17 @@ pub struct PrefetchInfo {
 }
 
 pub async fn nix_prefetch_tarball(url: impl AsRef<str>) -> Result<NixHash> {
+    nix_prefetch_url(url, true).await
+}
+
+pub async fn nix_prefetch_url(url: impl AsRef<str>, unpack: bool) -> Result<NixHash> {
     let url = url.as_ref();
     let result = async {
         let mut command = tokio::process::Command::new("nix-prefetch-url");
+        if unpack {
+            command.arg("--unpack"); // force calculation of the unpacked NAR hash
+        }
         command
-            .arg("--unpack") // force calculation of the unpacked NAR hash
             .arg("--name")
             .arg("source") // use the same symbolic store path name as `builtins.fetchTarball` to avoid downloading the source twice
             .arg("--type")

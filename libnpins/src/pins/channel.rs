@@ -7,20 +7,35 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Updatable, build_client, diff, nix};
 
+/// Stability note: this may change over time as upstream provides other compression algorithms
+pub const NIXPKGS_ARTIFACT: &'static str = "nixexprs.tar.xz";
+
+fn default_artifact_path() -> String {
+    NIXPKGS_ARTIFACT.into()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Pin {
     pub name: String,
+    #[serde(default = "default_artifact_path")]
+    pub artifact: String,
 }
 
 impl diff::Diff for Pin {
     fn properties(&self) -> Vec<(String, String)> {
-        vec![("name".into(), self.name.clone())]
+        vec![
+            ("name".into(), self.name.clone()),
+            ("artifact".into(), self.artifact.clone()),
+        ]
     }
 }
 
 impl Pin {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+    pub fn new(name: impl Into<String>, artifact: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            artifact: artifact.into(),
+        }
     }
 }
 
@@ -57,8 +72,8 @@ impl Updatable for Pin {
          */
         let url = build_client()?
             .head(format!(
-                "https://channels.nixos.org/{}/nixexprs.tar.xz",
-                self.name
+                "https://channels.nixos.org/{}/{}",
+                self.name, self.artifact,
             ))
             .send()
             .await?

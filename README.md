@@ -23,6 +23,7 @@ Simple and convenient dependency pinning for Nix
 - For git repositories hosted on GitHub or GitLab, `fetchTarball` is used instead of `fetchGit`
 - Track Nix channels
   - Unlike tracking a channel from its git branch, this gives you access to the `programs.sqlite` database
+  - Can also track Nix channel artifacts like live isos
 - Track PyPi packages
 
 ## Getting Started
@@ -181,6 +182,7 @@ Some common usage examples:
 
 ```sh
 npins add channel nixos-21.11
+npins add channel nixos-unstable latest-nixos-graphical-x86_64-linux.iso2
 # Remove -b to fetch the latest release
 npins add git https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git -b "nixos-21.11"
 npins add github ytdl-org youtube-dl
@@ -210,6 +212,7 @@ Commands:
   pypi       Track a package on PyPi
   container  Track an OCI container
   tarball    Track a tarball
+  url        Track a URL
   help       Print this message or the help of the given subcommand(s)
 
 Options:
@@ -269,6 +272,40 @@ Options:
 
       --submodules
           Also fetch submodules
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+
+Npins can track plain old links to URL resources. They will never update.
+Alternatively, you can also add the `--mutable` flag to make them behave similarly to the
+[Lockable HTTP Tarball Protocol](https://docs.lix.systems/manual/lix/nightly/protocols/tarball-fetcher.html#lockable-http-tarball-protocol):
+Npins will follow any redirects and then pin that url as the actual version, while keeping the original url as "update" url.
+
+```console
+$ npins help add tarball
+Track a tarball
+
+This can be either a static URL that never changes its contents or a "mutable" URL that redirects to an immutable snapshot.
+
+Usage: npins add tarball [OPTIONS] <URL>
+
+Arguments:
+  <URL>
+          Tarball URL
+
+Options:
+      --mutable
+          Treat this URL as mutable, and assume it will redirect to an immutable version of the content to be pinned. For example, a HEAD URL redirecting to the currently latest commit
+
+      --name <NAME>
+          Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
+
+      --frozen
+          Add the pin as frozen, meaning that it will be ignored by `npins update` by default
+
+  -v, --verbose
+          Print debug messages
 
   -h, --help
           Print help (see a summary with '-h')
