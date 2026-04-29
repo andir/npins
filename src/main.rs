@@ -940,25 +940,25 @@ impl Opts {
         Ok(())
     }
 
-    pub async fn run(&self) -> Result<()> {
+    pub fn run(&self) -> Result<()> {
         if self.lock_file.is_some() && &*self.folder != std::path::Path::new("npins") {
             anyhow::bail!(
                 "If --lock-file is set, --directory will be ignored and thus should not be set to a non-default value (which is \"npins\")"
             );
         }
         match &self.command {
-            Command::Init(o) => self.init(o).await?,
+            Command::Init(o) => start_runtime(self.init(o))?,
             Command::Show(o) => self.show(o)?,
-            Command::Add(a) => self.add(a).await?,
-            Command::Update(o) => self.update(o).await?,
-            Command::Verify(o) => self.verify(o).await?,
+            Command::Add(a) => start_runtime(self.add(a))?,
+            Command::Update(o) => start_runtime(self.update(o))?,
+            Command::Verify(o) => start_runtime(self.verify(o))?,
             Command::Upgrade => self.upgrade()?,
             Command::Remove(r) => self.remove(r)?,
-            Command::ImportNiv(o) => self.import_niv(o).await?,
-            Command::ImportFlake(o) => self.import_flake(o).await?,
-            Command::Freeze(o) => self.freeze(o).await?,
-            Command::Unfreeze(o) => self.unfreeze(o).await?,
-            Command::GetPath(o) => self.get_path(o).await?,
+            Command::ImportNiv(o) => start_runtime(self.import_niv(o))?,
+            Command::ImportFlake(o) => start_runtime(self.import_flake(o))?,
+            Command::Freeze(o) => start_runtime(self.freeze(o))?,
+            Command::Unfreeze(o) => start_runtime(self.unfreeze(o))?,
+            Command::GetPath(o) => start_runtime(self.get_path(o))?,
         };
 
         Ok(())
@@ -1065,8 +1065,12 @@ fn main() -> Result<()> {
         .format_target(false)
         .init();
 
+    opts.run()
+}
+
+fn start_runtime(future: impl Future<Output = Result<()>>) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
-        .block_on(opts.run())
+        .block_on(future)
 }
