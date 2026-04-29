@@ -27,9 +27,7 @@ let
     "^/completions/src$"
     "^/completions/src/.+$"
     "^/completions/Cargo.toml$"
-    "^/completions/npins.fish$"
-    "^/completions/generated$"
-    "^/completions/generated/.+$"
+    "^/completions/pin-completions.fish$"
   ];
 
   extractSource =
@@ -70,6 +68,13 @@ let
 
     inherit src;
 
+    cargoBuildFlags = [
+      "-p"
+      "npins"
+      "-p"
+      "npins-completions"
+    ];
+
     nativeBuildInputs = [
       makeWrapper
       installShellFiles
@@ -79,12 +84,14 @@ let
     doCheck = false;
 
     postFixup = ''
-      wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
-
       installShellCompletion --cmd npins \
-        --bash $src/completions/generated/npins.bash \
-        --fish $src/completions/npins.fish \
-        --zsh $src/completions/generated/npins.zsh
+        --bash <($out/bin/npins-completions bash) \
+        --fish <(cat <($out/bin/npins-completions fish) $src/completions/pin-completions.fish) \
+        --zsh <($out/bin/npins-completions zsh)
+
+      rm $out/bin/npins-completions
+
+      wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
     '';
 
     meta.tests = pkgs.callPackage ./test.nix { npins = self; };
