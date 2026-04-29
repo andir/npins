@@ -2,6 +2,7 @@
   lib,
   pkgs,
   rustPlatform,
+  installShellFiles,
   nix-gitignore,
   makeWrapper,
   runCommand,
@@ -22,6 +23,11 @@ let
     "^/libnpins/src$"
     "^/libnpins/src/.+$"
     "^/libnpins/Cargo.toml$"
+    "^/completions$"
+    "^/completions/src$"
+    "^/completions/src/.+$"
+    "^/completions/Cargo.toml$"
+    "^/completions/pin-completions.fish$"
   ];
 
   extractSource =
@@ -62,12 +68,29 @@ let
 
     inherit src;
 
-    nativeBuildInputs = [ makeWrapper ];
+    cargoBuildFlags = [
+      "-p"
+      "npins"
+      "-p"
+      "npins-completions"
+    ];
+
+    nativeBuildInputs = [
+      makeWrapper
+      installShellFiles
+    ];
 
     # (Almost) all tests require internet
     doCheck = false;
 
     postFixup = ''
+      installShellCompletion --cmd npins \
+        --bash <($out/bin/npins-completions bash) \
+        --fish <(cat <($out/bin/npins-completions fish) $src/completions/pin-completions.fish) \
+        --zsh <($out/bin/npins-completions zsh)
+
+      rm $out/bin/npins-completions
+
       wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
     '';
 
