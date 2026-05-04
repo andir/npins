@@ -1052,8 +1052,7 @@ impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
     }
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let opts = Opts::parse();
 
     env_logger::builder()
@@ -1066,6 +1065,8 @@ async fn main() -> Result<()> {
         .format_target(false)
         .init();
 
-    opts.run().await?;
-    Ok(())
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(opts.run())
 }
