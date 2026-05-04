@@ -1,7 +1,7 @@
 //! The npins `Pin` base type
 //! [`Pin`] is the main type for all pins, and then the variants are implemented in submodules.
 
-use crate::*;
+use crate::{Diff, Frozen, OptionExt, Updatable, diff};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 

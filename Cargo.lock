@@ -1070,7 +1070,6 @@ dependencies = [
  "clap",
  "clap_complete",
  "npins",
- "url",
 ]
 
 [[package]]
