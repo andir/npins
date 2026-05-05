@@ -273,6 +273,9 @@ Options:
       --submodules
           Also fetch submodules
 
+      --lfs
+          Also fetch LFS references
+
   -h, --help
           Print help (see a summary with '-h')
 ```
@@ -317,10 +320,10 @@ Options:
 $ npins help remove
 Removes one pin entry
 
-Usage: npins remove [OPTIONS] [NAMES]...
+Usage: npins remove [OPTIONS] <NAMES>...
 
 Arguments:
-  [NAMES]...  
+  <NAMES>...  
 
 Options:
   -v, --verbose  Print debug messages
