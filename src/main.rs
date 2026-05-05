@@ -82,6 +82,7 @@ impl GenericGitAddOpts {
                     self.version_upper_bound.clone(),
                     self.release_prefix.clone(),
                     self.submodules,
+                    self.lfs,
                 );
                 let version = self.at.as_ref().map(|at| GenericVersion {
                     version: at.clone(),

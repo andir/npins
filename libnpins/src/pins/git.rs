@@ -445,6 +445,7 @@ impl diff::Diff for GitPin {
             ),
             ("branch".into(), self.branch.clone()),
             ("submodules".into(), self.submodules.to_string()),
+            ("lfs".into(), self.lfs.to_string()),
         ]
     }
 }
@@ -529,6 +530,9 @@ pub struct GitReleasePin {
     /// Also fetch submodules
     #[serde(default)]
     pub submodules: bool,
+    /// Also fetch LFS references
+    #[serde(default)]
+    pub lfs: bool,
 }
 
 impl diff::Diff for GitReleasePin {
@@ -548,6 +552,7 @@ impl diff::Diff for GitReleasePin {
                 .as_ref()
                 .map(|release_prefix| ("release_prefix".into(), release_prefix.clone())),
             Some(("submodules".into(), self.submodules.to_string())),
+            Some(("lfs".into(), self.lfs.to_string())),
         ]
         .into_iter()
         .flat_map(Option::into_iter)
@@ -562,6 +567,7 @@ impl GitReleasePin {
         version_upper_bound: Option<String>,
         release_prefix: Option<String>,
         submodules: bool,
+        lfs: bool,
     ) -> Self {
         Self {
             repository,
@@ -569,6 +575,7 @@ impl GitReleasePin {
             version_upper_bound,
             release_prefix,
             submodules,
+            lfs,
         }
     }
 }
@@ -1042,6 +1049,7 @@ mod test {
             version_upper_bound: None,
             release_prefix: None,
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1101,6 +1109,7 @@ mod test {
             version_upper_bound: None,
             release_prefix: None,
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1140,6 +1149,7 @@ mod test {
             version_upper_bound: None,
             release_prefix: None,
             submodules: false,
+            lfs: false,
         };
         let version = GenericVersion {
             version: "0.2.1".into(),
@@ -1200,6 +1210,7 @@ mod test {
             version_upper_bound: Some("2.90.1".to_string()),
             release_prefix: None,
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1265,6 +1276,7 @@ mod test {
             version_upper_bound: None,
             release_prefix: None,
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1301,6 +1313,7 @@ mod test {
             version_upper_bound: None,
             release_prefix: None,
             submodules: false,
+            lfs: false,
         };
         let version = GenericVersion {
             version: "40.0".into(),
@@ -1361,6 +1374,7 @@ mod test {
             version_upper_bound: None,
             release_prefix: None,
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
