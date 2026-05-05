@@ -63,6 +63,10 @@ pub struct GenericGitAddOpts {
     /// Also fetch submodules
     #[arg(long)]
     pub submodules: bool,
+
+    /// Also fetch LFS references
+    #[arg(long)]
+    pub lfs: bool,
 }
 
 #[derive(Debug, Parser)]

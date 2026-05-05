@@ -431,6 +431,9 @@ pub struct GitPin {
     /// Also fetch submodules
     #[serde(default)]
     pub submodules: bool,
+    /// Also fetch LFS references
+    #[serde(default)]
+    pub lfs: bool,
 }
 
 impl diff::Diff for GitPin {
@@ -447,11 +450,12 @@ impl diff::Diff for GitPin {
 }
 
 impl GitPin {
-    pub fn new(repository: Repository, branch: String, submodules: bool) -> Self {
+    pub fn new(repository: Repository, branch: String, submodules: bool, lfs: bool) -> Self {
         Self {
             repository,
             branch,
             submodules,
+            lfs,
         }
     }
 }
@@ -1008,6 +1012,7 @@ mod test {
             },
             branch: "master".into(),
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1066,6 +1071,7 @@ mod test {
             },
             branch: "master".into(),
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1163,6 +1169,7 @@ mod test {
             },
             branch: "release-2.90".into(),
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1227,6 +1234,7 @@ mod test {
             },
             branch: "master".into(),
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(
@@ -1322,6 +1330,7 @@ mod test {
             },
             branch: "master".into(),
             submodules: false,
+            lfs: false,
         };
         let version = pin.update(None).await?;
         assert_eq!(

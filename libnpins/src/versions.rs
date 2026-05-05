@@ -418,13 +418,13 @@ mod test {
             NixPins {
                 pins: btreemap![
                     "nixos-mailserver".into() => Pin::Git {
-                        input: git::GitPin::new(git::Repository::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap()), "nixos-21.11".into(), false),
+                        input: git::GitPin::new(git::Repository::git("https://gitlab.com/simple-nixos-mailserver/nixos-mailserver.git".parse().unwrap()), "nixos-21.11".into(), false, false),
                         version: Some(git::GitRevision::new("6e3a7b2ea6f0d68b82027b988aa25d3423787303".into()).unwrap()),
                         hashes: Some(git::OptionalUrlHashes { url: None, hash: NixHash::from_sri("sha256-hNhzLOp+dApEY15vwLAQZu+sjEQbJcOXCaSfAT6lpsQ=").unwrap() } ),
                         frozen: Frozen::default(),
                     },
                     "nixpkgs".into() => Pin::Git {
-                        input: git::GitPin::new(git::Repository::github("nixos", "nixpkgs"), "nixpkgs-unstable".into(), false),
+                        input: git::GitPin::new(git::Repository::github("nixos", "nixpkgs"), "nixpkgs-unstable".into(), false, false),
                         version: Some(git::GitRevision::new("5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2".into()).unwrap()),
                         hashes: Some(git::OptionalUrlHashes { url: Some("https://github.com/nixos/nixpkgs/archive/5c37ad87222cfc1ec36d6cd1364514a9efc2f7f2.tar.gz".parse().unwrap()), hash: NixHash::from_sri("sha256-a8GGtxn2iL3WAkY5H+4E0s3Q7XJt6bTOvos9qqxT5OQ=").unwrap() }),
                         frozen: Frozen::default(),

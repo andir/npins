@@ -67,7 +67,7 @@ impl GenericGitAddOpts {
     fn add(&self, repository: git::Repository) -> Result<Pin> {
         Ok(match &self.branch {
             Some(branch) => {
-                let pin = git::GitPin::new(repository, branch.clone(), self.submodules);
+                let pin = git::GitPin::new(repository, branch.clone(), self.submodules, self.lfs);
                 let version = self
                     .at
                     .as_ref()

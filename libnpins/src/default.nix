@@ -88,10 +88,16 @@ let
                 submodules,
                 rev,
                 name,
+                lfs,
                 narHash,
               }:
               pkgs.fetchgit {
-                inherit url rev name;
+                inherit
+                  url
+                  rev
+                  name
+                  lfs
+                  ;
                 fetchSubmodules = submodules;
                 hash = narHash;
               };
@@ -127,6 +133,7 @@ let
       url ? null,
       submodules,
       hash,
+      lfs,
       ...
     }:
     assert repository ? type;
@@ -166,7 +173,12 @@ let
         rev = revision;
         narHash = hash;
 
-        inherit name submodules url;
+        inherit
+          name
+          submodules
+          url
+          lfs
+          ;
       };
 
   mkPyPiSource =

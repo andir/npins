@@ -23,12 +23,17 @@ impl TryFrom<NivPin> for Pin {
 
     fn try_from(niv: NivPin) -> anyhow::Result<Self> {
         Ok(match niv.owner {
-            None => {
-                git::GitPin::new(git::Repository::git(niv.repo.parse()?), niv.branch, false).into()
-            },
+            None => git::GitPin::new(
+                git::Repository::git(niv.repo.parse()?),
+                niv.branch,
+                false,
+                false,
+            )
+            .into(),
             Some(owner) => git::GitPin::new(
                 git::Repository::github(&owner, &niv.repo),
                 niv.branch,
+                false,
                 false,
             )
             .into(),

@@ -93,6 +93,7 @@ impl FlakePin {
                     ),
                     branch,
                     false,
+                    false,
                 )
                 .into()
             },
@@ -109,6 +110,7 @@ impl FlakePin {
                     ),
                     branch,
                     false,
+                    false,
                 )
                 .into()
             },
@@ -122,6 +124,7 @@ impl FlakePin {
                         self.locked.url.context("missing url on git flake input")?,
                     ),
                     ref_,
+                    false,
                     false,
                 )
                 .into()
