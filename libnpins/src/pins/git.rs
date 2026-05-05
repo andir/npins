@@ -477,7 +477,7 @@ impl Updatable for GitPin {
     }
 
     async fn fetch(&self, version: &GitRevision) -> Result<OptionalUrlHashes> {
-        if self.submodules {
+        if self.submodules || self.lfs {
             Ok(OptionalUrlHashes {
                 url: None,
                 hash: nix::nix_prefetch_git(&self.repository.git_url()?, &version.revision, true)
@@ -655,7 +655,7 @@ impl Updatable for GitReleasePin {
             .await?
             .revision;
 
-        if self.submodules {
+        if self.submodules || self.lfs {
             Ok(ReleasePinHashes {
                 url: None,
                 hash: nix::nix_prefetch_git(&repo_url, &revision, true).await?,
