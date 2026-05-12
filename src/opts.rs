@@ -167,6 +167,8 @@ pub struct ContainerAddOpts {
     pub image_name: String,
     #[arg(value_hint = ValueHint::Other)]
     pub image_tag: String,
+    #[arg(long, value_hint = ValueHint::Other)]
+    pub arch: Option<String>,
 }
 
 // Same as `UrlAddOpts` below, but different struct to have different doc comments

@@ -202,6 +202,7 @@ impl ContainerAddOpts {
             container::Pin {
                 image_name: self.image_name.clone(),
                 image_tag: self.image_tag.clone(),
+                arch: self.arch.clone(),
             }
             .into(),
         ))
