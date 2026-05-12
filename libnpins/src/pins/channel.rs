@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Updatable, build_client, diff, nix};
 
 /// Stability note: this may change over time as upstream provides other compression algorithms
-pub const NIXPKGS_ARTIFACT: &'static str = "nixexprs.tar.xz";
+pub const NIXPKGS_ARTIFACT: &str = "nixexprs.tar.xz";
 
 fn default_artifact_path() -> String {
     NIXPKGS_ARTIFACT.into()

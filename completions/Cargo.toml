@@ -6,6 +6,5 @@ license.workspace = true
 
 [dependencies]
 clap.workspace = true
-url.workspace = true
 clap_complete = "4.6.3"
 npins = { path = "../" }
