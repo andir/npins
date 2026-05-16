@@ -1,10 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - `npins show` now accepts a list of pin entries to show instead of always showing the complete list (https://github.com/andir/npins/pull/190)
 - Tweaked forge auto-detection for `add git` (https://github.com/andir/npins/pull/202)
-- `npins remove` now accepts a list of pin entries to remove (https://github.com/andir/npins/pull/203)
+- `npins remove` now accepts a list of pin entries to remove instead of just one (https://github.com/andir/npins/pull/203)
+- Calls to `nix` when verbosely logging now more concisely and accurately display the command being ran (https://github.com/andir/npins/pull/221)
+- `freeze`/`unfreeze` documentation was clarified to indicate more clearly what they do (https://github.com/andir/npins/pull/209)
+- Errors from external commands with http request checks will be now shown in the error output (https://github.com/andir/npins/pull/228)
+- `import-flake` now shows the name of the pin that caused a error in importing (https://github.com/andir/npins/pull/208)
+- Fixed visual glitch where status text was not being cleared properly in `update` and `verify` outputs (https://github.com/andir/npins/pull/187)
+- Minor comment and help changes (https://github.com/andir/npins/pull/194 https://github.com/andir/npins/pull/212)
 
 ## 0.4.0
 
