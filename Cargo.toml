@@ -11,7 +11,7 @@ tokio = "^1.0"
 clap = { version = "=4.5.36", features = [ "derive", "env" ] }
 
 [workspace.package]
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 license = "EUPL-1.2"
 

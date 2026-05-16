@@ -962,7 +962,7 @@ dependencies = [
 
 [[package]]
 name = "libnpins"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "npins"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1092,7 +1092,7 @@ dependencies = [
 
 [[package]]
 name = "npins-completions"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "clap",
  "clap_complete",
