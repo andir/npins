@@ -10,7 +10,7 @@ log = "^0.4"
 tokio = "^1.0"
 
 [workspace.package]
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 license = "EUPL-1.2"
 
