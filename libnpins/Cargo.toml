@@ -14,7 +14,7 @@ url = { workspace = true, features = ["serde"] }
 anyhow.workspace = true
 tokio = { workspace = true, features = ["process"] }
 log.workspace = true
-reqwest = { version = "0.13.1", features = [ "rustls" ], default-features = false }
+reqwest = { version = "0.13.3", features = [ "rustls" ], default-features = false }
 async-trait = "0.1"
 lenient_semver_parser = { version = "0.4.2", default-features = false }
 lenient_version = { version = "0.4.2" }

@@ -33,6 +33,6 @@ tokio = { workspace = true, features = ["rt"] }
 libnpins = { path = "libnpins" }
 # Pin clap because the latest patch has a regression in the help output
 clap.workspace = true
-futures-util = { version = "0.3.31", default-features = false }
+futures-util = { version = "0.3.32", default-features = false }
 crossterm = { version = "0.29", default-features = false }
 env_logger = { version = "^0.11.0", features = ["color", "auto-color", "regex"], default-features = false }
