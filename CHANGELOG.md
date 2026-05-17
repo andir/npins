@@ -7,13 +7,22 @@
   Existing locked tarball pins should remain functional just the same as before, no action required.
 - Added `npins add url` for pinning plain URLs (files that should not be unpacked as tarballs). Same semantics as `tarball` pins. (https://github.com/andir/npins/pull/223)
 - `npins add channel` now takes `--artifact` to pin something other than `nixexprs.tar.xz`, for example `latest-nixos-graphical-x86_64-linux.iso`. (https://github.com/andir/npins/pull/223)
-- `npins show` now accepts a list of pin entries to show instead of always showing the complete list (https://github.com/andir/npins/pull/190)
-- Tweaked forge auto-detection for `add git` (https://github.com/andir/npins/pull/202)
-- `npins remove` now accepts a list of pin entries to remove (https://github.com/andir/npins/pull/203)
 - Added `--plain` to `npins show` display a newline delimated list of pin names (https://github.com/andir/npins/pull/203)
 - Added `--exclude` to `npins show` to invert the provided entries to exclude from the complete list (https://github.com/andir/npins/pull/203)
 - Basic completions for bash, fish and zsh are now included (https://github.com/andir/npins/pull/203)
 - Fish completions will complete pin names where applicable (https://github.com/andir/npins/pull/203)
+
+## 0.4.1
+
+- `npins show` now accepts a list of pin entries to show instead of always showing the complete list (https://github.com/andir/npins/pull/190)
+- Tweaked forge auto-detection for `add git` (https://github.com/andir/npins/pull/202)
+- `npins remove` now accepts a list of pin entries to remove instead of just one (https://github.com/andir/npins/pull/203)
+- Calls to `nix` when verbosely logging now more concisely and accurately display the command being ran (https://github.com/andir/npins/pull/221)
+- `freeze`/`unfreeze` documentation was clarified to indicate more clearly what they do (https://github.com/andir/npins/pull/209)
+- Errors from external commands with http request checks will be now shown in the error output (https://github.com/andir/npins/pull/228)
+- `import-flake` now shows the name of the pin that caused a error in importing (https://github.com/andir/npins/pull/208)
+- Fixed visual glitch where status text was not being cleared properly in `update` and `verify` outputs (https://github.com/andir/npins/pull/187)
+- Minor comment and help changes (https://github.com/andir/npins/pull/194 https://github.com/andir/npins/pull/212)
 
 ## 0.4.0
 
