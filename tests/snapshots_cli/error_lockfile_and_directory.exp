@@ -1,2 +1,2 @@
-$ npins --lock-file sources.json -d npins2 show
-Error: If --lock-file is set, --directory will be ignored and thus should not be set to a non-default value (which is "npins")
+$ npins --lock-file sources.json -d npins show
+Error: expected `COMMAND ...`, got `-d`. Pass `--help` for usage information
