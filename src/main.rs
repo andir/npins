@@ -1340,6 +1340,8 @@ impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
         let mut stderr = stderr().lock();
 
         if !stderr.is_terminal() {
+            result_writer(&mut stderr);
+            stderr.flush().unwrap();
             return;
         }
 
