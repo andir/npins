@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2
+
+- Updating once again writes resulting changes to stderr even if not from a terminal (https://github.com/andir/npins/issues/254)
+
 ## 0.4.1
 
 - `npins show` now accepts a list of pin entries to show instead of always showing the complete list (https://github.com/andir/npins/pull/190)
