@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["libnpins", "completions"]
+members = ["libnpins"]
 
 [workspace.dependencies]
 serde_json = { version = "1.0", features = ["preserve_order"] }
@@ -21,8 +21,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 serde_json.workspace = true
 url.workspace = true
@@ -31,8 +29,7 @@ log.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 
 libnpins = { path = "libnpins" }
-# Pin clap because the latest patch has a regression in the help output
-clap.workspace = true
 futures-util = { version = "0.3", default-features = false }
 crossterm = { version = "0.29", default-features = false }
 env_logger = { version = "0.11", features = ["color", "auto-color", "regex"], default-features = false }
+bpaf = { version = "0.9.26", features = ["autocomplete", "dull-color", "docgen"] }

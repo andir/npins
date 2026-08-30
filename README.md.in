@@ -100,8 +100,8 @@ You may also use attributes from the JSON file, they are exposed 1:1. For exampl
 ## Usage
 
 ```console
-$ npins help
-{{npins help}}
+$ npins --help
+{{npins --help}}
 ```
 
 ### Initialization
@@ -115,8 +115,8 @@ npins init
 This will create an `npins` folder with a `default.nix` and `sources.json` within. By default, the `nixpkgs-unstable` channel will be added as pin.
 
 ```console
-$ npins help init
-{{npins help init}}
+$ npins init --help
+{{npins init --help}}
 ```
 
 ### Migrate from Niv
@@ -133,8 +133,8 @@ In your Nix configuration, simply replace `import ./nix/sources.nix` with `impor
 Note that the import functionality is minimal and only preserves the necessary information to identify the dependency, but not the actual pinned values themselves. Therefore, migrating must always come with an update (unless you do it manually).
 
 ```console
-$ npins help import-niv
-{{npins help import-niv}}
+$ npins import-niv --help
+{{npins import-niv --help}}
 ```
 
 ### Adding dependencies
@@ -159,15 +159,15 @@ npins add pypi streamlit --upper-bound 2.0.0 # We only want 1.X
 Depending on what kind of dependency you are adding, different arguments must be provided. You always have the option to specify a version (or hash, depending on the type) you want to pin to. Otherwise, the latest available version will be fetched for you. Not all features are present on all pin types.
 
 ```console
-$ npins help add
-{{npins help add}}
+$ npins add --help
+{{npins add --help}}
 ```
 
 There are several options for tracking git branches, releases and tags:
 
 ```console
-$ npins help add git
-{{npins help add git}}
+$ npins add git --help
+{{npins add git --help}}
 ```
 
 Npins can track plain old links to URL resources. They will never update.
@@ -176,15 +176,15 @@ Alternatively, you can also add the `--mutable` flag to make them behave similar
 Npins will follow any redirects and then pin that url as the actual version, while keeping the original url as "update" url.
 
 ```console
-$ npins help add tarball
-{{npins help add tarball}}
+$ npins add tarball --help
+{{npins add tarball --help}}
 ```
 
 ### Removing dependencies
 
 ```console
-$ npins help remove
-{{npins help remove}}
+$ npins remove --help
+{{npins remove --help}}
 ```
 
 ### Show current entries
@@ -192,8 +192,8 @@ $ npins help remove
 This will print the currently pinned dependencies in a human readable format. The machine readable `sources.json` may be accessed directly, but make sure to always check the format version (see below).
 
 ```console
-$ npins help show
-{{npins help show}}
+$ npins show --help
+{{npins show --help}}
 ```
 
 ### Updating dependencies
@@ -201,8 +201,8 @@ $ npins help show
 You can decide to update only selected dependencies, or all at once. For some pin types, we distinguish between "find out the latest version" and "fetch the latest version". These can be controlled with the `--full` and `--partial` flags.
 
 ```console
-$ npins help update
-{{npins help update}}
+$ npins update --help
+{{npins update --help}}
 ```
 
 ### Upgrading the pins file
@@ -210,8 +210,8 @@ $ npins help update
 To ensure compatibility across releases, the `npins/sources.json` and `npins/default.nix` are versioned. Whenever the format changes (i.e. because new pin types are added), the version number is increased. Use `npins upgrade` to automatically apply the necessary changes to the `sources.json` and to replace the `default.nix` with one for the current version. No stability guarantees are made on the Nix side across versions.
 
 ```console
-$ npins help upgrade
-{{npins help upgrade}}
+$ npins upgrade --help
+{{npins upgrade --help}}
 ```
 
 ### Using private GitLab repositories

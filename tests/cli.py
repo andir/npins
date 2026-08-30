@@ -24,9 +24,8 @@ with npins_subtest("npins init"):
 
 with npins_subtest("npins show"):
     succeed("npins --lock-file sources.json init --bare")
-    # Setting a custom directory should fail in lockfile mode
-    fail_snapshot("npins --lock-file sources.json -d npins2 show", "error_lockfile_and_directory")
-    succeed("npins --lock-file sources.json -d npins show")
+    # Setting a directory (even the default) should fail in lockfile mode
+    fail_snapshot("npins --lock-file sources.json -d npins show", "error_lockfile_and_directory")
 
 
 with npins_subtest("npins add --dry-run"):

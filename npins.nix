@@ -24,11 +24,6 @@ let
     "^/libnpins/src$"
     "^/libnpins/src/.+$"
     "^/libnpins/Cargo.toml$"
-    "^/completions$"
-    "^/completions/src$"
-    "^/completions/src/.+$"
-    "^/completions/Cargo.toml$"
-    "^/completions/pin-completions.fish$"
   ];
 
   extractSource =
@@ -70,13 +65,6 @@ let
 
     inherit src;
 
-    cargoBuildFlags = [
-      "-p"
-      "npins"
-      "-p"
-      "npins-completions"
-    ];
-
     nativeBuildInputs = [
       makeWrapper
       installShellFiles
@@ -87,11 +75,9 @@ let
 
     postFixup = ''
       installShellCompletion --cmd npins \
-        --bash <($out/bin/npins-completions bash) \
-        --fish <(cat <($out/bin/npins-completions fish) $src/completions/pin-completions.fish) \
-        --zsh <($out/bin/npins-completions zsh)
-
-      rm $out/bin/npins-completions
+        --bash <($out/bin/npins --bpaf-complete-style-bash) \
+        --fish <($out/bin/npins --bpaf-complete-style-fish) \
+        --zsh <($out/bin/npins --bpaf-complete-style-zsh)
 
       wrapProgram $out/bin/npins --prefix PATH : "${runtimePath}"
     '';

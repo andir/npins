@@ -100,31 +100,40 @@ You may also use attributes from the JSON file, they are exposed 1:1. For exampl
 ## Usage
 
 ```console
-$ npins help
-Usage: npins [OPTIONS] <COMMAND>
+$ npins --help
+Simple and convenient dependency pinning for Nix. All options are available in subcommands.
 
-Commands:
-  init          Initializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your sources.json
-  add           Adds a new pin entry
-  show          Lists the current pin entries
-  update        Updates all or the given pins to the latest version
-  verify        Verifies that all or the given pins still have correct hashes. This is like `update --partial --dry-run` and then checking that the diff is empty
-  upgrade       Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
-  remove        Removes one pin entry
-  import-niv    Try to import entries from Niv
-  import-flake  Try to import entries from flake.lock
-  import-lon    Try to import entries from lon.lock
-  freeze        Freezes a pin entry, preventing it from being changed during an update
-  unfreeze      Thaws a pin entry, allowing it to be changed during an update like a normal pin
-  get-path      Evaluates the store path to a pin, fetching it if necessary. Don't forget to add a GC root
-  help          Print this message or the help of the given subcommand(s)
+Usage: npins ([-d=FOLDER] | --lock-file=FILE) [-v] COMMAND ...
 
-Options:
-  -d, --directory <FOLDER>     Base folder for sources.json and the boilerplate default.nix [env: NPINS_DIRECTORY=] [default: npins]
-      --lock-file <LOCK_FILE>  Specifies the path to the sources.json and activates lockfile mode. In lockfile mode, no default.nix will be generated and --directory will be ignored
-  -v, --verbose                Print debug messages
-  -h, --help                   Print help
-  -V, --version                Print version
+Available options:
+    -d, --directory=FOLDER  Specifies base folder for sources.json and the boilerplate default.nix
+                            [env:NPINS_DIRECTORY: N/A]
+                            [default: npins]
+        --lock-file=FILE    Specifies the lockfile and operates only on it (lockfile mode)
+    -v, --verbose           Prints debug messages
+    -h, --help              Prints help information
+    -V, --version           Prints version information
+
+Available commands:
+    init                    Intializes the npins directory. Running this multiple times will
+                            restore/upgrade the `default.nix` and never touch your sources.json
+    add                     Adds a new pin entry.
+    show                    Lists the current pin entries
+    update                  Updates all or the given pins to the latest version
+    verify                  Verifies that all or the given pins still have correct hashes. This is
+                            like `update --partial --dry-run` and then checking that the diff is
+                            empty
+    upgrade                 Upgrade the sources.json and default.nix to the latest format version.
+                            This may occasionally break Nix evaluation!
+    remove                  Remove pin entries
+    import-niv              Try to import entries from Niv
+    import-lon              Try to import entries from Lon
+    import-flake            Try to import entries from flake.lock
+    freeze                  Freezes a pin entry, preventing it from being changed during an update
+    unfreeze                Thaws a pin entry, allowing it to be changed during an update like a
+                            normal pin
+    get-path                Evaluates the store path to a pin, fetching it if necessary. Don't
+                            forget to add a GC root
 ```
 
 ### Initialization
@@ -138,15 +147,15 @@ npins init
 This will create an `npins` folder with a `default.nix` and `sources.json` within. By default, the `nixpkgs-unstable` channel will be added as pin.
 
 ```console
-$ npins help init
-Initializes the npins directory. Running this multiple times will restore/upgrade the `default.nix` and never touch your sources.json
+$ npins init --help
+Intializes the npins directory. Running this multiple times will restore/upgrade the `default.nix`
+and never touch your sources.json
 
-Usage: npins init [OPTIONS]
+Usage: npins init [--bare]
 
-Options:
-      --bare     Don't add an initial `nixpkgs` entry
-  -v, --verbose  Print debug messages
-  -h, --help     Print help
+Available options:
+        --bare  Don't add an initial `nixpkgs` entry
+    -h, --help  Prints help information
 ```
 
 ### Migrate from Niv
@@ -163,18 +172,16 @@ In your Nix configuration, simply replace `import ./nix/sources.nix` with `impor
 Note that the import functionality is minimal and only preserves the necessary information to identify the dependency, but not the actual pinned values themselves. Therefore, migrating must always come with an update (unless you do it manually).
 
 ```console
-$ npins help import-niv
+$ npins import-niv --help
 Try to import entries from Niv
 
-Usage: npins import-niv [OPTIONS] [PATH]
+Usage: npins import-niv [-n=NAME] [FILE]
 
-Arguments:
-  [PATH]  [default: nix/sources.json]
+Available positional items:
 
-Options:
-  -n, --name <NAME>  Optionally import only one entry from Niv instead of all
-  -v, --verbose      Print debug messages
-  -h, --help         Print help
+Available options:
+    -n, --name=NAME  Only import one entry from Niv
+    -h, --help       Prints help information
 ```
 
 ### Adding dependencies
@@ -199,83 +206,57 @@ npins add pypi streamlit --upper-bound 2.0.0 # We only want 1.X
 Depending on what kind of dependency you are adding, different arguments must be provided. You always have the option to specify a version (or hash, depending on the type) you want to pin to. Otherwise, the latest available version will be fetched for you. Not all features are present on all pin types.
 
 ```console
-$ npins help add
-Adds a new pin entry
+$ npins add --help
+Adds a new pin entry.
 
-Usage: npins add [OPTIONS] <COMMAND>
+Usage: npins add [--name=NAME] [--frozen] [-n] COMMAND ...
 
-Commands:
-  channel    Track a Nix channel
-  github     Track a GitHub repository
-  forgejo    Track a Forgejo repository
-  gitlab     Track a GitLab repository
-  git        Track a git repository
-  pypi       Track a package on PyPi
-  container  Track an OCI container
-  tarball    Track a tarball
-  url        Track a URL
-  help       Print this message or the help of the given subcommand(s)
+Available options:
+        --name=NAME  Add the pin with a custom name. If a pin with that name already exists, it will
+                     be overwritten
+        --frozen     Add the pin as frozen, meaning that it will be ignored by `npins update` by
+                     default.
+    -n, --dry-run    Don't actually apply the changes
+    -h, --help       Prints help information
 
-Options:
-      --name <NAME>  Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
-      --frozen       Add the pin as frozen, meaning that it will be ignored by `npins update` by default
-  -n, --dry-run      Don't actually apply the changes
-  -v, --verbose      Print debug messages
-  -h, --help         Print help
+Available commands:
+    channel          Track a Nix channel
+    github           Track a GitHub repository
+    forgejo          Track a Forgejo repository
+    gitlab           Track a GitLab repository
+    git              Track a git repository
+    pypi             Track a package on PyPi
+    container        Track an OCI container
+    tarball          Track a URL
+    url              Track a URL
 ```
 
 There are several options for tracking git branches, releases and tags:
 
 ```console
-$ npins help add git
+$ npins add git --help
 Track a git repository
 
-Usage: npins add git [OPTIONS] <URL>
+Usage: npins add git [--at=<TAG OR REV>] [--submodules] (-b=BRANCH | [--pre-releases] [--upper-bound
+=VERSION] [--release-prefix=VERSION]) [--forge=FORGE] URL
 
-Arguments:
-  <URL>
-          The git remote URL. For example <https://github.com/andir/ate.git>
+Available positional items:
+    URL                    The git remote URL. For example <https://github.com/andir/ate.git>
 
-Options:
-      --forge <FORGE>
-          [default: auto]
-
-          Possible values:
-          - none:    A generic git pin, with no further information
-          - auto:    Try to determine the Forge from the given url, potentially by probing the server
-          - gitlab:  A Gitlab forge, e.g. gitlab.com
-          - github:  A Github forge, i.e. github.com
-          - forgejo: A Forgejo forge, e.g. codeberg.org
-
-      --name <NAME>
-          Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
-
-  -b, --branch <BRANCH>
-          Track a branch instead of a release
-
-      --frozen
-          Add the pin as frozen, meaning that it will be ignored by `npins update` by default
-
-      --at <tag or rev>
-          Use a specific commit/release instead of the latest. This may be a tag name, or a git revision when --branch is set
-
-  -v, --verbose
-          Print debug messages
-
-      --pre-releases
-          Also track pre-releases. Conflicts with the --branch option
-
-      --upper-bound <version>
-          Bound the version resolution. For example, setting this to "2" will restrict updates to 1.X versions. Conflicts with the --branch option
-
-      --release-prefix <RELEASE_PREFIX>
-          Optional prefix required for each release name / tag. For example, setting this to "release/" will only consider those that start with that string
-
-      --submodules
-          Also fetch submodules
-
-  -h, --help
-          Print help (see a summary with '-h')
+Available options:
+        --at=<TAG OR REV>  Use a specific commit/release instead of the latest. This may be a tag
+                           name, or a git revision when --branch is set.
+        --submodules       Also fetch submodules
+    -b, --branch=BRANCH    Track a branch instead of a release
+        --pre-releases     Also track pre-releases. Conflicts with the --branch option.
+        --upper-bound=VERSION  Bound the version resolution. For example, setting this to "2" will
+                           restrict updates to 1.X versions.
+        --release-prefix=VERSION  Optional prefix required for each release name / tag. For example,
+                           setting this to "release/" will only consider those that start with that
+                           string.
+        --forge=FORGE
+                           [default: auto]
+    -h, --help             Prints help information
 ```
 
 Npins can track plain old links to URL resources. They will never update.
@@ -284,48 +265,37 @@ Alternatively, you can also add the `--mutable` flag to make them behave similar
 Npins will follow any redirects and then pin that url as the actual version, while keeping the original url as "update" url.
 
 ```console
-$ npins help add tarball
-Track a tarball
+$ npins add tarball --help
+Track a URL
 
-This can be either a static URL that never changes its contents or a "mutable" URL that redirects to an immutable snapshot.
+Usage: npins add tarball [--mutable] URL
 
-Usage: npins add tarball [OPTIONS] <URL>
+This can be either a static URL that never changes its contents or a "mutable" URL that redirects to
+an immutable snapshot.
 
-Arguments:
-  <URL>
-          Tarball URL
+Available positional items:
+    URL            Tarball URL
 
-Options:
-      --mutable
-          Treat this URL as mutable, and assume it will redirect to an immutable version of the content to be pinned. For example, a HEAD URL redirecting to the currently latest commit
-
-      --name <NAME>
-          Add the pin with a custom name. If a pin with that name already exists, it will be overwritten
-
-      --frozen
-          Add the pin as frozen, meaning that it will be ignored by `npins update` by default
-
-  -v, --verbose
-          Print debug messages
-
-  -h, --help
-          Print help (see a summary with '-h')
+Available options:
+        --mutable  Treat this URL as mutable, and assume it will redirect to an immutable version of
+                   the content to be pinned. For example, a HEAD URL redirecting to the currently
+                   latest commit
+    -h, --help     Prints help information
 ```
 
 ### Removing dependencies
 
 ```console
-$ npins help remove
-Removes one pin entry
+$ npins remove --help
+Remove pin entries
 
-Usage: npins remove [OPTIONS] <NAMES>...
+Usage: npins remove NAMES...
 
-Arguments:
-  <NAMES>...  
+Available positional items:
+    NAMES       Names of the pins to remove
 
-Options:
-  -v, --verbose  Print debug messages
-  -h, --help     Print help
+Available options:
+    -h, --help  Prints help information
 ```
 
 ### Show current entries
@@ -333,19 +303,18 @@ Options:
 This will print the currently pinned dependencies in a human readable format. The machine readable `sources.json` may be accessed directly, but make sure to always check the format version (see below).
 
 ```console
-$ npins help show
+$ npins show --help
 Lists the current pin entries
 
-Usage: npins show [OPTIONS] [NAMES]...
+Usage: npins show [-b] [-e] [NAMES]...
 
-Arguments:
-  [NAMES]...  Names of the pins to show
+Available positional items:
+    NAMES          Names of the pins to show
 
-Options:
-  -p, --plain    Prints only pin names
-  -e, --exclude  Invert [NAMES] to exclude specified pins
-  -v, --verbose  Print debug messages
-  -h, --help     Print help
+Available options:
+    -b, --plain    Prints only pin names
+    -e, --exclude  Prints all the pins not specified
+    -h, --help     Prints help information
 ```
 
 ### Updating dependencies
@@ -353,29 +322,22 @@ Options:
 You can decide to update only selected dependencies, or all at once. For some pin types, we distinguish between "find out the latest version" and "fetch the latest version". These can be controlled with the `--full` and `--partial` flags.
 
 ```console
-$ npins help update
+$ npins update --help
 Updates all or the given pins to the latest version
 
-Usage: npins update [OPTIONS] [NAMES]...
+Usage: npins update [-f | -p] [-n] [--frozen] [--max-concurrent-downloads=NUM] [NAMES]...
 
-Arguments:
-  [NAMES]...  Updates only the specified pins
+Available positional items:
+    NAMES          Updates only the specified pins
 
-Options:
-  -p, --partial
-          Don't update versions, only re-fetch hashes
-  -f, --full
-          Re-fetch hashes even if the version hasn't changed. Useful to make sure the derivations are in the Nix store
-  -n, --dry-run
-          Print the diff, but don't write back the changes
-  -v, --verbose
-          Print debug messages
-      --frozen
-          Allow updating frozen pins, which would otherwise be ignored
-      --max-concurrent-downloads <MAX_CONCURRENT_DOWNLOADS>
-          Maximum number of simultaneous downloads [default: 5]
-  -h, --help
-          Print help
+Available options:
+    -f, --full     Re-fetch hashes even if the version hasn't changed. Useful to make sure the
+                   derivations are in the Nix store.
+    -p, --partial  Don't update versions, only re-fetch hashes
+    -n, --dry-run  Print the diff, but don't write back the changes
+        --frozen   Allow updating frozen pins, which would otherwise be ignored
+        --max-concurrent-downloads=NUM  Maximum number of simultaneous downloads
+    -h, --help     Prints help information
 ```
 
 ### Upgrading the pins file
@@ -383,14 +345,14 @@ Options:
 To ensure compatibility across releases, the `npins/sources.json` and `npins/default.nix` are versioned. Whenever the format changes (i.e. because new pin types are added), the version number is increased. Use `npins upgrade` to automatically apply the necessary changes to the `sources.json` and to replace the `default.nix` with one for the current version. No stability guarantees are made on the Nix side across versions.
 
 ```console
-$ npins help upgrade
-Upgrade the sources.json and default.nix to the latest format version. This may occasionally break Nix evaluation!
+$ npins upgrade --help
+Upgrade the sources.json and default.nix to the latest format version. This may occasionally break
+Nix evaluation!
 
-Usage: npins upgrade [OPTIONS]
+Usage: npins upgrade 
 
-Options:
-  -v, --verbose  Print debug messages
-  -h, --help     Print help
+Available options:
+    -h, --help  Prints help information
 ```
 
 ### Using private GitLab repositories

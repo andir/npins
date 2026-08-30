@@ -1,7 +1,6 @@
 //! The main CLI application
 
 use anyhow::{Context, Result};
-use clap::Parser;
 use crossterm::{
     QueueableCommand,
     cursor::MoveToPreviousLine,
@@ -18,6 +17,7 @@ use std::{
     fs::File,
     future,
     io::{BufReader, IsTerminal, Write, stderr},
+    path::Path,
 };
 use url::{ParseError, Url};
 
@@ -65,8 +65,8 @@ impl ChannelAddOpts {
 
 impl GenericGitAddOpts {
     fn add(&self, repository: git::Repository) -> Result<Pin> {
-        Ok(match &self.branch {
-            Some(branch) => {
+        Ok(match &self.selected {
+            GitAddSelection::Branch { branch } => {
                 let pin = git::GitPin::new(repository, branch.clone(), self.submodules);
                 let version = self
                     .at
@@ -75,12 +75,16 @@ impl GenericGitAddOpts {
                     .transpose()?;
                 (pin, version).into()
             },
-            None => {
+            GitAddSelection::Release {
+                pre_releases,
+                version_upper_bound,
+                release_prefix,
+            } => {
                 let pin = git::GitReleasePin::new(
                     repository,
-                    self.pre_releases,
-                    self.version_upper_bound.clone(),
-                    self.release_prefix.clone(),
+                    *pre_releases,
+                    version_upper_bound.clone(),
+                    release_prefix.clone(),
                     self.submodules,
                 );
                 let version = self.at.as_ref().map(|at| GenericVersion {
@@ -133,20 +137,7 @@ impl GitLabAddOpts {
 
 impl GitAddOpts {
     pub async fn add(&self) -> Result<(Option<String>, Pin)> {
-        let url = Url::parse(&self.url)
-            .map_err(|e| {
-                match e {
-                    url::ParseError::RelativeUrlWithoutBase => {
-                        anyhow::format_err!("URL scheme is missing. For git URLs, add the fully qualified scheme like git+ssh://. For local repositories, add file://")
-                    },
-                    url::ParseError::InvalidPort => {
-                        anyhow::format_err!("Invalid port number. For git URLs, try inserting a '/' after the ':' before the user name, like so: git+ssh://git@gitlab-instance.net:/user/repo.git")
-                    },
-                    e => e.into(),
-                }
-            })
-            .context("Failed to parse repository URL")?;
-
+        let url = self.url.clone();
         if url.scheme().contains('.') {
             log::warn!(
                 "Your URL scheme ('{}:') contains a '.', which is unusual. Please double-check its correctness.",
@@ -209,18 +200,6 @@ impl ContainerAddOpts {
     }
 }
 
-impl TarballAddOpts {
-    pub async fn add(&self) -> Result<(Option<String>, Pin)> {
-        // Delegate to `UrlAddOpts`
-        UrlAddOpts {
-            url: self.url.clone(),
-            mutable: self.mutable,
-        }
-        .add(true)
-        .await
-    }
-}
-
 impl UrlAddOpts {
     pub async fn add(&self, unpack: bool) -> Result<(Option<String>, Pin)> {
         let pin: Pin = if self.mutable {
@@ -249,7 +228,7 @@ impl AddOpts {
             AddCommands::Forgejo(fg) => fg.add()?,
             AddCommands::GitLab(gl) => gl.add()?,
             AddCommands::PyPi(p) => p.add()?,
-            AddCommands::Tarball(p) => p.add().await?,
+            AddCommands::Tarball(p) => p.add(true).await?,
             AddCommands::Url(p) => p.add(false).await?,
             AddCommands::Container(p) => p.add()?,
         };
@@ -282,33 +261,25 @@ fn write_diff(writer: &mut impl Write, name: &str, diff: &[diff::DiffEntry]) {
     }
 }
 
+pub fn read_pins(path: &Path) -> Result<NixPins> {
+    let fh = BufReader::new(File::open(path).with_context(move || {
+        format!(
+            "Failed to open {}. You must initialize npins before you can show current pins.",
+            path.display()
+        )
+    })?);
+    NixPins::from_json_versioned(serde_json::from_reader(fh)?)
+        .context("Failed to deserialize sources.json")
+}
+
 impl Opts {
     fn read_pins(&self) -> Result<NixPins> {
-        let path = if let Some(lock_file) = self.lock_file.as_ref() {
-            lock_file.to_owned()
-        } else {
-            self.folder.join("sources.json")
-        };
-        let fh = BufReader::new(File::open(&path).with_context(move || {
-            format!(
-                "Failed to open {}. You must initialize npins before you can show current pins.",
-                path.display()
-            )
-        })?);
-        NixPins::from_json_versioned(serde_json::from_reader(fh)?)
-            .context("Failed to deserialize sources.json")
+        read_pins(self.mode.lockfile())
     }
 
     fn write_pins(&self, pins: &NixPins) -> Result<()> {
-        let path = if let Some(lock_file) = &self.lock_file {
-            lock_file.to_owned()
-        } else {
-            if !self.folder.exists() {
-                std::fs::create_dir(&self.folder)?;
-            }
-            self.folder.join("sources.json")
-        };
-        let mut fh = File::create(&path)
+        let path = self.mode.lockfile();
+        let mut fh = File::create(path)
             .with_context(move || format!("Failed to open {} for writing.", path.display()))?;
         serde_json::to_writer_pretty(&mut fh, &pins.to_value_versioned())?;
         fh.write_all(b"\n")?;
@@ -318,22 +289,22 @@ impl Opts {
     async fn init(&self, o: &InitOpts) -> Result<()> {
         log::info!("Welcome to npins!");
 
-        // Skip the entire default.nix and convenience creating folders bit in lockfile mode
-        if self.lock_file.is_none() {
-            let default_nix = DEFAULT_NIX;
-            if !self.folder.exists() {
-                log::info!("Creating `{}` directory", self.folder.display());
-                std::fs::create_dir(&self.folder).context("Failed to create npins folder")?;
+        if let SourceMode::Directory {
+            default_nix,
+            directory,
+            ..
+        } = &self.mode
+        {
+            if !directory.exists() {
+                log::info!("Creating `{}` directory", directory.display());
+                std::fs::create_dir(directory).context("Failed to create npins folder")?;
             }
             log::info!("Writing default.nix");
-            let p = self.folder.join("default.nix");
-            let mut fh = File::create(&p).context("Failed to create npins default.nix")?;
-            fh.write_all(default_nix.as_bytes())?;
+            let mut fh = File::create(default_nix).context("Failed to create npins default.nix")?;
+            fh.write_all(DEFAULT_NIX.as_bytes())?;
         }
 
-        let sources_json = self.folder.join("sources.json");
-        let path = self.lock_file.as_ref().unwrap_or(&sources_json);
-        // Only create the pins if the file isn't there yet
+        let path = self.mode.lockfile();
         if path.exists() {
             log::info!(
                 "The file '{}' already exists; nothing to do.",
@@ -362,10 +333,7 @@ impl Opts {
         self.write_pins(&initial_pins)?;
         log::info!(
             "Successfully written initial files to '{}'.",
-            self.lock_file
-                .as_ref()
-                .unwrap_or(&self.folder.join("sources.json"))
-                .display()
+            path.display()
         );
         Ok(())
     }
@@ -508,13 +476,6 @@ impl Opts {
             return Err(anyhow::anyhow!("no valid pin selected for update"));
         }
 
-        let strategy = match (opts.partial, opts.full) {
-            (false, false) => UpdateStrategy::Normal,
-            (false, true) => UpdateStrategy::Full,
-            (true, false) => UpdateStrategy::HashesOnly,
-            (true, true) => panic!("partial and full are mutually exclusive"),
-        };
-
         let animation = Animation::new(|stderr, finished| {
             write!(stderr, "Updated {finished}/{length} pins").unwrap()
         });
@@ -529,7 +490,7 @@ impl Opts {
             })
             .map(|(name, pin)| async move {
                 animation.on_pin_start(name);
-                let diff = Self::update_one(name, pin, strategy).await?;
+                let diff = Self::update_one(name, pin, opts.strategy).await?;
                 animation.on_pin_finish(name, |stderr| write_diff(stderr, name, &diff));
                 anyhow::Result::<_, anyhow::Error>::Ok((name, diff))
             });
@@ -660,27 +621,29 @@ impl Opts {
     }
 
     fn upgrade(&self) -> Result<()> {
-        if self.lock_file.is_none() {
+        if let SourceMode::Directory {
+            default_nix,
+            directory,
+            ..
+        } = &self.mode
+        {
             anyhow::ensure!(
-                self.folder.exists(),
+                directory.exists(),
                 "Could not find npins folder at {}",
-                self.folder.display(),
+                directory.display(),
             );
 
-            let nix_path = self.folder.join("default.nix");
-            let nix_file = DEFAULT_NIX;
-            if std::fs::read_to_string(&nix_path)? == nix_file {
+            if std::fs::read_to_string(default_nix)? == DEFAULT_NIX {
                 log::info!("default.nix is already up to date");
             } else {
                 log::info!("Replacing default.nix with an up to date version");
-                std::fs::write(&nix_path, nix_file)
+                std::fs::write(default_nix, DEFAULT_NIX)
                     .context("Failed to create npins default.nix")?;
             }
         }
 
         log::info!("Upgrading lock file to the newest format version");
-        let sources_json = self.folder.join("sources.json");
-        let path = self.lock_file.as_ref().unwrap_or(&sources_json);
+        let path = self.mode.lockfile();
         let fh = BufReader::new(File::open(path).with_context(move || {
             format!(
                 "Failed to open {}. You must initialize npins first.",
@@ -1008,11 +971,7 @@ impl Opts {
             );
         }
 
-        let path = self
-            .lock_file
-            .to_owned()
-            .unwrap_or(self.folder.join("sources.json"));
-        let out_path = nix::nix_eval_pin(&path, &o.name)
+        let out_path = nix::nix_eval_pin(self.mode.lockfile(), &o.name)
             .await
             .context("Could not evaluate pin")?;
         /* note(piegames): HMU if you ever find yourself using npins on Windows */
@@ -1024,11 +983,6 @@ impl Opts {
     }
 
     pub fn run(&self) -> Result<()> {
-        if self.lock_file.is_some() && &*self.folder != std::path::Path::new("npins") {
-            anyhow::bail!(
-                "If --lock-file is set, --directory will be ignored and thus should not be set to a non-default value (which is \"npins\")"
-            );
-        }
         match &self.command {
             Command::Init(o) => start_runtime(self.init(o))?,
             Command::Show(o) => self.show(o)?,
@@ -1139,7 +1093,7 @@ impl<'a, F: for<'b> Fn(&'b mut std::io::StderrLock, i32)> Animation<'a, F> {
 }
 
 fn main() -> Result<()> {
-    let opts = Opts::parse();
+    let opts = crate::Opts::parser().run();
 
     env_logger::builder()
         .filter_level(if opts.verbose {
