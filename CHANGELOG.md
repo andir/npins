@@ -2,10 +2,18 @@
 
 ## Unreleased
 
-- Added `import-lon` to import lockfiles from Lon
-- `import-niv` now supports file/tarball pins.
-- `import-flake` now supports file pins.
-- Updating container pins no longer downloads the image twice (https://github.com/andir/npins/pull/243, TODO)
+## 0.5.1
+
+- Added `import-lon` to import lockfiles from Lon. (https://github.com/andir/npins/pull/251)
+- `import-niv` now supports file/tarball pins. (https://github.com/andir/npins/pull/251)
+- `import-flake` now supports file pins. (https://github.com/andir/npins/pull/251)
+- Updating container pins no longer downloads the image twice (https://github.com/andir/npins/pull/251)
+- Newly created/upgraded [default.nix](https://github.com/andir/npins/blob/0.5.1/libnpins/src/default.nix) will no longer error on mutable `url` pins having long store paths (https://github.com/andir/npins/pull/245 https://github.com/andir/npins/pull/257)
+- Updating once again writes resulting changes to stderr even if not from a terminal (https://github.com/andir/npins/issues/254)
+
+## 0.4.2
+
+- Updating once again writes resulting changes to stderr even if not from a terminal (https://github.com/andir/npins/issues/254)
 
 ## 0.5.0
 
