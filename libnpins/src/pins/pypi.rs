@@ -61,7 +61,7 @@ impl Updatable for Pin {
          * JSON schema (as in the returned value): https://warehouse.pypa.io/api-reference/json.html
          */
         let metadata: PyPiMetadata =
-            get_and_deserialize(format!("https://pypi.org/pypi/{}/json", &self.name))
+            get_and_deserialize(format!("https://pypi.org/pypi/{}/json", self.name))
                 .await
                 .context("Could not fetch Pypi metadata")?;
         let version = match version_upper_bound {
@@ -112,7 +112,7 @@ impl Updatable for Pin {
          * JSON schema (as in the returned value): https://warehouse.pypa.io/api-reference/json.html
          */
         let mut metadata: PyPiMetadata =
-            get_and_deserialize(format!("https://pypi.org/pypi/{}/json", &self.name))
+            get_and_deserialize(format!("https://pypi.org/pypi/{}/json", self.name))
                 .await
                 .context("Could not fetch Pypi metadata")?;
 

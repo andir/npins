@@ -9,7 +9,7 @@ let
   pre-commit = (import pins."pre-commit-hooks.nix").run {
     src = ./.;
     hooks = {
-      nixfmt-rfc-style = {
+      nixfmt = {
         enable = true;
         settings.width = 100;
       };
@@ -47,7 +47,7 @@ pkgs.mkShell {
       just
       npins
     ]
-    ++ (lib.optionals stdenv.isDarwin [
+    ++ (lib.optionals stdenv.hostPlatform.isDarwin [
       pkgs.libiconv
     ]);
 

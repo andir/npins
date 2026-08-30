@@ -7,18 +7,18 @@ error:
             2|   This file is provided under the MIT licence:
 
        … while evaluating the attribute 'hello-world.outPath'
-         at «string»:116:15:
-          115|     in
-          116|     spec // { outPath = mayOverride name path; };
+         at «string»:133:15:
+          132|     in
+          133|     spec // { outPath = mayOverride name path; };
              |               ^
-          117|
+          134|
 
        … from call site
-         at «string»:116:25:
-          115|     in
-          116|     spec // { outPath = mayOverride name path; };
+         at «string»:133:25:
+          132|     in
+          133|     spec // { outPath = mayOverride name path; };
              |                         ^
-          117|
+          134|
 
        … while calling 'mayOverride'
          at «string»:37:11:
@@ -35,25 +35,25 @@ error:
            45|     else
 
        … from call site
-         at «string»:112:11:
-          111|         else if spec.type == "Container" then
-          112|           mkContainerSource pkgs spec
+         at «string»:129:11:
+          128|         else if spec.type == "Container" then
+          129|           mkContainerSource pkgs spec
              |           ^
-          113|         else
+          130|         else
 
        … while calling 'mkContainerSource'
-         at «string»:215:5:
-          214|     pkgs:
-          215|     {
+         at «string»:232:5:
+          231|     pkgs:
+          232|     {
              |     ^
-          216|       image_name,
+          233|       image_name,
 
        … caused by explicit throw
-         at «string»:223:7:
-          222|     if pkgs == null then
-          223|       builtins.throw "container sources require passing in a Nixpkgs value: https://github.com/andir/npins/blob/master/README.md#using-the-nixpkgs-fetchers"
+         at «string»:240:7:
+          239|     if pkgs == null then
+          240|       builtins.throw "container sources require passing in a Nixpkgs value: https://github.com/andir/npins/blob/master/README.md#using-the-nixpkgs-fetchers"
              |       ^
-          224|     else
+          241|     else
 
        error: container sources require passing in a Nixpkgs value: https://github.com/andir/npins/blob/master/README.md#using-the-nixpkgs-fetchers
 Error: Could not evaluate pin

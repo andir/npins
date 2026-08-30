@@ -8,18 +8,18 @@ license.workspace = true
 wildcard_imports = "warn"
 
 [dependencies]
-serde = { version = "^1.0", features = [ "derive" ] }
+serde = { version = "1", features = [ "derive" ] }
 serde_json.workspace = true
 url = { workspace = true, features = ["serde"] }
 anyhow.workspace = true
 tokio = { workspace = true, features = ["process"] }
 log.workspace = true
-reqwest = { version = "0.13.3", features = [ "rustls" ], default-features = false }
+reqwest = { version = "0.13.4", features = [ "rustls" ], default-features = false }
 async-trait = "0.1"
 lenient_semver_parser = { version = "0.4.2", default-features = false }
 lenient_version = { version = "0.4.2" }
-nix-compat = { git = "https://git.snix.dev/snix/snix", rev = "4918571f95d436d2e3da4665e8c1e9b77d9546e8", default-features = false, features = ["serde"] }
-shlex = "1.3.0"
+nix-compat = { git = "https://git.snix.dev/snix/snix", rev = "833fc62bffe4fd9adb1f5e3fc4dbd77ebf2cfe7f", default-features = false, features = ["serde"] }
+shlex = "2"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }

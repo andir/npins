@@ -466,7 +466,7 @@ impl Opts {
                 .fetch()
                 .await
                 .with_context(|| format!("Fetching {}", name))?;
-            diff1.into_iter().chain(diff2.into_iter()).collect()
+            diff1.into_iter().chain(diff2).collect()
         } else {
             diff1
         };

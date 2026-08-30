@@ -7,18 +7,18 @@ error:
             2|   This file is provided under the MIT licence:
 
        … while evaluating the attribute 'broken.outPath'
-         at «string»:116:15:
-          115|     in
-          116|     spec // { outPath = mayOverride name path; };
+         at «string»:133:15:
+          132|     in
+          133|     spec // { outPath = mayOverride name path; };
              |               ^
-          117|
+          134|
 
        … from call site
-         at «string»:116:25:
-          115|     in
-          116|     spec // { outPath = mayOverride name path; };
+         at «string»:133:25:
+          132|     in
+          133|     spec // { outPath = mayOverride name path; };
              |                         ^
-          117|
+          134|
 
        … while calling 'mayOverride'
          at «string»:37:11:
@@ -35,25 +35,39 @@ error:
            45|     else
 
        … from call site
-         at «string»:110:11:
-          109|         else if spec.type == "Url" || spec.type == "MutableUrl" then
-          110|           mkUrlSource fetchers spec
+         at «string»:127:11:
+          126|         else if spec.type == "Url" || spec.type == "MutableUrl" then
+          127|           mkUrlSource fetchers spec
              |           ^
-          111|         else if spec.type == "Container" then
+          128|         else if spec.type == "Container" then
 
        … while calling 'mkUrlSource'
-         at «string»:202:5:
-          201|     }:
-          202|     {
+         at «string»:219:5:
+          218|     }:
+          219|     {
              |     ^
-          203|       url,
+          220|       url,
+
+       … from call site
+         at «string»:225:5:
+          224|     }:
+          225|     (if unpack then fetchTarball else fetchurl) {
+             |     ^
+          226|       inherit url;
+
+       … while calling 'fetchurl'
+         at «string»:69:15:
+           68|             fetchurl =
+           69|               {
+             |               ^
+           70|                 url,
 
        … while calling the 'fetchurl' builtin
-         at «string»:208:5:
-          207|     }:
-          208|     (if unpack then fetchTarball else fetchurl) {
-             |     ^
-          209|       inherit url;
+         at «string»:73:15:
+           72|               }:
+           73|               builtins.fetchurl {
+             |               ^
+           74|                 name = "source";
 
        error: hash mismatch in file downloaded from 'http://localhost/testTarball':
          specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
