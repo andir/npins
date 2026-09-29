@@ -112,8 +112,9 @@ let
   };
 
   # The locked URL behind the nixpkgs-unstable channel of the mock channels host
-  channelReleasePath = "/nixpkgs/nixpkgs-unstable-25.11pre123456.abcdef/nixexprs.tar.xz";
-  channelReleaseUrl = "https://releases.nixos.org${channelReleasePath}";
+  channelUnstableReleasePath = "/nixpkgs/nixpkgs-unstable-25.11pre123456.abcdef/nixexprs.tar.xz";
+  channelStableReleasePath = "/nixos/26.05/nixos-26.05.56789.ghijkl/nixexprs.tar.xz";
+  channelReleaseHost = "https://releases.nixos.org";
 
   # Fake self-signed TLS certificates.
   # Contains `ca.pem`, `cert.pem` and `key.pem`
@@ -228,13 +229,17 @@ in
         addSSL = true;
         sslCertificate = "${mockCert}/cert.pem";
         sslCertificateKey = "${mockCert}/key.pem";
-        locations."= /nixpkgs-unstable/nixexprs.tar.xz".return = "302 ${channelReleaseUrl}";
+        locations."= /nixpkgs-unstable/nixexprs.tar.xz".return =
+          "302 ${channelReleaseHost}${channelUnstableReleasePath}";
+        locations."= /nixos-26.05/nixexprs.tar.xz".return =
+          "302 ${channelReleaseHost}${channelStableReleasePath}";
       };
       virtualHosts."releases.nixos.org" = {
         addSSL = true;
         sslCertificate = "${mockCert}/cert.pem";
         sslCertificateKey = "${mockCert}/key.pem";
-        locations."= ${channelReleasePath}".alias = "${testTarball}";
+        locations."= ${channelUnstableReleasePath}".alias = "${testTarball}";
+        locations."= ${channelStableReleasePath}".alias = "${testTarball}";
       };
     };
   };

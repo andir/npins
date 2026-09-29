@@ -1,6 +1,6 @@
 //! The main CLI application
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use crossterm::{
     QueueableCommand,
@@ -48,17 +48,72 @@ impl UpdateStrategy {
 
 impl ChannelAddOpts {
     pub fn add(&self) -> Result<(Option<String>, Pin)> {
+        let pin = channel::Pin {
+            name: self.channel_name.clone(),
+            artifact: self.artifact.clone(),
+        };
+
+        let version = self
+            .at
+            .clone()
+            .map(|at| -> Result<channel::ChannelVersion> {
+                // `at`, which we got from the user, is something like 26.05.337975.eabc3821918
+                // however, the full version string depends on the channel name, `pin.name`.
+                //
+                // for nixpkgs-unstable, it's nixpkgs-$version,
+                // for nixpkgs-darwin-* it's nixpkgs-darwin-$version,
+                // for nixos-* (incl. nixos-unstable), it's nixos-$version
+                let full_ver_str = if pin.name == "nixpkgs-unstable" {
+                    format!("nixpkgs-{}", at)
+                } else if pin.name.ends_with("-darwin") {
+                    format!("nixpkgs-darwin-{}", at)
+                } else {
+                    format!("nixos-{}", at)
+                };
+
+                // for some reason, nixpkgs-unstable has a different path from all
+                // the other versions:
+                //      - nixos-26.05 -> /nixos/26.05
+                //      - nixpkgs-26.05-darwin -> /nixpkgs/26.05-darwin
+                //      - nixos-unstable -> /nixos/unstable
+                //      - nixpkgs-unstable -> /nixpkgs
+                // ???
+                let channel_path = {
+                    if pin.name == "nixpkgs-unstable" {
+                        "nixpkgs".into()
+                    } else {
+                        let (main_channel_name, major_minor_ver) = pin
+                            .name
+                            .split_once('-')
+                            .ok_or_else(|| anyhow!("Unable to parse channel name"))
+                            .with_context(|| {
+                                anyhow::format_err!(
+                                    "While determining channel URL for version '{at}'"
+                                )
+                            })?;
+
+                        format!("{}/{}", main_channel_name, major_minor_ver)
+                    }
+                };
+
+                let url = format!(
+                    "https://releases.nixos.org/{}/{}/{}",
+                    channel_path, full_ver_str, self.artifact
+                );
+
+                Ok(channel::ChannelVersion {
+                    url: url.parse().unwrap(),
+                })
+            })
+            .transpose()?;
+
         Ok((
             Some(if self.artifact == channel::NIXPKGS_ARTIFACT {
                 self.channel_name.clone()
             } else {
                 format!("{}-{}", self.channel_name, self.artifact)
             }),
-            channel::Pin {
-                name: self.channel_name.clone(),
-                artifact: self.artifact.clone(),
-            }
-            .into(),
+            { (pin, version).into() },
         ))
     }
 }

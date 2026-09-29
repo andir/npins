@@ -26,6 +26,12 @@ pub struct ChannelAddOpts {
     /* ↑ these two lines are intentionally left blank (for better help formatting) */
     #[clap(default_value = channel::NIXPKGS_ARTIFACT)]
     pub artifact: String,
+    /// Use a specific version of this channel.
+    /// See the official wiki's page on channel branches for more information:
+    ///
+    /// <https://wiki.nixos.org/wiki/Channel_branches#Channel_Versioning>
+    #[arg(long, value_name = "version", value_hint = ValueHint::Other)]
+    pub at: Option<String>,
 }
 
 #[derive(Debug, Parser)]
