@@ -112,6 +112,13 @@ main-repo-4: (git release tag)
     hash: sha256-z8RpbkPx6UZQUIVY9xWBSx3c5ZergtJqPh7EWlkewCc=
     frozen: false
 
+nixos-26.05: (Nix channel)
+    name: nixos-26.05
+    artifact: nixexprs.tar.xz
+    url: https://releases.nixos.org/nixos/26.05/nixos-26.05.56789.ghijkl/nixexprs.tar.xz
+    hash: sha256-lRKytOtDgTaHQOmUJWGDiYA9KmcsEdQRD/EhOJECDn4=
+    frozen: false
+
 nixpkgs-unstable: (Nix channel)
     name: nixpkgs-unstable
     artifact: nixexprs.tar.xz

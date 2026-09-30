@@ -13,7 +13,10 @@ FAKE_GIT_REV = "0" * 40
 
 # See `channelReleaseUrl` in ./vm.nix
 # TODO: This is not the prettiest, something more akin to `ls_remote` used for git repos would be preferable
-CHANNEL_RELEASE_URL = "https://releases.nixos.org/nixpkgs/nixpkgs-unstable-25.11pre123456.abcdef/nixexprs.tar.xz"
+CHANNEL_UNSTABLE_VERSION = "25.11pre123456.abcdef"
+CHANNEL_UNSTABLE_RELEASE_URL = f"https://releases.nixos.org/nixpkgs/nixpkgs-unstable-{CHANNEL_UNSTABLE_VERSION}/nixexprs.tar.xz"
+CHANNEL_STABLE_VERSION = "26.05.56789.ghijkl"
+CHANNEL_STABLE_RELEASE_URL = f"https://releases.nixos.org/nixos/26.05/nixos-{CHANNEL_STABLE_VERSION}/nixexprs.tar.xz"
 
 start_all()
 channels.wait_for_unit("nginx.service")

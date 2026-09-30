@@ -16,7 +16,7 @@ with npins_subtest("npins init"):
     pins = dump_pins()
     assert "nixpkgs" in pins, f"expected a nixpkgs pin, got {pins!r}"
     assert pins["nixpkgs"]["name"] == "nixpkgs-unstable"
-    assert pins["nixpkgs"]["url"] == CHANNEL_RELEASE_URL
+    assert pins["nixpkgs"]["url"] == CHANNEL_UNSTABLE_RELEASE_URL
 
     # Init twice
     succeed_snapshot("npins init --bare", "init_twice")
