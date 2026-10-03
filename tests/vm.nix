@@ -8,7 +8,7 @@
 # - forgejo, running a Forgejo instance
 # - registry, running a Docker registry
 # Sources provided by the mocks:
-# - https://channels.nixos.org/nixpkgs-unstable (channel)
+# - https://channels.nixos.org/nixos-unstable (channel)
 # - https://github.com/generic-org/generic-repo
 # - https://github.com/owner/dependency
 # - https://github.com/owner/main-repo (has github:owner/dependency as submodule)
@@ -112,7 +112,7 @@ let
   };
 
   # The locked URL behind the nixpkgs-unstable channel of the mock channels host
-  channelReleasePath = "/nixpkgs/nixpkgs-unstable-25.11pre123456.abcdef/nixexprs.tar.xz";
+  channelReleasePath = "/nixos/unstable/nixos-26.11pre123456.abcdef/nixexprs.tar.xz";
   channelReleaseUrl = "https://releases.nixos.org${channelReleasePath}";
 
   # Fake self-signed TLS certificates.
@@ -228,7 +228,7 @@ in
         addSSL = true;
         sslCertificate = "${mockCert}/cert.pem";
         sslCertificateKey = "${mockCert}/key.pem";
-        locations."= /nixpkgs-unstable/nixexprs.tar.xz".return = "302 ${channelReleaseUrl}";
+        locations."= /nixos-unstable/nixexprs.tar.xz".return = "302 ${channelReleaseUrl}";
       };
       virtualHosts."releases.nixos.org" = {
         addSSL = true;

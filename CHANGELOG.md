@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Changed default channel to `nixos-unstable` from `nixpkgs-unstable` to nudge new users into using a better tested unstable branch.
+
 ## 0.5.1
 
 - Added `import-lon` to import lockfiles from Lon. (https://github.com/andir/npins/pull/251)
