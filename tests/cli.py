@@ -57,6 +57,23 @@ with npins_subtest("npins --lock-file add"):
     succeed("NPINS_DIRECTORY=testing npins show")
 
 
+# Adding a name that is already pinned is an update of that pin, so the log
+# message has to say "Updating", not "Adding".
+# Regression test for https://github.com/andir/npins/issues/236
+with npins_subtest("npins add existing pin"):
+    succeed("npins init --bare")
+    succeed("npins add git http://localhost/tagged-repo.git")
+    update_output = succeed(
+        "npins add --name tagged-repo git http://localhost/tagged-repo.git 2>&1"
+    )
+    assert "Updating 'tagged-repo'" in update_output, (
+        "expected the log to announce an update of the existing pin",
+        update_output,
+    )
+    # The pin must still be usable afterwards
+    succeed("npins get-path tagged-repo")
+
+
 # Regression test for https://github.com/andir/npins/issues/75
 with npins_subtest("npins add git --at non-rev"):
     succeed("npins init --bare")

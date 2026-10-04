@@ -26,6 +26,15 @@ use libnpins::*;
 
 mod opts;
 
+/// Decides the verb used to announce a pin that `npins add` is about to
+/// operate on.
+///
+/// Adding a name that is already pinned *is* an update of that pin, so saying
+/// "Adding" is misleading. `https://github.com/andir/npins/issues/236`
+fn add_verb(already_pinned: bool) -> &'static str {
+    if already_pinned { "Updating" } else { "Adding" }
+}
+
 impl UpdateStrategy {
     /// Whether the latest version should be fetched
     pub fn should_update(&self) -> bool {
@@ -422,11 +431,19 @@ impl Opts {
 
     async fn add(&self, opts: &AddOpts) -> Result<()> {
         let mut pins = self.read_pins()?;
+
+        /* Fetch the pin before we say anything about it, so that we can tell
+         * "adding a new pin" from "updating an existing one" accurately. */
         let (name, mut pin) = opts.run().await?;
+
+        /* `add` on a name that is already pinned is an update of that pin,
+         * so report it as such. */
+        let verb = add_verb(pins.pins.contains_key(&name));
+
         if opts.frozen {
-            log::info!("Adding '{}' (frozen) …", name);
+            log::info!("{} '{}' (frozen) …", verb, name);
         } else {
-            log::info!("Adding '{}' …", name);
+            log::info!("{} '{}' …", verb, name);
         }
         /* Fetch the latest version unless the user specified some */
         let strategy = if pin.has_version() {
@@ -1159,4 +1176,15 @@ fn start_runtime(future: impl Future<Output = Result<()>>) -> Result<()> {
         .enable_all()
         .build()?
         .block_on(future)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::add_verb;
+
+    #[test]
+    fn add_verb_reports_updates() {
+        assert_eq!(add_verb(false), "Adding");
+        assert_eq!(add_verb(true), "Updating");
+    }
 }
