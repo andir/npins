@@ -66,22 +66,25 @@ $ tree
 1 directory, 2 files
 
 $ npins show
-nixpkgs: (Nix channel)
-    name: nixpkgs-unstable
-    url: https://releases.nixos.org/nixpkgs/nixpkgs-22.05pre378171.ff691ed9ba2/nixexprs.tar.xz
-    hash: 04xggrc0qz5sq39mxdhqh0d2mljg9wmmn8nbv71x3vblam1wyp9b
+nixos-unstable: (Nix channel)
+    name: nixos-unstable
+    artifact: nixexprs.tar.xz
+    url: https://releases.nixos.org/nixos/unstable/nixos-26.11pre1083223.c59305bab206/nixexprs.tar.xz
+    hash: sha256-VBA0QerzzmL+4wxgtwiCdiLwLpJg2/9xOxhgO3BRJQA=
+    frozen: false
 
 $ cat npins/sources.json
 {
   "pins": {
-    "nixpkgs": {
+    "nixos-unstable": {
       "type": "Channel",
-      "name": "nixpkgs-unstable",
-      "url": "https://releases.nixos.org/nixpkgs/nixpkgs-22.05pre378171.ff691ed9ba2/nixexprs.tar.xz",
-      "hash": "04xggrc0qz5sq39mxdhqh0d2mljg9wmmn8nbv71x3vblam1wyp9b"
+      "name": "nixos-unstable",
+      "artifact": "nixexprs.tar.xz",
+      "url": "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1083223.c59305bab206/nixexprs.tar.xz",
+      "hash": "sha256-VBA0QerzzmL+4wxgtwiCdiLwLpJg2/9xOxhgO3BRJQA="
     }
   },
-  "version": 2
+  "version": 8
 }
 ```
 

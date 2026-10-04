@@ -1,8 +1,8 @@
 $ npins show
 channel-tarball: (mutable url)
-    update_url: https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.xz
+    update_url: https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz
     unpack: true
-    url: https://releases.nixos.org/nixpkgs/nixpkgs-unstable-25.11pre123456.abcdef/nixexprs.tar.xz
+    url: https://releases.nixos.org/nixos/unstable/nixos-26.11pre123456.abcdef/nixexprs.tar.xz
     hash: sha256-lRKytOtDgTaHQOmUJWGDiYA9KmcsEdQRD/EhOJECDn4=
     frozen: false
 
@@ -112,10 +112,10 @@ main-repo-4: (git release tag)
     hash: sha256-z8RpbkPx6UZQUIVY9xWBSx3c5ZergtJqPh7EWlkewCc=
     frozen: false
 
-nixpkgs-unstable: (Nix channel)
-    name: nixpkgs-unstable
+nixos-unstable: (Nix channel)
+    name: nixos-unstable
     artifact: nixexprs.tar.xz
-    url: https://releases.nixos.org/nixpkgs/nixpkgs-unstable-25.11pre123456.abcdef/nixexprs.tar.xz
+    url: https://releases.nixos.org/nixos/unstable/nixos-26.11pre123456.abcdef/nixexprs.tar.xz
     hash: sha256-lRKytOtDgTaHQOmUJWGDiYA9KmcsEdQRD/EhOJECDn4=
     frozen: false
 

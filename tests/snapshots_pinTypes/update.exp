@@ -1,7 +1,7 @@
 $ npins update --max-concurrent-downloads 1
 [channel-tarball] Changes:
--    url: https://releases.nixos.org/nixpkgs/outdated/nixexprs.tar.xz
-+    url: https://releases.nixos.org/nixpkgs/nixpkgs-unstable-25.11pre123456.abcdef/nixexprs.tar.xz
+-    url: https://releases.nixos.org/nixos/outdated/nixexprs.tar.xz
++    url: https://releases.nixos.org/nixos/unstable/nixos-26.11pre123456.abcdef/nixexprs.tar.xz
 [dependency] Changes:
 -    version: 0.1
 +    version: v0.2
@@ -22,9 +22,9 @@ $ npins update --max-concurrent-downloads 1
 [main-repo-2] No Changes
 [main-repo-3] No Changes
 [main-repo-4] No Changes
-[nixpkgs-unstable] Changes:
--    url: https://releases.nixos.org/nixpkgs/outdated/nixexprs.tar.xz
-+    url: https://releases.nixos.org/nixpkgs/nixpkgs-unstable-25.11pre123456.abcdef/nixexprs.tar.xz
+[nixos-unstable] Changes:
+-    url: https://releases.nixos.org/nixos/outdated/nixexprs.tar.xz
++    url: https://releases.nixos.org/nixos/unstable/nixos-26.11pre123456.abcdef/nixexprs.tar.xz
 [submoduled-repo] No Changes
 [submoduled-repo-2] No Changes
 [tagged-repo] Changes:

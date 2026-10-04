@@ -9,13 +9,13 @@ with npins_subtest("npins init"):
     pins = dump_pins("sources.json")
     assert pins == {}, f"expected empty pins, got {pins!r}"
 
-    # Regular init pins the nixpkgs-unstable channel
+    # Regular init pins the nixos-unstable channel
     succeed_snapshot("npins init", "init")
     succeed("test -e npins/default.nix")
 
     pins = dump_pins()
     assert "nixpkgs" in pins, f"expected a nixpkgs pin, got {pins!r}"
-    assert pins["nixpkgs"]["name"] == "nixpkgs-unstable"
+    assert pins["nixpkgs"]["name"] == "nixos-unstable"
     assert pins["nixpkgs"]["url"] == CHANNEL_RELEASE_URL
 
     # Init twice

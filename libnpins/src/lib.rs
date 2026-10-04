@@ -152,12 +152,12 @@ pub struct NixPins {
 }
 
 impl NixPins {
-    /// Create a new `NixPins` with a pin `nixpkgs` pointing to the `nixpkgs-unstable` channel
+    /// Create a new `NixPins` with a pin `nixpkgs` pointing to the `nixos-unstable` channel
     pub fn new_with_nixpkgs() -> Self {
         let mut pins = BTreeMap::new();
         pins.insert(
             "nixpkgs".to_owned(),
-            channel::Pin::new("nixpkgs-unstable", channel::NIXPKGS_ARTIFACT).into(),
+            channel::Pin::new("nixos-unstable", channel::NIXPKGS_ARTIFACT).into(),
         );
         Self { pins }
     }

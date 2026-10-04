@@ -44,15 +44,15 @@ with npins_subtest("pin types"):
     test_cases = [
         PinTestCase(
             "channel",
-            "nixpkgs-unstable",
-            "channel nixpkgs-unstable",
+            "nixos-unstable",
+            "channel nixos-unstable",
             {
                 "type": "Channel",
-                "name": "nixpkgs-unstable",
+                "name": "nixos-unstable",
                 "artifact": "nixexprs.tar.xz",
                 "url": CHANNEL_RELEASE_URL,
             },
-            downgrade={"url": "https://releases.nixos.org/nixpkgs/outdated/nixexprs.tar.xz"},
+            downgrade={"url": "https://releases.nixos.org/nixos/outdated/nixexprs.tar.xz"},
         ),
         PinTestCase(
             "tarball",
@@ -76,14 +76,14 @@ with npins_subtest("pin types"):
         PinTestCase(
             "tarball channel",
             "channel-tarball",
-            "--name channel-tarball tarball --mutable https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.xz",
+            "--name channel-tarball tarball --mutable https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz",
             {
                 "type": "MutableUrl",
                 "unpack": True,
-                "update_url": "https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.xz",
+                "update_url": "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz",
                 "url": CHANNEL_RELEASE_URL,
             },
-            downgrade={"url": "https://releases.nixos.org/nixpkgs/outdated/nixexprs.tar.xz"},
+            downgrade={"url": "https://releases.nixos.org/nixos/outdated/nixexprs.tar.xz"},
         ),
         PinTestCase(
             "url",
