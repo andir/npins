@@ -7,7 +7,14 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - macos-26-intel
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4.1.3
       # Don't use Lix for now, to use the container tests in CI (VM tests are soo slow …)
@@ -35,4 +42,5 @@ jobs:
       - name: Run smoke test
         run: nix-shell --run "bash ./.github/workflows/smoke-test.sh"
       - name: Run integration tests
+        if: ${{ runner.os == 'Linux' }}
         run: nix-build -A meta.tests
