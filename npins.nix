@@ -13,6 +13,9 @@
   nix-prefetch-docker,
   skopeo, # part of nix-prefetch-docker but we call it explicitly too
   git, # for git ls-remote
+
+  pkg-config,
+  aws-lc,
 }:
 let
   paths = [
@@ -78,8 +81,13 @@ let
     ];
 
     nativeBuildInputs = [
-      makeWrapper
+      pkg-config
       installShellFiles
+      makeWrapper
+    ];
+
+    buildInputs = [
+      aws-lc
     ];
 
     # (Almost) all tests require internet
