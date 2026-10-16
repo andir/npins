@@ -347,7 +347,7 @@ impl Opts {
             NixPins::default()
         } else {
             log::info!(
-                "Writing initial lock file with nixpkgs entry (need to fetch latest commit first)"
+                "Writing initial lock file with nixpkgs entry (need to fetch latest build first)"
             );
             let mut pin = NixPins::new_with_nixpkgs();
             Self::update_one(

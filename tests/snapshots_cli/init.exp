@@ -2,5 +2,5 @@ $ npins init
 [INFO ] Welcome to npins!
 [INFO ] Creating `npins` directory
 [INFO ] Writing default.nix
-[INFO ] Writing initial lock file with nixpkgs entry (need to fetch latest commit first)
+[INFO ] Writing initial lock file with nixpkgs entry (need to fetch latest build first)
 [INFO ] Successfully written initial files to 'npins/sources.json'.
