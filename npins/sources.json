@@ -1,17 +1,11 @@
 {
   "pins": {
     "nixpkgs": {
-      "type": "Git",
-      "repository": {
-        "type": "GitHub",
-        "owner": "nixos",
-        "repo": "nixpkgs"
-      },
-      "branch": "nixpkgs-unstable",
-      "submodules": false,
-      "revision": "c27cdad491a991b11ed731760aa2ef8db0cb0410",
-      "url": "https://github.com/nixos/nixpkgs/archive/c27cdad491a991b11ed731760aa2ef8db0cb0410.tar.gz",
-      "hash": "sha256-PYZq1qzCJXC2zGI0mH07vrZBsw6DRBAOX0jN1pPtqOQ="
+      "type": "Channel",
+      "name": "nixpkgs-unstable",
+      "artifact": "nixexprs.tar.zst",
+      "url": "https://releases.nixos.org/nixpkgs/nixpkgs-26.11pre1093421.f20cd90e28fe/nixexprs.tar.zst",
+      "hash": "sha256-MTJCMrhDFb+GRbLxBPTp8kB4dDlO+egmQ5qsJgYuaWw="
     },
     "pre-commit-hooks.nix": {
       "type": "Git",

@@ -43,6 +43,8 @@ pkgs.mkShell {
       nix-prefetch-git
       nix-prefetch-docker
       skopeo
+      pkg-config
+      aws-lc
       git
       just
       npins
@@ -52,4 +54,6 @@ pkgs.mkShell {
     ]);
 
   inherit (pre-commit) shellHook;
+
+  env.AWS_LC_SYS_USE_SYSTEM = "1";
 }

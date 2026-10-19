@@ -6,7 +6,7 @@ import json
 import os
 import shlex
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Generator
 
 FAKE_HASH = "sha256:" + "0" * 64
 FAKE_GIT_REV = "0" * 40
@@ -74,7 +74,7 @@ def fail_snapshot(cmd: str, name: str) -> None:
 
 
 @contextlib.contextmanager
-def npins_subtest(name: str) -> Iterator[None]:
+def npins_subtest(name: str) -> Generator[None]:
     """Like `subtest`, but cleans the test working directory after the scope."""
     client.succeed("mkdir /testdir")
     with subtest(name):
