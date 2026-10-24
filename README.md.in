@@ -48,6 +48,8 @@ You could also install it to your profile using `nix-env` (not recommended, but 
 nix-env -f https://github.com/andir/npins/archive/master.tar.gz -i
 ```
 
+<!-- Modified 2026-10-24: correct the initial pin name in the quickstart output. -->
+
 ### Quickstart
 
 ```
@@ -66,7 +68,7 @@ $ tree
 1 directory, 2 files
 
 $ npins show
-nixos-unstable: (Nix channel)
+nixpkgs: (Nix channel)
     name: nixos-unstable
     artifact: nixexprs.tar.xz
     url: https://releases.nixos.org/nixos/unstable/nixos-26.11pre1083223.c59305bab206/nixexprs.tar.xz
@@ -76,7 +78,7 @@ nixos-unstable: (Nix channel)
 $ cat npins/sources.json
 {
   "pins": {
-    "nixos-unstable": {
+    "nixpkgs": {
       "type": "Channel",
       "name": "nixos-unstable",
       "artifact": "nixexprs.tar.xz",
