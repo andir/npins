@@ -143,6 +143,7 @@ pub async fn nix_prefetch_docker(
     image_name: impl AsRef<str>,
     image_tag: impl AsRef<str>,
     arch: &Option<String>,
+    os: &Option<String>,
     image_digest: Option<&str>,
 ) -> Result<NixPrefetchDockerResponse> {
     let image_name = image_name.as_ref();
@@ -161,6 +162,10 @@ pub async fn nix_prefetch_docker(
 
     if let Some(value) = arch {
         command.arg("--arch").arg(value);
+    }
+
+    if let Some(value) = os {
+        command.arg("--os").arg(value);
     }
 
     log::debug!("Executing: {}", format_command(&command)?);
@@ -197,6 +202,7 @@ pub async fn container_image_digest(
     image_name: impl AsRef<str>,
     image_tag: impl AsRef<str>,
     arch: Option<&str>,
+    os: Option<&str>,
 ) -> Result<String> {
     let image_name = image_name.as_ref();
     let image_tag = image_tag.as_ref();
@@ -205,6 +211,9 @@ pub async fn container_image_digest(
     command.arg("--insecure-policy");
     if let Some(arch) = arch {
         command.arg("--override-arch").arg(arch);
+    }
+    if let Some(os) = os {
+        command.arg("--override-os").arg(os);
     }
     command
         .arg("inspect")

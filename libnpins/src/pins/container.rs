@@ -13,6 +13,8 @@ pub struct Pin {
     pub image_tag: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
 }
 
 impl diff::Diff for Pin {
@@ -24,6 +26,10 @@ impl diff::Diff for Pin {
 
         if let Some(arch) = &self.arch {
             v.push(("arch".into(), arch.clone()));
+        }
+
+        if let Some(os) = &self.os {
+            v.push(("os".into(), os.clone()));
         }
 
         v
@@ -63,6 +69,7 @@ impl Updatable for Pin {
                 &self.image_name,
                 &self.image_tag,
                 self.arch.as_deref(),
+                self.os.as_deref(),
             )
             .await?,
         })
@@ -74,6 +81,7 @@ impl Updatable for Pin {
                 &self.image_name,
                 &self.image_tag,
                 &self.arch,
+                &self.os,
                 Some(&version.image_digest),
             )
             .await?
@@ -94,6 +102,7 @@ mod test {
             image_name: DEAD_TEST_CONTAINER.to_string(),
             image_tag: "latest".to_string(),
             arch: None,
+            os: None,
         };
         let version = pin.update(None).await.unwrap();
         assert_eq!(
