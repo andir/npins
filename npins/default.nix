@@ -230,6 +230,7 @@ let
           hash = hash;
         }
         // (if args.arch or null != null then { arch = args.arch; } else { })
+        // (if args.os or null != null then { os = args.os; } else { })
       );
 
 in
